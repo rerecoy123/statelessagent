@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — 2026-02-01
+## 0.1.0-alpha — 2026-02-01
 
 ### Rebranded as The Stateless Agent
 
