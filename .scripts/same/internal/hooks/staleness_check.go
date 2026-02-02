@@ -1,0 +1,31 @@
+package hooks
+
+import (
+	"fmt"
+
+	"github.com/sgxdev/same/internal/memory"
+	"github.com/sgxdev/same/internal/store"
+)
+
+// runStalenessCheck queries for stale notes and surfaces them.
+func runStalenessCheck(db *store.DB, _ *HookInput) *HookOutput {
+	stale := memory.FindStaleNotes(db, 5, true)
+	if len(stale) == 0 {
+		return nil
+	}
+
+	contextText := memory.FormatStaleNotesContext(stale)
+	if contextText == "" {
+		return nil
+	}
+
+	return &HookOutput{
+		HookSpecificOutput: &HookSpecific{
+			HookEventName: "SessionStart",
+			AdditionalContext: fmt.Sprintf(
+				"\n<vault-staleness>\n%s\n</vault-staleness>\n",
+				contextText,
+			),
+		},
+	}
+}

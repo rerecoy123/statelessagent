@@ -1,0 +1,1092 @@
+// Package main is the entrypoint for the SAME CLI.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/sgxdev/same/internal/config"
+	"github.com/sgxdev/same/internal/embedding"
+	"github.com/sgxdev/same/internal/hooks"
+	"github.com/sgxdev/same/internal/indexer"
+	mcpserver "github.com/sgxdev/same/internal/mcp"
+	memory "github.com/sgxdev/same/internal/memory"
+	"github.com/sgxdev/same/internal/store"
+	"github.com/sgxdev/same/internal/watcher"
+)
+
+// Version is set at build time via ldflags.
+var Version = "dev"
+
+func main() {
+	root := &cobra.Command{
+		Use:   "same",
+		Short: "Stateless Agent Memory Engine",
+		Long:  "SAME — semantic search, context surfacing, and memory for Obsidian vaults.",
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
+	}
+
+	root.AddCommand(versionCmd())
+	root.AddCommand(reindexCmd())
+	root.AddCommand(statsCmd())
+	root.AddCommand(migrateCmd())
+	root.AddCommand(hookCmd())
+	root.AddCommand(mcpCmd())
+	root.AddCommand(evalExportCmd())
+	root.AddCommand(benchCmd())
+	root.AddCommand(searchCmd())
+	root.AddCommand(relatedCmd())
+	root.AddCommand(doctorCmd())
+	root.AddCommand(budgetCmd())
+	root.AddCommand(vaultCmd())
+	root.AddCommand(watchCmd())
+	root.AddCommand(pluginCmd())
+
+	// Global --vault flag
+	root.PersistentFlags().StringVar(&config.VaultOverride, "vault", "", "Vault name or path (overrides auto-detect)")
+
+	if err := root.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func versionCmd() *cobra.Command {
+	var check bool
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print the SAME version",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if check {
+				return runVersionCheck()
+			}
+			fmt.Printf("same %s\n", Version)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "Check for updates against GitHub releases")
+	return cmd
+}
+
+func runVersionCheck() error {
+	if Version == "dev" {
+		fmt.Println("same dev (built from source, no version check)")
+		return nil
+	}
+
+	// Fetch latest release tag from GitHub API (no auth needed for public repos)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/sgxdev/statelessagent/releases/latest")
+	if err != nil {
+		// Network error — silently succeed (don't block hooks)
+		fmt.Printf("same %s (update check failed: %v)\n", Version, err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		// No releases yet or API issue
+		fmt.Printf("same %s (no releases found)\n", Version)
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("same %s\n", Version)
+		return nil
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+	}
+	if err := json.Unmarshal(body, &release); err != nil {
+		fmt.Printf("same %s\n", Version)
+		return nil
+	}
+
+	latestVer := strings.TrimPrefix(release.TagName, "v")
+	currentVer := strings.TrimPrefix(Version, "v")
+
+	if latestVer != currentVer && latestVer > currentVer {
+		// Output as hook-compatible JSON for SessionStart hook
+		fmt.Printf(`{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"\n\n**SAME update available:** %s → %s\nRun: cd .scripts/same && git pull && make install\n\n"}}`, currentVer, latestVer)
+		fmt.Println()
+	}
+
+	return nil
+}
+
+func reindexCmd() *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "reindex",
+		Short: "Index vault into SQLite",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runReindex(force)
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "Re-embed all files regardless of changes")
+	return cmd
+}
+
+func statsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stats",
+		Short: "Show index statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStats()
+		},
+	}
+}
+
+func migrateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "migrate",
+		Short: "Re-index from markdown (drops old data)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runReindex(true)
+		},
+	}
+}
+
+func hookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hook",
+		Short: "Run a hook handler",
+	}
+	cmd.AddCommand(hookSubCmd("context-surfacing", "UserPromptSubmit hook: surface relevant vault context"))
+	cmd.AddCommand(hookSubCmd("decision-extractor", "Stop hook: extract decisions from transcript"))
+	cmd.AddCommand(hookSubCmd("handoff-generator", "PreCompact/Stop hook: generate handoff notes"))
+	cmd.AddCommand(hookSubCmd("staleness-check", "SessionStart hook: surface stale notes"))
+	return cmd
+}
+
+func hookSubCmd(name, short string) *cobra.Command {
+	return &cobra.Command{
+		Use:   name,
+		Short: short,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			hooks.Run(name)
+			return nil
+		},
+	}
+}
+
+func mcpCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mcp",
+		Short: "Start MCP stdio server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return mcpserver.Serve()
+		},
+	}
+}
+
+func evalExportCmd() *cobra.Command {
+	var (
+		strategy         string
+		query            string
+		topK             int
+		relevanceWeight  float64
+		recencyWeight    float64
+		confidenceWeight float64
+	)
+	cmd := &cobra.Command{
+		Use:   "eval-export",
+		Short: "JSON output for Python eval harness",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			weights := map[string]float64{
+				"relevance_weight":  relevanceWeight,
+				"recency_weight":    recencyWeight,
+				"confidence_weight": confidenceWeight,
+			}
+			return runEvalExport(strategy, query, topK, weights)
+		},
+	}
+	cmd.Flags().StringVar(&strategy, "strategy", "vanilla", "Search strategy (vanilla|confidence|no_recency|no_confidence|tuned)")
+	cmd.Flags().StringVar(&query, "query", "", "Search query")
+	cmd.Flags().IntVar(&topK, "top-k", 10, "Number of results")
+	cmd.Flags().Float64Var(&relevanceWeight, "relevance-weight", 0.5, "Relevance weight for composite scoring")
+	cmd.Flags().Float64Var(&recencyWeight, "recency-weight", 0.4, "Recency weight for composite scoring")
+	cmd.Flags().Float64Var(&confidenceWeight, "confidence-weight", 0.1, "Confidence weight for composite scoring")
+	return cmd
+}
+
+func runReindex(force bool) error {
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	stats, err := indexer.Reindex(db, force)
+	if err != nil {
+		return err
+	}
+
+	data, _ := json.MarshalIndent(stats, "", "  ")
+	fmt.Println(string(data))
+	return nil
+}
+
+func runStats() error {
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	stats := indexer.GetStats(db)
+	data, _ := json.MarshalIndent(stats, "", "  ")
+	fmt.Println(string(data))
+	return nil
+}
+
+func runEvalExport(strategy, query string, topK int, weights map[string]float64) error {
+	if query == "" {
+		return fmt.Errorf("--query is required")
+	}
+
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	client := embedding.NewClient()
+	queryVec, err := client.GetQueryEmbedding(query)
+	if err != nil {
+		return fmt.Errorf("embed query: %w", err)
+	}
+
+	var results interface{}
+
+	if strategy == "vanilla" {
+		searchResults, err := db.VectorSearch(queryVec, store.SearchOptions{TopK: topK})
+		if err != nil {
+			return fmt.Errorf("search: %w", err)
+		}
+		results = searchResults
+	} else {
+		// Composite scoring strategies use VectorSearchRaw
+		rw := weights["relevance_weight"]
+		recW := weights["recency_weight"]
+		confW := weights["confidence_weight"]
+
+		rawResults, err := db.VectorSearchRaw(queryVec, topK*5)
+		if err != nil {
+			return fmt.Errorf("search: %w", err)
+		}
+
+		// Deduplicate by path (keep best chunk per note)
+		type scoredResult struct {
+			store.SearchResult
+			CompositeScore float64 `json:"composite_score"`
+		}
+
+		seen := make(map[string]bool)
+		type dedupedRaw struct {
+			store.RawSearchResult
+		}
+		var deduped []store.RawSearchResult
+		for _, r := range rawResults {
+			if seen[r.Path] {
+				continue
+			}
+			seen[r.Path] = true
+			deduped = append(deduped, r)
+		}
+
+		// Min-max normalize distances within result set (matches Python)
+		minDist := 0.0
+		maxDist := 0.0
+		if len(deduped) > 0 {
+			minDist = deduped[0].Distance
+			maxDist = deduped[0].Distance
+			for _, r := range deduped[1:] {
+				if r.Distance < minDist {
+					minDist = r.Distance
+				}
+				if r.Distance > maxDist {
+					maxDist = r.Distance
+				}
+			}
+		}
+		distRange := maxDist - minDist
+		if distRange <= 0 {
+			distRange = 1.0
+		}
+
+		var scored []scoredResult
+		for _, r := range deduped {
+			semanticScore := 1.0 - ((r.Distance - minDist) / distRange)
+
+			composite := memory.CompositeScore(
+				semanticScore, r.Modified, r.Confidence, r.ContentType,
+				rw, recW, confW,
+			)
+
+			snippet := r.Text
+			if len(snippet) > 500 {
+				snippet = snippet[:500]
+			}
+
+			scored = append(scored, scoredResult{
+				SearchResult: store.SearchResult{
+					Path:         r.Path,
+					Title:        r.Title,
+					ChunkHeading: r.Heading,
+					Score:        round3(semanticScore),
+					Distance:     round1(r.Distance),
+					Snippet:      snippet,
+					Domain:       r.Domain,
+					Workstream:   r.Workstream,
+					Tags:         r.Tags,
+					ContentType:  r.ContentType,
+					Confidence:   round3(r.Confidence),
+				},
+				CompositeScore: composite,
+			})
+		}
+
+		// Sort by composite score descending
+		sort.Slice(scored, func(i, j int) bool {
+			return scored[i].CompositeScore > scored[j].CompositeScore
+		})
+
+		if len(scored) > topK {
+			scored = scored[:topK]
+		}
+		results = scored
+	}
+
+	output := map[string]interface{}{
+		"strategy": strategy,
+		"query":    query,
+		"top_k":    topK,
+		"results":  results,
+	}
+
+	data, _ := json.MarshalIndent(output, "", "  ")
+	fmt.Println(string(data))
+	return nil
+}
+
+func round3(f float64) float64 {
+	return float64(int(f*1000+0.5)) / 1000
+}
+
+func round1(f float64) float64 {
+	return float64(int(f*10+0.5)) / 10
+}
+
+func searchCmd() *cobra.Command {
+	var (
+		topK     int
+		domain   string
+		jsonOut  bool
+	)
+	cmd := &cobra.Command{
+		Use:   "search [query]",
+		Short: "Search the vault from the command line",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.Join(args, " ")
+			return runSearch(query, topK, domain, jsonOut)
+		},
+	}
+	cmd.Flags().IntVar(&topK, "top-k", 5, "Number of results")
+	cmd.Flags().StringVar(&domain, "domain", "", "Filter by domain")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	return cmd
+}
+
+func runSearch(query string, topK int, domain string, jsonOut bool) error {
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	client := embedding.NewClient()
+	queryVec, err := client.GetQueryEmbedding(query)
+	if err != nil {
+		return fmt.Errorf("embed query: %w", err)
+	}
+
+	results, err := db.VectorSearch(queryVec, store.SearchOptions{
+		TopK:   topK,
+		Domain: domain,
+	})
+	if err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+
+	if jsonOut {
+		data, _ := json.MarshalIndent(results, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
+	if len(results) == 0 {
+		fmt.Println("No results found.")
+		return nil
+	}
+
+	for i, r := range results {
+		typeTag := ""
+		if r.ContentType != "" && r.ContentType != "note" {
+			typeTag = fmt.Sprintf(" [%s]", r.ContentType)
+		}
+
+		fmt.Printf("\n%d. %s%s\n", i+1, r.Title, typeTag)
+		fmt.Printf("   %s\n", r.Path)
+		fmt.Printf("   Score: %.3f  Distance: %.1f  Confidence: %.3f\n", r.Score, r.Distance, r.Confidence)
+
+		// Show first 150 chars of snippet
+		snippet := r.Snippet
+		if len(snippet) > 150 {
+			snippet = snippet[:150] + "..."
+		}
+		// Replace newlines with spaces for compact display
+		snippet = strings.ReplaceAll(snippet, "\n", " ")
+		snippet = strings.ReplaceAll(snippet, "\r", "")
+		fmt.Printf("   %s\n", snippet)
+	}
+	fmt.Println()
+
+	return nil
+}
+
+func relatedCmd() *cobra.Command {
+	var (
+		topK    int
+		jsonOut bool
+	)
+	cmd := &cobra.Command{
+		Use:   "related [note-path]",
+		Short: "Find notes semantically similar to a given note",
+		Long:  "Find notes related to a specific vault note using its stored embedding. Path is relative to vault root.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRelated(args[0], topK, jsonOut)
+		},
+	}
+	cmd.Flags().IntVar(&topK, "top-k", 5, "Number of related notes to show")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	return cmd
+}
+
+func runRelated(notePath string, topK int, jsonOut bool) error {
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	// Get the stored embedding for this note
+	noteVec, err := db.GetNoteEmbedding(notePath)
+	if err != nil {
+		return fmt.Errorf("get embedding: %w", err)
+	}
+	if noteVec == nil {
+		return fmt.Errorf("note not found in index: %s", notePath)
+	}
+
+	// Search for similar notes, requesting extra to filter out the source note
+	results, err := db.VectorSearch(noteVec, store.SearchOptions{
+		TopK: topK + 3,
+	})
+	if err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+
+	// Filter out the source note itself
+	var filtered []store.SearchResult
+	for _, r := range results {
+		if r.Path != notePath {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) > topK {
+		filtered = filtered[:topK]
+	}
+
+	if jsonOut {
+		data, _ := json.MarshalIndent(filtered, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
+	if len(filtered) == 0 {
+		fmt.Println("No related notes found.")
+		return nil
+	}
+
+	fmt.Printf("\nNotes related to: %s\n", notePath)
+	for i, r := range filtered {
+		typeTag := ""
+		if r.ContentType != "" && r.ContentType != "note" {
+			typeTag = fmt.Sprintf(" [%s]", r.ContentType)
+		}
+
+		fmt.Printf("\n%d. %s%s\n", i+1, r.Title, typeTag)
+		fmt.Printf("   %s\n", r.Path)
+		fmt.Printf("   Score: %.3f  Distance: %.1f\n", r.Score, r.Distance)
+
+		snippet := r.Snippet
+		if len(snippet) > 150 {
+			snippet = snippet[:150] + "..."
+		}
+		snippet = strings.ReplaceAll(snippet, "\n", " ")
+		snippet = strings.ReplaceAll(snippet, "\r", "")
+		fmt.Printf("   %s\n", snippet)
+	}
+	fmt.Println()
+
+	return nil
+}
+
+func doctorCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "doctor",
+		Short: "Check system health: vault, database, Ollama, hooks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDoctor()
+		},
+	}
+}
+
+func runDoctor() error {
+	passed := 0
+	failed := 0
+
+	check := func(name string, fn func() (string, error)) {
+		detail, err := fn()
+		if err != nil {
+			fmt.Printf("  FAIL  %s: %s\n", name, err)
+			failed++
+		} else {
+			fmt.Printf("  OK    %s", name)
+			if detail != "" {
+				fmt.Printf(" (%s)", detail)
+			}
+			fmt.Println()
+			passed++
+		}
+	}
+
+	fmt.Print("\nSAME System Health Check\n\n")
+
+	// 1. Vault path exists
+	check("Vault path", func() (string, error) {
+		vp := config.VaultPath()
+		if vp == "" {
+			return "", fmt.Errorf("VAULT_PATH not set")
+		}
+		info, err := os.Stat(vp)
+		if err != nil {
+			return "", fmt.Errorf("path does not exist: %s", vp)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("path is not a directory: %s", vp)
+		}
+		return vp, nil
+	})
+
+	// 2. Database exists and opens
+	check("Database", func() (string, error) {
+		db, err := store.Open()
+		if err != nil {
+			return "", fmt.Errorf("cannot open: %v", err)
+		}
+		defer db.Close()
+		noteCount, err := db.NoteCount()
+		if err != nil {
+			return "", fmt.Errorf("cannot query notes: %v", err)
+		}
+		chunkCount, err := db.ChunkCount()
+		if err != nil {
+			return "", fmt.Errorf("cannot query chunks: %v", err)
+		}
+		if noteCount == 0 {
+			return "", fmt.Errorf("database is empty — run 'same reindex'")
+		}
+		return fmt.Sprintf("%d notes, %d chunks", noteCount, chunkCount), nil
+	})
+
+	// 3. Ollama reachable
+	check("Ollama", func() (string, error) {
+		client := embedding.NewClient()
+		vec, err := client.GetQueryEmbedding("test")
+		if err != nil {
+			return "", fmt.Errorf("cannot connect: %v", err)
+		}
+		return fmt.Sprintf("%d-dim embeddings", len(vec)), nil
+	})
+
+	// 4. Vector search works
+	check("Vector search", func() (string, error) {
+		db, err := store.Open()
+		if err != nil {
+			return "", err
+		}
+		defer db.Close()
+
+		client := embedding.NewClient()
+		vec, err := client.GetQueryEmbedding("test query for health check")
+		if err != nil {
+			return "", fmt.Errorf("embedding failed: %v", err)
+		}
+
+		results, err := db.VectorSearch(vec, store.SearchOptions{TopK: 1})
+		if err != nil {
+			return "", fmt.Errorf("search failed: %v", err)
+		}
+		if len(results) == 0 {
+			return "", fmt.Errorf("no results — index may be empty")
+		}
+		return fmt.Sprintf("top result: %s (d=%.1f)", results[0].Title, results[0].Distance), nil
+	})
+
+	// 5. Context surfacing hook
+	check("Context surfacing hook", func() (string, error) {
+		db, err := store.Open()
+		if err != nil {
+			return "", err
+		}
+		defer db.Close()
+
+		client := embedding.NewClient()
+		vec, err := client.GetQueryEmbedding("what notes are in this vault")
+		if err != nil {
+			return "", fmt.Errorf("embedding failed: %v", err)
+		}
+
+		raw, err := db.VectorSearchRaw(vec, 3)
+		if err != nil {
+			return "", fmt.Errorf("raw search failed: %v", err)
+		}
+		if len(raw) == 0 {
+			return "", fmt.Errorf("no raw results")
+		}
+		if raw[0].Distance > 16.5 {
+			return fmt.Sprintf("best distance %.1f (above 16.5 threshold — would not inject)", raw[0].Distance), nil
+		}
+		return fmt.Sprintf("best distance %.1f (would inject)", raw[0].Distance), nil
+	})
+
+	fmt.Printf("\n%d passed, %d failed\n\n", passed, failed)
+
+	if failed > 0 {
+		return fmt.Errorf("%d check(s) failed", failed)
+	}
+	return nil
+}
+
+func pluginCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "plugin",
+		Short: "Manage hook plugins",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List registered plugins",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			plugins := hooks.LoadPlugins()
+			if len(plugins) == 0 {
+				pluginsPath := filepath.Join(config.VaultPath(), ".scripts", "same", "plugins.json")
+				fmt.Printf("No plugins registered.\n")
+				fmt.Printf("Create %s to add custom hooks.\n\n", pluginsPath)
+				fmt.Println("Example plugins.json:")
+				fmt.Println(`{
+  "plugins": [
+    {
+      "name": "my-custom-hook",
+      "event": "UserPromptSubmit",
+      "command": "/path/to/script.sh",
+      "args": [],
+      "timeout_ms": 5000,
+      "enabled": true
+    }
+  ]
+}`)
+				return nil
+			}
+			fmt.Println("Registered plugins:")
+			for _, p := range plugins {
+				status := "enabled"
+				if !p.Enabled {
+					status = "disabled"
+				}
+				fmt.Printf("  %-20s  event=%-20s  %s  %s %s\n",
+					p.Name, p.Event, status, p.Command, strings.Join(p.Args, " "))
+			}
+			return nil
+		},
+	})
+
+	return cmd
+}
+
+func watchCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "watch",
+		Short: "Watch vault for changes and auto-reindex",
+		Long:  "Monitor the vault filesystem for markdown file changes. Automatically reindexes modified, created, or deleted notes with a 2-second debounce.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := store.Open()
+			if err != nil {
+				return fmt.Errorf("open database: %w", err)
+			}
+			defer db.Close()
+			return watcher.Watch(db)
+		},
+	}
+}
+
+func vaultCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "vault",
+		Short: "Manage vault registrations",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List registered vaults",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			reg := config.LoadRegistry()
+			if len(reg.Vaults) == 0 {
+				fmt.Println("No vaults registered. Use 'same vault add <name> <path>' to register one.")
+				fmt.Printf("Current vault (auto-detected): %s\n", config.VaultPath())
+				return nil
+			}
+			fmt.Println("Registered vaults:")
+			for name, path := range reg.Vaults {
+				marker := "  "
+				if name == reg.Default {
+					marker = "* "
+				}
+				fmt.Printf("  %s%-15s %s\n", marker, name, path)
+			}
+			if reg.Default != "" {
+				fmt.Printf("\n  (* = default)\n")
+			}
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "add [name] [path]",
+		Short: "Register a vault",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, path := args[0], args[1]
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return fmt.Errorf("resolve path: %w", err)
+			}
+			if info, err := os.Stat(absPath); err != nil || !info.IsDir() {
+				return fmt.Errorf("path does not exist or is not a directory: %s", absPath)
+			}
+			reg := config.LoadRegistry()
+			reg.Vaults[name] = absPath
+			if len(reg.Vaults) == 1 {
+				reg.Default = name
+			}
+			if err := reg.Save(); err != nil {
+				return fmt.Errorf("save registry: %w", err)
+			}
+			fmt.Printf("Registered vault %q at %s\n", name, absPath)
+			if reg.Default == name {
+				fmt.Println("Set as default vault.")
+			}
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "remove [name]",
+		Short: "Unregister a vault",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			reg := config.LoadRegistry()
+			if _, ok := reg.Vaults[name]; !ok {
+				return fmt.Errorf("vault %q not registered", name)
+			}
+			delete(reg.Vaults, name)
+			if reg.Default == name {
+				reg.Default = ""
+			}
+			if err := reg.Save(); err != nil {
+				return fmt.Errorf("save registry: %w", err)
+			}
+			fmt.Printf("Removed vault %q\n", name)
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "default [name]",
+		Short: "Set the default vault",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			reg := config.LoadRegistry()
+			if _, ok := reg.Vaults[name]; !ok {
+				return fmt.Errorf("vault %q not registered", name)
+			}
+			reg.Default = name
+			if err := reg.Save(); err != nil {
+				return fmt.Errorf("save registry: %w", err)
+			}
+			fmt.Printf("Default vault set to %q (%s)\n", name, reg.Vaults[name])
+			return nil
+		},
+	})
+
+	return cmd
+}
+
+func budgetCmd() *cobra.Command {
+	var (
+		sessionID string
+		lastN     int
+		jsonOut   bool
+	)
+	cmd := &cobra.Command{
+		Use:   "budget",
+		Short: "Show context utilization budget report",
+		Long:  "Analyze how much injected context Claude actually used. Tracks injection events and reference detection.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runBudget(sessionID, lastN, jsonOut)
+		},
+	}
+	cmd.Flags().StringVar(&sessionID, "session", "", "Report for a specific session ID")
+	cmd.Flags().IntVar(&lastN, "last", 10, "Report for last N sessions")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	return cmd
+}
+
+func runBudget(sessionID string, lastN int, jsonOut bool) error {
+	db, err := store.Open()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	report := memory.GetBudgetReport(db, sessionID, lastN)
+
+	if jsonOut {
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Human-readable output
+	switch r := report.(type) {
+	case memory.BudgetReport:
+		fmt.Print("\nContext Utilization Budget Report\n\n")
+		fmt.Printf("  Sessions analyzed:     %d\n", r.SessionsAnalyzed)
+		fmt.Printf("  Total injections:      %d\n", r.TotalInjections)
+		fmt.Printf("  Total tokens injected: %d\n", r.TotalTokensInjected)
+		fmt.Printf("  Referenced by Claude:   %d (%.0f%%)\n", r.ReferencedCount, r.UtilizationRate*100)
+		fmt.Printf("  Wasted tokens:         ~%d\n", r.TotalTokensInjected-int(float64(r.TotalTokensInjected)*r.UtilizationRate))
+
+		if len(r.PerHook) > 0 {
+			fmt.Println("\n  Per-hook breakdown:")
+			for name, hs := range r.PerHook {
+				fmt.Printf("    %-25s  %d injections, %d referenced (%.0f%%), avg %d tokens\n",
+					name, hs.Injections, hs.Referenced, hs.UtilizationRate*100, hs.AvgTokensPerInject)
+			}
+		}
+
+		if len(r.Suggestions) > 0 {
+			fmt.Println("\n  Suggestions:")
+			for _, s := range r.Suggestions {
+				fmt.Printf("    - %s\n", s)
+			}
+		}
+		fmt.Println()
+	default:
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+	}
+	return nil
+}
+
+func benchCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "bench",
+		Short: "Run performance benchmarks",
+		Long:  "Measure cold-start, search, embedding, and database performance.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runBench()
+		},
+	}
+}
+
+type benchResult struct {
+	Name    string `json:"name"`
+	Latency string `json:"latency_ms"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+func runBench() error {
+	fmt.Println("SAME Performance Benchmark")
+	fmt.Println("==========================")
+	fmt.Println()
+
+	var results []benchResult
+
+	// 1. Database open (cold start)
+	t0 := time.Now()
+	db, err := store.Open()
+	dbOpen := time.Since(t0)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
+
+	noteCount, _ := db.NoteCount()
+	chunkCount, _ := db.ChunkCount()
+	results = append(results, benchResult{
+		Name:    "DB open (cold start)",
+		Latency: fmt.Sprintf("%.1f", float64(dbOpen.Microseconds())/1000.0),
+		Detail:  fmt.Sprintf("%d notes, %d chunks", noteCount, chunkCount),
+	})
+	fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+
+	// 2. Embedding latency (single query)
+	client := embedding.NewClient()
+	testQuery := "what decisions were made about the memory system architecture"
+	t0 = time.Now()
+	queryVec, err := client.GetQueryEmbedding(testQuery)
+	embedLatency := time.Since(t0)
+	if err != nil {
+		results = append(results, benchResult{
+			Name:    "Embedding (Ollama)",
+			Latency: "FAILED",
+			Detail:  err.Error(),
+		})
+		fmt.Printf("  %-30s %8s     %s\n", "Embedding (Ollama)", "FAILED", err.Error())
+	} else {
+		results = append(results, benchResult{
+			Name:    "Embedding (Ollama)",
+			Latency: fmt.Sprintf("%.1f", float64(embedLatency.Microseconds())/1000.0),
+			Detail:  fmt.Sprintf("%d dimensions", len(queryVec)),
+		})
+		fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+	}
+
+	if queryVec == nil {
+		fmt.Println("\n  Skipping search benchmarks (embedding failed).")
+		printBenchSummary(results)
+		return nil
+	}
+
+	// 3. Vector search (vanilla, KNN only)
+	t0 = time.Now()
+	searchResults, err := db.VectorSearch(queryVec, store.SearchOptions{TopK: 10})
+	searchLatency := time.Since(t0)
+	if err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+	results = append(results, benchResult{
+		Name:    "Vector search (top-10)",
+		Latency: fmt.Sprintf("%.1f", float64(searchLatency.Microseconds())/1000.0),
+		Detail:  fmt.Sprintf("%d results", len(searchResults)),
+	})
+	fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+
+	// 4. Raw search + composite scoring
+	t0 = time.Now()
+	rawResults, _ := db.VectorSearchRaw(queryVec, 50)
+	_ = rawResults
+	rawSearchLatency := time.Since(t0)
+	results = append(results, benchResult{
+		Name:    "Raw search (top-50)",
+		Latency: fmt.Sprintf("%.1f", float64(rawSearchLatency.Microseconds())/1000.0),
+		Detail:  fmt.Sprintf("%d raw results", len(rawResults)),
+	})
+	fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+
+	// 5. Composite scoring (CPU only, no I/O)
+	t0 = time.Now()
+	for i := 0; i < 1000; i++ {
+		for _, r := range rawResults {
+			memory.CompositeScore(0.8, r.Modified, r.Confidence, r.ContentType, 0.5, 0.4, 0.1)
+		}
+	}
+	compositeDur := time.Since(t0)
+	opsPerSec := float64(1000*len(rawResults)) / compositeDur.Seconds()
+	results = append(results, benchResult{
+		Name:    "Composite scoring",
+		Latency: fmt.Sprintf("%.3f", float64(compositeDur.Microseconds())/1000.0/1000.0),
+		Detail:  fmt.Sprintf("%.0f scores/sec (1000 x %d)", opsPerSec, len(rawResults)),
+	})
+	fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+
+	// 6. End-to-end: embed + search + score (what a hook actually does)
+	t0 = time.Now()
+	vec2, _ := client.GetQueryEmbedding("recent session handoffs and decisions")
+	raw2, _ := db.VectorSearchRaw(vec2, 12)
+	for _, r := range raw2 {
+		memory.CompositeScore(0.8, r.Modified, r.Confidence, r.ContentType, 0.5, 0.4, 0.1)
+	}
+	e2eLatency := time.Since(t0)
+	results = append(results, benchResult{
+		Name:    "End-to-end (hook sim)",
+		Latency: fmt.Sprintf("%.1f", float64(e2eLatency.Microseconds())/1000.0),
+		Detail:  "embed + search + score",
+	})
+	fmt.Printf("  %-30s %8s ms  %s\n", results[len(results)-1].Name, results[len(results)-1].Latency, results[len(results)-1].Detail)
+
+	printBenchSummary(results)
+
+	// Output JSON for programmatic consumption
+	data, _ := json.MarshalIndent(results, "", "  ")
+	fmt.Println("\n" + string(data))
+	return nil
+}
+
+func printBenchSummary(results []benchResult) {
+	fmt.Println()
+	fmt.Println("Summary:")
+
+	// Find the embed and search latencies to calculate overhead
+	var embedMs, searchMs, e2eMs float64
+	for _, r := range results {
+		var v float64
+		fmt.Sscanf(r.Latency, "%f", &v)
+		switch r.Name {
+		case "Embedding (Ollama)":
+			embedMs = v
+		case "Vector search (top-10)":
+			searchMs = v
+		case "End-to-end (hook sim)":
+			e2eMs = v
+		}
+	}
+
+	if embedMs > 0 && searchMs > 0 {
+		goOverhead := e2eMs - embedMs
+		fmt.Printf("  Ollama embedding: %.0fms (network I/O, dominates latency)\n", embedMs)
+		fmt.Printf("  Go overhead:      %.1fms (search + scoring + I/O)\n", goOverhead)
+		fmt.Printf("  Total e2e:        %.0fms\n", e2eMs)
+	}
+}

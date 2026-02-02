@@ -1,0 +1,107 @@
+name: Release SAME Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+            cc: ""
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+            cc: ""
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            cc: ""
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+            cc: zig
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .scripts/same
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: .scripts/same/go.sum
+
+      - name: Install zig (Windows cross-compile)
+        if: matrix.cc == 'zig'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Run tests
+        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
+        env:
+          CGO_ENABLED: '1'
+        run: go test ./... -v -count=1
+
+      - name: Build (native)
+        if: matrix.cc == ''
+        env:
+          CGO_ENABLED: '1'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -ldflags "-s -w -X main.Version=${{ github.ref_name }}" \
+            -o build/same-${{ matrix.suffix }} ./cmd/same
+
+      - name: Build (zig cross-compile)
+        if: matrix.cc == 'zig'
+        env:
+          CGO_ENABLED: '1'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CC: "zig cc -target x86_64-windows-gnu"
+          CXX: "zig c++ -target x86_64-windows-gnu"
+          CGO_CFLAGS: "-I${{ github.workspace }}/.scripts/same/cgo-headers -fno-sanitize=undefined"
+        run: |
+          go build -ldflags "-s -w -X main.Version=${{ github.ref_name }}" \
+            -o build/same-${{ matrix.suffix }} ./cmd/same
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: same-${{ matrix.suffix }}
+          path: .scripts/same/build/same-${{ matrix.suffix }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/same-darwin-arm64/same-darwin-arm64
+            artifacts/same-darwin-amd64/same-darwin-amd64
+            artifacts/same-linux-amd64/same-linux-amd64
+            artifacts/same-windows-amd64.exe/same-windows-amd64.exe
