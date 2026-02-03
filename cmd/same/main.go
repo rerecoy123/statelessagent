@@ -576,7 +576,8 @@ func runDoctor() error {
 		}
 	}
 
-	fmt.Printf("\n%sSAME Health Check%s\n\n", cli.Bold, cli.Reset)
+	cli.Header("SAME Health Check")
+	fmt.Println()
 
 	// 1. Vault path
 	check("Vault path", "run 'same init' or set VAULT_PATH", func() (string, error) {
@@ -703,7 +704,11 @@ func runDoctor() error {
 		return "", nil
 	})
 
-	fmt.Printf("\n  %d passed, %d failed\n\n", passed, failed)
+	cli.Box([]string{
+		fmt.Sprintf("%d passed, %d failed", passed, failed),
+	})
+
+	cli.Footer()
 
 	if failed > 0 {
 		return fmt.Errorf("%d check(s) failed", failed)
@@ -1150,9 +1155,10 @@ func runStatus() error {
 			"Run 'same init' to set up, or set VAULT_PATH")
 	}
 
-	fmt.Printf("\n%sSAME Status%s\n\n", cli.Bold, cli.Reset)
+	cli.Header("SAME Status")
 
-	fmt.Printf("  Vault:   %s\n", cli.ShortenHome(vp))
+	cli.Section("Vault")
+	fmt.Printf("  Path:    %s\n", cli.ShortenHome(vp))
 
 	db, err := store.Open()
 	if err != nil {
@@ -1195,7 +1201,7 @@ func runStatus() error {
 	}
 
 	// Hooks
-	fmt.Printf("\n  Hooks:\n")
+	cli.Section("Hooks")
 	hookStatus := setup.HooksInstalled(vp)
 	hookNames := []string{
 		"context-surfacing",
@@ -1205,23 +1211,24 @@ func runStatus() error {
 	}
 	for _, name := range hookNames {
 		if hookStatus[name] {
-			fmt.Printf("    %-22s %s✓ active%s\n",
+			fmt.Printf("  %-24s %s\u2713 active%s\n",
 				name, cli.Green, cli.Reset)
 		} else {
-			fmt.Printf("    %-22s %s- not configured%s\n",
+			fmt.Printf("  %-24s %s- not configured%s\n",
 				name, cli.Dim, cli.Reset)
 		}
 	}
 
 	// MCP
+	cli.Section("MCP")
 	if setup.MCPInstalled(vp) {
-		fmt.Printf("\n  MCP: registered\n")
+		fmt.Printf("  registered in .mcp.json\n")
 	} else {
-		fmt.Printf("\n  MCP: %snot registered%s\n",
+		fmt.Printf("  %snot registered%s\n",
 			cli.Dim, cli.Reset)
 	}
 
-	fmt.Println()
+	cli.Footer()
 	return nil
 }
 

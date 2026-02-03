@@ -31,30 +31,30 @@ func RunInit(opts InitOptions) error {
 	if version == "" {
 		version = "dev"
 	}
-	fmt.Printf("\n%sSAME v%s%s\n", cli.Bold, version, cli.Reset)
+	cli.Banner(version)
 
 	// Checking Ollama
-	fmt.Printf("\n  Checking Ollama\n")
+	cli.Section("Ollama")
 	if err := checkOllama(); err != nil {
 		return err
 	}
 
 	// Finding notes
-	fmt.Printf("\n  Finding your notes\n")
+	cli.Section("Vault")
 	vaultPath, err := detectVault(opts.Yes)
 	if err != nil {
 		return err
 	}
 
 	// Indexing
-	fmt.Printf("\n  Indexing\n")
+	cli.Section("Indexing")
 	stats, err := runIndex(vaultPath)
 	if err != nil {
 		return err
 	}
 
 	// Config
-	fmt.Printf("\n  Config\n")
+	cli.Section("Config")
 	if err := generateConfig(vaultPath); err != nil {
 		return err
 	}
@@ -66,36 +66,43 @@ func RunInit(opts InitOptions) error {
 	registerVault(vaultPath)
 
 	// Integrations
-	fmt.Printf("\n  Integrations\n")
+	cli.Section("Integrations")
 	if !opts.MCPOnly {
 		setupHooksInteractive(vaultPath, opts.Yes)
 	}
 	setupMCPInteractive(vaultPath, opts.Yes)
 
-	// Setup complete + summary
-	fmt.Printf("\n  %sSetup complete%s\n", cli.Bold, cli.Reset)
-
+	// Setup complete + summary box
 	dbPath := filepath.Join(vaultPath, ".same", "data", "vault.db")
 	var dbSizeMB float64
 	if info, err := os.Stat(dbPath); err == nil {
 		dbSizeMB = float64(info.Size()) / (1024 * 1024)
 	}
-	fmt.Println()
-	fmt.Printf("  Notes:    %s\n", cli.FormatNumber(stats.NotesInIndex))
-	fmt.Printf("  Chunks:   %s\n", cli.FormatNumber(stats.ChunksInIndex))
-	if dbSizeMB > 0 {
-		fmt.Printf("  Database: %.1f MB\n", dbSizeMB)
+
+	boxLines := []string{
+		"Setup complete",
+		"",
+		fmt.Sprintf("Notes:    %s", cli.FormatNumber(stats.NotesInIndex)),
+		fmt.Sprintf("Chunks:   %s", cli.FormatNumber(stats.ChunksInIndex)),
 	}
+	if dbSizeMB > 0 {
+		boxLines = append(boxLines, fmt.Sprintf("Database: %.1f MB", dbSizeMB))
+	}
+	cli.Box(boxLines)
 
 	fmt.Println()
-	fmt.Printf("  Run '%sclaude%s' to start. SAME surfaces context\n", cli.Cyan, cli.Reset)
-	fmt.Printf("  automatically. Run '%ssame status%s' anytime.\n", cli.Cyan, cli.Reset)
-
-	// Privacy at the end (less interruptive)
-	fmt.Printf("\n  %sPrivacy: all processing is local via Ollama.%s\n", cli.Dim, cli.Reset)
-	fmt.Printf("  %sContext sent to your AI tool's API as part of%s\n", cli.Dim, cli.Reset)
-	fmt.Printf("  %syour conversation — same as pasting it manually.%s\n", cli.Dim, cli.Reset)
+	fmt.Printf("  Run 'claude' to start. SAME surfaces\n")
+	fmt.Printf("  context automatically.\n")
 	fmt.Println()
+	fmt.Printf("  Run 'same status' anytime.\n")
+
+	// Privacy at the end
+	cli.Section("Privacy")
+	fmt.Printf("  All processing is local via Ollama.\n")
+	fmt.Printf("  Context sent to your AI tool's API as\n")
+	fmt.Printf("  part of your conversation.\n")
+
+	cli.Footer()
 
 	return nil
 }
