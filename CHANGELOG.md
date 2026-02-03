@@ -1,24 +1,44 @@
 # Changelog
 
-## 0.1.0-alpha — 2026-02-01
+## v0.3.0 — Standalone Release
 
-### Rebranded as The Stateless Agent
+SAME is now a standalone Go project, decoupled from any specific vault infrastructure.
 
-Forked from [Statelessagent](https://github.com/heyitsnoah/statelessagent) by Noah Brier and rebranded under `sgx-labs/statelessagent`.
+### Breaking Changes
 
-#### Added
-- Interactive TUI installer (`node install.mjs`) with prerequisite checks and feature selection
-- 3D ASCII banner with red gradient
-- This changelog
+- **Data directory moved**: `.scripts/same/data/` → `.same/data/`. Run `same reindex --force` after updating.
+- **Plugins path moved**: `.scripts/same/plugins.json` → `.same/plugins.json`.
+- **Go module renamed**: `github.com/sgxdev/same` → `github.com/sgx-labs/statelessagent`.
+- **Default handoff directory**: Changed from `07_Journal/Sessions` to `sessions`. Override with `SAME_HANDOFF_DIR`.
+- **Default decision log**: Changed from `decisions_and_conclusions.md` to `decisions.md`. Override with `SAME_DECISION_LOG`.
 
-#### Changed
-- All internal references updated from `statelessagent` to `stateless-agent`
-- GitHub URLs point to `sgx-labs/statelessagent`
-- `/install-statelessagent-command` renamed to `/install-command`
-- Fallback vault paths use `stateless-agent-vault`
-- ESLint config names use `stateless-agent/*` namespace
+### Added
 
-#### Preserved
-- Full vault structure, PARA method, all slash commands
-- Upgrade system, agent roles, MCP integrations
-- All acknowledgments and credits to original authors
+- Multi-tool vault detection: recognizes `.same`, `.obsidian`, `.logseq`, `.foam`, `.dendron` markers
+- `SAME_DATA_DIR` env var to override data directory location
+- `SAME_HANDOFF_DIR` env var to override handoff directory
+- `SAME_DECISION_LOG` env var to override decision log path
+- `SAME_SKIP_DIRS` env var to add custom skip directories
+- Security: `_PRIVATE/` exclusion from indexing and context surfacing
+- Security: Ollama localhost-only validation
+- Security: Prompt injection detection in context surfacing snippets
+- Security: `same doctor` checks for private content leaks and Ollama binding
+- MCP server name changed from `vault-search` to `same`
+
+### Removed
+
+- Obsidian-specific vault detection fallback
+- Personal path defaults
+- Node.js/Python infrastructure (package.json, vault-search Python server)
+- Raycast scripts, eval harness, docs (deferred to separate repos)
+
+## v0.2.0
+
+- Initial Go rewrite of SAME
+- Vector search with sqlite-vec
+- Claude Code hooks (context surfacing, decision extraction, handoff generation, staleness check)
+- MCP server with 6 tools
+- Composite scoring (semantic + recency + confidence)
+- Vault registry for multi-vault support
+- File watcher for auto-reindex
+- Budget tracking for context utilization

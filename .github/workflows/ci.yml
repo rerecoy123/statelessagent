@@ -3,25 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
-    paths:
-      - '.scripts/same/**'
   pull_request:
-    paths:
-      - '.scripts/same/**'
 
 jobs:
   test:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: .scripts/same
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          cache-dependency-path: .scripts/same/go.sum
+          cache-dependency-path: go.sum
 
       - name: Run tests
         env:

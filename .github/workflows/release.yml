@@ -34,9 +34,6 @@ jobs:
             suffix: windows-amd64.exe
             cc: zig
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: .scripts/same
 
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +41,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          cache-dependency-path: .scripts/same/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install zig (Windows cross-compile)
         if: matrix.cc == 'zig'
@@ -76,7 +73,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CC: "zig cc -target x86_64-windows-gnu"
           CXX: "zig c++ -target x86_64-windows-gnu"
-          CGO_CFLAGS: "-I${{ github.workspace }}/.scripts/same/cgo-headers -fno-sanitize=undefined"
+          CGO_CFLAGS: "-I${{ github.workspace }}/cgo-headers -fno-sanitize=undefined"
         run: |
           go build -ldflags "-s -w -X main.Version=${{ github.ref_name }}" \
             -o build/same-${{ matrix.suffix }} ./cmd/same
@@ -85,7 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: same-${{ matrix.suffix }}
-          path: .scripts/same/build/same-${{ matrix.suffix }}
+          path: build/same-${{ matrix.suffix }}
 
   release:
     needs: build
