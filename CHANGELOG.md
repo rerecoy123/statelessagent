@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.5.0 — Public Launch
+
+Landing page, branded CLI, and overhauled documentation.
+
+### Added
+
+- **Landing page** at statelessagent.com — dark terminal aesthetic, install-first design
+- **Branded CLI output** — STATELESS AGENT ASCII art with red gradient, section headers, boxed summaries, and footer across `same init`, `same status`, and `same doctor`
+- **Post-init explanation** — completion message now explains what SAME does: context surfacing, decision extraction, handoffs, staleness checks
+- **Donations** — Buy Me a Coffee + GitHub Sponsors links in README and landing page
+
+### Changed
+
+- **README overhauled** — sell first, document second; collapsed `<details>` sections for CLI reference, configuration, and MCP; streamlined FAQ
+- **install.sh** now also available at `statelessagent.com/install.sh`
+
+## v0.4.0 — Public Release Polish
+
+Eval-driven optimization, security hardening, CLI improvements.
+
+### Added
+
+- Composite scoring: semantic + recency + confidence signal blending
+- Distance threshold and composite threshold tuning via config
+- Eval harness for measuring retrieval quality
+- Security: prompt injection pattern scanning in context snippets
+- `same budget` command for context utilization stats
+- Config file support (`.same/config.toml`) with `same config show/edit`
+
+### Changed
+
+- Default distance threshold tuned from 15.0 to 16.2 based on eval results
+- Hook output formatting improvements
+
 ## v0.3.0 — Standalone Release
 
 SAME is now a standalone Go project, decoupled from any specific vault infrastructure.

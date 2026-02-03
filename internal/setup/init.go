@@ -91,10 +91,17 @@ func RunInit(opts InitOptions) error {
 	cli.Box(boxLines)
 
 	fmt.Println()
-	fmt.Printf("  Run 'claude' to start. SAME surfaces\n")
-	fmt.Printf("  context automatically.\n")
+	fmt.Printf("  %sSAME is now active.%s When you use Claude Code:\n", cli.Bold, cli.Reset)
 	fmt.Println()
-	fmt.Printf("  Run 'same status' anytime.\n")
+	fmt.Printf("  %s→%s Your prompts get matched to relevant notes\n", cli.Cyan, cli.Reset)
+	fmt.Printf("  %s→%s Decisions get extracted and saved\n", cli.Cyan, cli.Reset)
+	fmt.Printf("  %s→%s Session handoffs keep context across sessions\n", cli.Cyan, cli.Reset)
+	fmt.Printf("  %s→%s Stale notes get flagged for review\n", cli.Cyan, cli.Reset)
+	fmt.Println()
+	fmt.Printf("  Try it: run %sclaude%s and ask about something\n", cli.Bold, cli.Reset)
+	fmt.Printf("  in your notes.\n")
+	fmt.Println()
+	fmt.Printf("  Run %ssame status%s anytime.\n", cli.Bold, cli.Reset)
 
 	// Privacy at the end
 	cli.Section("Privacy")
