@@ -177,4 +177,6 @@ Cross-compilation for Linux/Windows from macOS requires [zig](https://ziglang.or
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Business Source License 1.1 — free for personal, educational, and non-commercial use. Commercial production use requires a paid license. See [LICENSE](LICENSE) for full terms.
+
+On 2030-02-02, the code automatically relicenses to Apache 2.0.

@@ -1,21 +1,43 @@
-MIT License
+Business Source License 1.1
 
-Copyright (c) 2025-2026 Stateless Agent Contributors
+Licensor:  SGX Labs
+Licensed Work:  SAME (Stateless Agent Memory Engine) v0.3.0 and later
+Change Date:  2030-02-02
+Change License:  Apache License, Version 2.0
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Terms
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, below.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Additional Use Grant:
+
+You may use the Licensed Work for any non-commercial purpose, including
+personal use, educational use, research, evaluation, and hobbyist projects.
+
+For commercial production use — meaning use of the Licensed Work, or any
+derivative of it, as part of or in support of a product or service offered
+to third parties for a fee — you must obtain a commercial license from the
+Licensor. Contact: licensing@sgxlabs.dev
+
+Change Date and Change License:
+
+On the Change Date above, the Licensed Work will be made available under
+the Change License (Apache License, Version 2.0). Until the Change Date,
+the terms of this Business Source License 1.1 apply.
+
+Notice
+
+Business Source License 1.1 was originally published by MariaDB Corporation Ab.
+The text of this license is available at https://mariadb.com/bsl11/
+
+THE LICENSED WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE LICENSED WORK OR THE USE OR OTHER DEALINGS IN THE LICENSED
+WORK.
+
+Copyright (c) 2025-2026 SGX Labs
