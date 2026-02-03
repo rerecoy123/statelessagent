@@ -42,7 +42,7 @@ SAME is now a standalone Go project, decoupled from any specific vault infrastru
 
 - **Data directory moved**: `.scripts/same/data/` → `.same/data/`. Run `same reindex --force` after updating.
 - **Plugins path moved**: `.scripts/same/plugins.json` → `.same/plugins.json`.
-- **Go module renamed**: `github.com/sgxdev/same` → `github.com/sgx-labs/statelessagent`.
+- **Go module renamed**: now `github.com/sgx-labs/statelessagent`.
 - **Default handoff directory**: Changed from `07_Journal/Sessions` to `sessions`. Override with `SAME_HANDOFF_DIR`.
 - **Default decision log**: Changed from `decisions_and_conclusions.md` to `decisions.md`. Override with `SAME_DECISION_LOG`.
 
