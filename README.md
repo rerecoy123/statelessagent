@@ -10,13 +10,14 @@ Give your AI coding agent persistent memory — local, automatic, private.
 curl -fsSL statelessagent.com/install.sh | bash
 ```
 
-Requires [Ollama](https://ollama.ai) for local embeddings.
+Requires [Ollama](https://ollama.ai) for local embeddings (or configure OpenAI).
 
 ## What it does
 
-- **Surfaces context automatically** — your prompt gets matched to relevant notes and injected as context. No copy-pasting.
+- **Surfaces context automatically** — your prompt gets matched to relevant notes and surfaced as context. No copy-pasting.
+- **Learns what helps** — notes the agent actually uses get boosted for future sessions (feedback loop).
 - **Extracts decisions and generates handoffs** — decisions get logged, session summaries get created, so the next session picks up where you left off.
-- **Runs entirely on your machine** — Ollama embeddings + SQLite. No cloud, no API keys, no accounts.
+- **Runs entirely on your machine** — Ollama embeddings + SQLite by default. No cloud, no API keys, no accounts. Optional OpenAI embeddings if you prefer.
 
 ## How it works
 
@@ -51,7 +52,7 @@ Use `same init --mcp-only` to skip Claude Code hooks and just register the MCP s
 
 ## Built with
 
-Go · SQLite + sqlite-vec · Ollama
+Go · SQLite + sqlite-vec · Ollama / OpenAI
 
 <details>
 <summary><strong>CLI Reference</strong></summary>
@@ -91,7 +92,11 @@ decision_log = "decisions.md"
 
 [ollama]
 url = "http://localhost:11434"
-model = "nomic-embed-text"
+
+[embedding]
+provider = "ollama"           # "ollama" (default) or "openai"
+model = "nomic-embed-text"    # or "text-embedding-3-small" for openai
+# api_key = ""                # required for openai, or set SAME_EMBED_API_KEY
 
 [memory]
 max_token_budget = 800
@@ -103,6 +108,7 @@ composite_threshold = 0.65
 context_surfacing = true
 decision_extractor = true
 handoff_generator = true
+feedback_loop = true
 staleness_check = true
 ```
 
@@ -120,6 +126,9 @@ Configuration priority (highest wins):
 | `SAME_DATA_DIR` | `<vault>/.same/data` | Database location |
 | `SAME_HANDOFF_DIR` | `sessions` | Handoff notes directory |
 | `SAME_DECISION_LOG` | `decisions.md` | Decision log path |
+| `SAME_EMBED_PROVIDER` | `ollama` | Embedding provider (`ollama` or `openai`) |
+| `SAME_EMBED_MODEL` | `nomic-embed-text` | Embedding model name |
+| `SAME_EMBED_API_KEY` | *(none)* | API key (required for `openai` provider) |
 | `SAME_SKIP_DIRS` | *(none)* | Extra dirs to skip (comma-separated) |
 
 </details>
@@ -145,11 +154,14 @@ SAME exposes 6 tools via MCP:
 **Do I need Obsidian?**
 No. Any directory of `.md` files works.
 
+**Do I need Ollama?**
+By default, yes — SAME uses Ollama for local embeddings. But you can switch to OpenAI embeddings by setting `SAME_EMBED_PROVIDER=openai` and `SAME_EMBED_API_KEY`. Note: switching providers requires reindexing since embedding dimensions differ.
+
 **Does it slow down my prompts?**
-50-200ms. Ollama embedding is the bottleneck — search and scoring take <5ms.
+50-200ms. Embedding is the bottleneck — search and scoring take <5ms.
 
 **Is my data sent anywhere?**
-SAME is fully local. Context injected into your AI tool is sent to that tool's API as part of your conversation, same as pasting it manually.
+SAME is fully local. Context surfaced to your AI tool is sent to that tool's API as part of your conversation, same as pasting it manually.
 
 **How much disk space?**
 5-15MB for a few hundred notes.

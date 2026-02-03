@@ -2,17 +2,20 @@
 
 ## v0.5.0 — Public Launch
 
-Landing page, branded CLI, and overhauled documentation.
+Landing page, branded CLI, multi-provider embeddings, and feedback loop.
 
 ### Added
 
+- **Multi-provider embedding support** — pluggable embedding backend with Ollama (default) and OpenAI providers. Configure via `[embedding]` config section or `SAME_EMBED_PROVIDER` / `SAME_EMBED_MODEL` / `SAME_EMBED_API_KEY` env vars
+- **Feedback loop** — notes surfaced during a session that the agent actually references get an access count boost, improving future retrieval confidence
 - **Landing page** at statelessagent.com — dark terminal aesthetic, install-first design
 - **Branded CLI output** — STATELESS AGENT ASCII art with red gradient, section headers, boxed summaries, and footer across `same init`, `same status`, and `same doctor`
-- **Post-init explanation** — completion message now explains what SAME does: context surfacing, decision extraction, handoffs, staleness checks
+- **Post-init explanation** — completion message now explains what SAME does: context surfacing, decision extraction, handoffs, feedback loop, staleness checks
 - **Donations** — Buy Me a Coffee + GitHub Sponsors links in README and landing page
 
 ### Changed
 
+- **Embedding architecture** — `embedding.Client` replaced with `embedding.Provider` interface; all call sites updated
 - **README overhauled** — sell first, document second; collapsed `<details>` sections for CLI reference, configuration, and MCP; streamlined FAQ
 - **install.sh** now also available at `statelessagent.com/install.sh`
 
