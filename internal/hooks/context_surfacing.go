@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/embedding"
 	"github.com/sgx-labs/statelessagent/internal/memory"
 	"github.com/sgx-labs/statelessagent/internal/store"
@@ -13,12 +14,8 @@ import (
 
 const (
 	minPromptChars   = 20
-	maxResults       = 2   // 2 high-quality results > 3 noisy ones
 	maxSnippetChars  = 300
-	maxDistance       = 16.2 // L2 distance; eval-optimized from 16.5 (iter4: F1 +38%)
-	minComposite     = 0.65 // raised from 0.6; fewer false positives
 	minSemanticFloor = 0.25 // absolute floor: if semantic score < this, skip regardless of boost
-	maxTokenBudget   = 800  // tightened from 1000; less context waste
 )
 
 // Recency-aware weights: when query has recency intent, shift weight heavily to recency.
@@ -91,6 +88,12 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 		return nil
 	}
 
+	// Load configurable memory parameters once per invocation
+	maxResults := config.MemoryMaxResults()
+	maxDistance := config.MemoryDistanceThreshold()
+	minComposite := config.MemoryCompositeThreshold()
+	maxTokenBudget := config.MemoryMaxTokenBudget()
+
 	isRecency := memory.HasRecencyIntent(prompt)
 
 	// Embed the prompt
@@ -106,9 +109,9 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	var candidates []scored
 
 	if isRecency {
-		candidates = recencyHybridSearch(db, queryVec)
+		candidates = recencyHybridSearch(db, queryVec, maxDistance)
 	} else {
-		candidates = standardSearch(db, queryVec)
+		candidates = standardSearch(db, queryVec, maxDistance, minComposite)
 	}
 
 	if len(candidates) == 0 {
@@ -166,8 +169,9 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 }
 
 // standardSearch performs vector search with keyword fallback.
-func standardSearch(db *store.DB, queryVec []float32) []scored {
+func standardSearch(db *store.DB, queryVec []float32, maxDistance, minComposite float64) []scored {
 	// Fetch extra candidates to compensate for path filtering (experiments, _PRIVATE)
+	maxResults := config.MemoryMaxResults()
 	raw, err := db.VectorSearchRaw(queryVec, maxResults*15)
 	vectorEmpty := err != nil || len(raw) == 0 || raw[0].Distance > maxDistance
 
@@ -338,7 +342,7 @@ var commonHyphenated = map[string]bool{
 // recencyHybridSearch merges vector results with time-sorted results.
 // Uses recency-heavy weights and includes recently modified notes even
 // if they aren't strong semantic matches.
-func recencyHybridSearch(db *store.DB, queryVec []float32) []scored {
+func recencyHybridSearch(db *store.DB, queryVec []float32, maxDistance float64) []scored {
 	// Get vector search results (relaxed distance threshold)
 	raw, err := db.VectorSearchRaw(queryVec, recencyMaxResults*15)
 	if err != nil {

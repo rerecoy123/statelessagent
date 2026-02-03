@@ -86,7 +86,7 @@ func DefaultConfig() *Config {
 		Memory: MemoryConfig{
 			MaxTokenBudget:     800,
 			MaxResults:         2,
-			DistanceThreshold:  16.5,
+			DistanceThreshold:  16.2,
 			CompositeThreshold: 0.65,
 		},
 		Hooks: HooksConfig{
@@ -217,7 +217,7 @@ func generateTOMLContent(vaultPath string) string {
 	b.WriteString("[memory]\n")
 	b.WriteString("max_token_budget = 800\n")
 	b.WriteString("max_results = 2\n")
-	b.WriteString("distance_threshold = 16.5\n")
+	b.WriteString("distance_threshold = 16.2\n")
 	b.WriteString("composite_threshold = 0.65\n\n")
 
 	b.WriteString("[hooks]\n")
@@ -270,6 +270,38 @@ func DecisionLogPath() string {
 		return cfg.Vault.DecisionLog
 	}
 	return "decisions.md"
+}
+
+// MemoryMaxResults returns the configured maximum number of results to surface.
+func MemoryMaxResults() int {
+	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.MaxResults > 0 {
+		return cfg.Memory.MaxResults
+	}
+	return 2
+}
+
+// MemoryDistanceThreshold returns the configured maximum L2 distance threshold.
+func MemoryDistanceThreshold() float64 {
+	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.DistanceThreshold > 0 {
+		return cfg.Memory.DistanceThreshold
+	}
+	return 16.2
+}
+
+// MemoryCompositeThreshold returns the configured minimum composite score.
+func MemoryCompositeThreshold() float64 {
+	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.CompositeThreshold > 0 {
+		return cfg.Memory.CompositeThreshold
+	}
+	return 0.65
+}
+
+// MemoryMaxTokenBudget returns the configured maximum token budget for context injection.
+func MemoryMaxTokenBudget() int {
+	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.MaxTokenBudget > 0 {
+		return cfg.Memory.MaxTokenBudget
+	}
+	return 800
 }
 
 // loadConfigSafe loads config without risking recursion. Returns nil on error.

@@ -129,7 +129,7 @@ model = "nomic-embed-text"
 [memory]
 max_token_budget = 800
 max_results = 2
-distance_threshold = 16.5
+distance_threshold = 16.2
 composite_threshold = 0.65
 
 [hooks]
