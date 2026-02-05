@@ -214,6 +214,49 @@ Handoffs compound — each one makes the next session more productive.
 - AI remembers your project
 - Documentation happens naturally
 
+## Token Budgeting
+
+Control how aggressively flywheels spin:
+
+| Setting | Config | Effect |
+|---------|--------|--------|
+| **Tight** | `same profile use precise` | Fewer results, less tokens |
+| **Balanced** | `same profile use balanced` | Default behavior |
+| **Unlimited** | `same profile use broad` | More context, ~2x tokens |
+
+### In config.toml
+
+```toml
+[memory]
+max_results = 2          # Cap surfaced notes (1-4)
+max_token_budget = 800   # Cap injected tokens (400-1600)
+```
+
+### Quick Adjustments
+
+```bash
+# Tight budget (fewer tokens)
+same profile use precise
+
+# Let it breathe (more context)
+same profile use broad
+
+# Check what's being used
+same budget
+```
+
+### When to Tighten
+
+- Token costs adding up
+- Surfaced context isn't being used
+- Too much noise in results
+
+### When to Loosen
+
+- AI keeps asking for info that's in notes
+- Complex project needs more context
+- You want thorough exploration
+
 ## Measuring Flywheel Health
 
 ```bash
