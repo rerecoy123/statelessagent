@@ -1165,6 +1165,7 @@ func initCmd() *cobra.Command {
 	var (
 		yes     bool
 		mcpOnly bool
+		verbose bool
 	)
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -1182,12 +1183,14 @@ Run this command from inside your project folder.`,
 			return setup.RunInit(setup.InitOptions{
 				Yes:     yes,
 				MCPOnly: mcpOnly,
+				Verbose: verbose,
 				Version: Version,
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "Accept all defaults without prompting")
 	cmd.Flags().BoolVar(&mcpOnly, "mcp-only", false, "Skip hooks setup (for Cursor/Windsurf users)")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show each file being processed")
 	return cmd
 }
 

@@ -20,8 +20,9 @@ import (
 
 // InitOptions controls the init wizard behavior.
 type InitOptions struct {
-	Yes     bool // skip all prompts, accept defaults
-	MCPOnly bool // skip hooks setup (for Cursor/Windsurf users)
+	Yes     bool   // skip all prompts, accept defaults
+	MCPOnly bool   // skip hooks setup (for Cursor/Windsurf users)
+	Verbose bool   // show detailed progress (each file being processed)
 	Version string
 }
 
@@ -48,7 +49,7 @@ func RunInit(opts InitOptions) error {
 
 	// Indexing
 	cli.Section("Indexing")
-	stats, err := runIndex(vaultPath)
+	stats, err := runIndex(vaultPath, opts.Verbose)
 	if err != nil {
 		return err
 	}
@@ -365,7 +366,7 @@ func promptForPath() (string, error) {
 }
 
 // runIndex indexes the vault with a progress bar.
-func runIndex(vaultPath string) (*indexer.Stats, error) {
+func runIndex(vaultPath string, verbose bool) (*indexer.Stats, error) {
 	// Ensure data dir exists
 	dataDir := filepath.Join(vaultPath, ".same", "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -394,9 +395,19 @@ func runIndex(vaultPath string) (*indexer.Stats, error) {
 		if total == 0 {
 			return
 		}
-		filled := current * barWidth / total
-		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-		fmt.Printf("\r  [%s] %d/%d", bar, current, total)
+		if verbose {
+			// Show each file being processed
+			shortPath := path
+			if len(path) > 50 {
+				shortPath = "..." + path[len(path)-47:]
+			}
+			fmt.Printf("\r  [%d/%d] %s\033[K\n", current, total, shortPath)
+		} else {
+			// Just show progress bar
+			filled := current * barWidth / total
+			bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+			fmt.Printf("\r  [%s] %d/%d", bar, current, total)
+		}
 	}
 
 	stats, err := indexer.ReindexWithProgress(db, true, progress)
@@ -404,7 +415,9 @@ func runIndex(vaultPath string) (*indexer.Stats, error) {
 		return nil, fmt.Errorf("indexing failed: %w", err)
 	}
 
-	fmt.Println() // newline after progress bar
+	if !verbose {
+		fmt.Println() // newline after progress bar
+	}
 	return stats, nil
 }
 
