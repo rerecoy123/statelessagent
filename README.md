@@ -14,7 +14,7 @@ Requires [Ollama](https://ollama.ai) for local embeddings (or configure OpenAI).
 
 ## What it does
 
-- **Surfaces context automatically** — your prompt gets matched to relevant notes and surfaced as context. No copy-pasting.
+- **Surfaces the right context, not all context** — semantic search finds the notes that matter. No manual copy-pasting, no token waste.
 - **Learns what helps** — notes the agent actually uses get boosted for future sessions (feedback loop).
 - **Extracts decisions and generates handoffs** — decisions get logged, session summaries get created, so the next session picks up where you left off.
 - **Runs entirely on your machine** — Ollama embeddings + SQLite by default. No cloud, no API keys, no accounts. Optional OpenAI embeddings if you prefer.
