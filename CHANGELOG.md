@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.1 — Onboarding & UX Polish
+
+Better first-run experience and vibe-coder friendly commands.
+
+### Added
+
+- **Welcome notes** — 3 example notes copied to `.same/welcome/` during init, demonstrating recommended format and providing searchable onboarding content
+- **Profile system** — `same profile use precise|balanced|broad` to adjust precision vs coverage tradeoffs, with token usage warnings
+- **Display modes** — `same display full|compact|quiet` to control output verbosity
+- **Experience level question** — Setup asks if you're new to coding or experienced, sets appropriate defaults
+- **Cloud sync warning** — Detects Dropbox, iCloud, OneDrive, Google Drive and warns about database conflicts
+- **Large vault time estimates** — Shows estimated indexing time for 500+ note vaults
+- **Dependency checks** — Verifies Go 1.23+ and CGO with platform-specific install instructions
+- **ASCII art banner** — STATELESS AGENT logo with red gradient in installer
+
+### Changed
+
+- Default display mode is now "full" (verbose box) instead of compact
+- Installer has friendlier messaging and visual polish
+
 ## v0.5.0 — Public Launch
 
 Landing page, branded CLI, multi-provider embeddings, and feedback loop.

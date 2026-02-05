@@ -66,6 +66,8 @@ Go · SQLite + sqlite-vec · Ollama / OpenAI
 | `same related <path>` | Find similar notes |
 | `same reindex [--force]` | Re-index markdown files |
 | `same doctor` | System health check with fix suggestions |
+| `same display full\|compact\|quiet` | Control output verbosity |
+| `same profile use precise\|balanced\|broad` | Adjust precision vs coverage |
 | `same config show` | Show effective configuration |
 | `same config edit` | Open config in $EDITOR |
 | `same setup hooks` | Install/update Claude Code hooks |
