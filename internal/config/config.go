@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -41,6 +42,7 @@ type Config struct {
 	Embedding EmbeddingConfig `toml:"embedding"`
 	Memory    MemoryConfig    `toml:"memory"`
 	Hooks     HooksConfig     `toml:"hooks"`
+	Display   DisplayConfig   `toml:"display"`
 }
 
 // VaultConfig holds vault-related settings.
@@ -81,6 +83,11 @@ type HooksConfig struct {
 	StalenessCheck    bool `toml:"staleness_check"`
 }
 
+// DisplayConfig controls visual output settings.
+type DisplayConfig struct {
+	Mode string `toml:"mode"` // "full" (default), "compact", "quiet"
+}
+
 // DefaultConfig returns a Config with all built-in defaults.
 func DefaultConfig() *Config {
 	return &Config{
@@ -107,6 +114,9 @@ func DefaultConfig() *Config {
 			DecisionExtractor: true,
 			HandoffGenerator:  true,
 			StalenessCheck:    true,
+		},
+		Display: DisplayConfig{
+			Mode: "full",
 		},
 	}
 }
@@ -655,4 +665,41 @@ func defaultVaultPath() string {
 
 	// No vault found — return empty string (caller should show helpful error)
 	return ""
+}
+
+// DisplayMode returns the current display mode from config.
+// Returns "full" (default), "compact", or "quiet".
+func DisplayMode() string {
+	cfg := loadConfigSafe()
+	if cfg == nil || cfg.Display.Mode == "" {
+		return "full"
+	}
+	return cfg.Display.Mode
+}
+
+// SetDisplayMode updates the display mode in the config file.
+func SetDisplayMode(vaultPath, mode string) error {
+	cfgPath := ConfigFilePath(vaultPath)
+
+	// Load existing config or create default
+	cfg, err := LoadConfig()
+	if err != nil {
+		cfg = DefaultConfig()
+	}
+
+	// Update display mode
+	cfg.Display.Mode = mode
+
+	// Marshal to TOML
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	if err := encoder.Encode(cfg); err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+
+	// Ensure directory exists
+	os.MkdirAll(filepath.Dir(cfgPath), 0o755)
+
+	// Write file
+	return os.WriteFile(cfgPath, buf.Bytes(), 0o644)
 }

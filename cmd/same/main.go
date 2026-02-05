@@ -81,6 +81,7 @@ Need help? https://discord.gg/GZGHtrrKF2`,
 	root.AddCommand(logCmd())
 	root.AddCommand(configCmd())
 	root.AddCommand(setupSubCmd())
+	root.AddCommand(displayCmd())
 
 	// Global --vault flag
 	root.PersistentFlags().StringVar(&config.VaultOverride, "vault", "", "Vault name or path (overrides auto-detect)")
@@ -1522,6 +1523,78 @@ func setupSubCmd() *cobra.Command {
 	cmd.AddCommand(mcpSetupCmd)
 
 	return cmd
+}
+
+// ---------- display ----------
+
+func displayCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "display",
+		Short: "Change how much SAME shows you",
+		Long: `Control how much detail SAME shows when surfacing notes.
+
+Modes:
+  full     Show the full box with all details (default)
+  compact  Show just a one-line summary
+  quiet    Don't show anything
+
+Example: same display compact`,
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "full",
+		Short: "Show full details when surfacing (default)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setDisplayMode("full")
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "compact",
+		Short: "Show just a one-line summary",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setDisplayMode("compact")
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "quiet",
+		Short: "Don't show surfacing output",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setDisplayMode("quiet")
+		},
+	})
+
+	return cmd
+}
+
+func setDisplayMode(mode string) error {
+	vp := config.VaultPath()
+	if vp == "" {
+		return userError("No vault found", "Run 'same init' first")
+	}
+
+	// Update config file
+	cfgPath := config.ConfigFilePath(vp)
+	if err := config.SetDisplayMode(vp, mode); err != nil {
+		return fmt.Errorf("update config: %w", err)
+	}
+
+	switch mode {
+	case "full":
+		fmt.Println("Display mode: full (show all details)")
+		fmt.Println("\nSAME will show the complete box with included/excluded notes.")
+	case "compact":
+		fmt.Println("Display mode: compact (one-liner)")
+		fmt.Println("\nSAME will show: ✦ SAME surfaced 3 of 847 memories")
+	case "quiet":
+		fmt.Println("Display mode: quiet (hidden)")
+		fmt.Println("\nSAME will work silently in the background.")
+	}
+
+	fmt.Printf("\nSaved to: %s\n", cli.ShortenHome(cfgPath))
+	fmt.Println("Change takes effect on next prompt.")
+	return nil
 }
 
 // ---------- error helpers ----------

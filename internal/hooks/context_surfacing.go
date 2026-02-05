@@ -91,10 +91,16 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 		return nil
 	}
 
-	// Check display mode: SAME_QUIET suppresses output, SAME_COMPACT shows one-liner
-	// Default is full box (verbose)
-	quietMode := os.Getenv("SAME_QUIET") == "1" || os.Getenv("SAME_QUIET") == "true"
-	compactMode := os.Getenv("SAME_COMPACT") == "1" || os.Getenv("SAME_COMPACT") == "true"
+	// Check display mode from config, with env var override
+	// Default is full box
+	displayMode := config.DisplayMode() // "full", "compact", or "quiet"
+	if os.Getenv("SAME_QUIET") == "1" || os.Getenv("SAME_QUIET") == "true" {
+		displayMode = "quiet"
+	} else if os.Getenv("SAME_COMPACT") == "1" || os.Getenv("SAME_COMPACT") == "true" {
+		displayMode = "compact"
+	}
+	quietMode := displayMode == "quiet"
+	compactMode := displayMode == "compact"
 
 	// Load configurable memory parameters once per invocation
 	maxResults := config.MemoryMaxResults()
