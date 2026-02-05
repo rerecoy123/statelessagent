@@ -26,6 +26,14 @@ type InitOptions struct {
 	Version string
 }
 
+// ExperienceLevel represents the user's coding experience.
+type ExperienceLevel string
+
+const (
+	LevelVibeCoder ExperienceLevel = "vibe-coder"
+	LevelDev       ExperienceLevel = "dev"
+)
+
 // RunInit executes the interactive setup wizard.
 func RunInit(opts InitOptions) error {
 	version := opts.Version
@@ -33,6 +41,12 @@ func RunInit(opts InitOptions) error {
 		version = "dev"
 	}
 	cli.Banner(version)
+
+	// Ask experience level first (unless auto-accepting)
+	experience := LevelVibeCoder // default
+	if !opts.Yes {
+		experience = askExperienceLevel()
+	}
 
 	// Checking Ollama
 	cli.Section("Ollama")
@@ -54,9 +68,9 @@ func RunInit(opts InitOptions) error {
 		return err
 	}
 
-	// Config
+	// Config (with experience-based defaults)
 	cli.Section("Config")
-	if err := generateConfig(vaultPath); err != nil {
+	if err := generateConfigWithExperience(vaultPath, experience); err != nil {
 		return err
 	}
 
@@ -421,17 +435,6 @@ func runIndex(vaultPath string, verbose bool) (*indexer.Stats, error) {
 	return stats, nil
 }
 
-// generateConfig writes the default config file.
-func generateConfig(vaultPath string) error {
-	configPath := config.ConfigFilePath(vaultPath)
-	if err := config.GenerateConfig(vaultPath); err != nil {
-		return fmt.Errorf("generate config: %w", err)
-	}
-
-	rel, _ := filepath.Rel(vaultPath, configPath)
-	fmt.Printf("  → %s\n", rel)
-	return nil
-}
 
 // handleGitignore checks and offers to add .same/data/ to .gitignore.
 func handleGitignore(vaultPath string, autoAccept bool) {
@@ -512,4 +515,64 @@ func confirm(question string, defaultYes bool) bool {
 		return defaultYes
 	}
 	return line == "y" || line == "yes"
+}
+
+// askExperienceLevel asks the user about their experience level.
+func askExperienceLevel() ExperienceLevel {
+	cli.Section("About You")
+	fmt.Println()
+	fmt.Printf("  %sWhat's your experience level?%s\n", cli.Bold, cli.Reset)
+	fmt.Println()
+	fmt.Printf("    %s1%s) I'm new to coding / using AI to build %s(recommended)%s\n",
+		cli.Cyan, cli.Reset, cli.Dim, cli.Reset)
+	fmt.Printf("       %s→ Full details, friendly messages%s\n", cli.Dim, cli.Reset)
+	fmt.Println()
+	fmt.Printf("    %s2%s) I'm an experienced developer\n",
+		cli.Cyan, cli.Reset)
+	fmt.Printf("       %s→ Compact output, less hand-holding%s\n", cli.Dim, cli.Reset)
+	fmt.Println()
+	fmt.Print("  Choice [1]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return LevelVibeCoder
+	}
+	line = strings.TrimSpace(line)
+
+	if line == "2" {
+		fmt.Printf("\n  %s→ Developer mode: compact output, terse messages%s\n", cli.Green, cli.Reset)
+		return LevelDev
+	}
+
+	fmt.Printf("\n  %s→ Friendly mode: full details, guided help%s\n", cli.Green, cli.Reset)
+	return LevelVibeCoder
+}
+
+// generateConfigWithExperience writes the config file with experience-based defaults.
+func generateConfigWithExperience(vaultPath string, experience ExperienceLevel) error {
+	configPath := config.ConfigFilePath(vaultPath)
+	if err := config.GenerateConfig(vaultPath); err != nil {
+		return fmt.Errorf("generate config: %w", err)
+	}
+
+	// Set display mode based on experience
+	displayMode := "full"
+	if experience == LevelDev {
+		displayMode = "compact"
+	}
+	if err := config.SetDisplayMode(vaultPath, displayMode); err != nil {
+		return fmt.Errorf("set display mode: %w", err)
+	}
+
+	rel, _ := filepath.Rel(vaultPath, configPath)
+	fmt.Printf("  → %s\n", rel)
+	if experience == LevelDev {
+		fmt.Printf("  → Display mode: compact %s(change with 'same display full')%s\n",
+			cli.Dim, cli.Reset)
+	} else {
+		fmt.Printf("  → Display mode: full %s(change with 'same display compact')%s\n",
+			cli.Dim, cli.Reset)
+	}
+	return nil
 }
