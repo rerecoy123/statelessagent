@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/memory"
 	"github.com/sgx-labs/statelessagent/internal/store"
@@ -73,6 +74,8 @@ type scored struct {
 	composite   float64
 	semantic    float64
 	distance    float64
+	tokens      int      // estimated tokens (set after selection)
+	matchTerms  []string // terms from prompt that matched this note
 }
 
 // runContextSurfacing embeds the user's prompt, searches the vault,
@@ -87,6 +90,10 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	if strings.HasPrefix(strings.TrimSpace(prompt), "/") {
 		return nil
 	}
+
+	// Check display mode: SAME_QUIET suppresses output, SAME_VERBOSE shows full box
+	quietMode := os.Getenv("SAME_QUIET") == "1" || os.Getenv("SAME_QUIET") == "true"
+	verboseMode := os.Getenv("SAME_VERBOSE") == "1" || os.Getenv("SAME_VERBOSE") == "true"
 
 	// Load configurable memory parameters once per invocation
 	maxResults := config.MemoryMaxResults()
@@ -110,6 +117,9 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	// Set prompt for keyword extraction fallback
 	keyTermsPrompt = prompt
 
+	// Get total vault note count for display
+	totalVault, _ := db.NoteCount()
+
 	var candidates []scored
 
 	if isRecency {
@@ -118,9 +128,16 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 		candidates = standardSearch(db, queryVec, maxDistance, minComposite)
 	}
 
+	// If no candidates found, show empty state (unless quiet)
 	if len(candidates) == 0 {
+		if !quietMode {
+			cli.SurfacingEmpty(totalVault)
+		}
 		return nil
 	}
+
+	// Extract match terms from prompt for display
+	promptTerms := extractDisplayTerms(prompt)
 
 	effectiveMax := maxResults
 	if isRecency {
@@ -131,26 +148,71 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	}
 
 	// Build context string, capped at token budget
+	// Track which candidates are included vs excluded
 	var parts []string
+	var included []scored
+	var excluded []scored
 	totalTokens := 0
-	for _, s := range candidates {
+
+	for i := range candidates {
 		entry := fmt.Sprintf("**%s** (%s, score: %.3f)\n%s\n%s",
-			s.title, s.contentType, s.composite, s.path, s.snippet)
+			candidates[i].title, candidates[i].contentType, candidates[i].composite,
+			candidates[i].path, candidates[i].snippet)
 		entryTokens := memory.EstimateTokens(entry)
+
+		// Find which prompt terms appear in this note's title/snippet
+		candidates[i].matchTerms = findMatchingTerms(promptTerms, candidates[i].title, candidates[i].snippet)
+
 		if totalTokens+entryTokens > maxTokenBudget {
-			break
+			excluded = append(excluded, candidates[i])
+			continue
 		}
+		candidates[i].tokens = entryTokens
 		parts = append(parts, entry)
+		included = append(included, candidates[i])
 		totalTokens += entryTokens
 	}
 
 	if len(parts) == 0 {
+		if !quietMode {
+			cli.SurfacingEmpty(totalVault)
+		}
 		return nil
+	}
+
+	// Display surfacing feedback to stderr
+	if !quietMode {
+		if verboseMode {
+			// Build display notes
+			var displayNotes []cli.SurfacedNote
+			for _, s := range included {
+				displayNotes = append(displayNotes, cli.SurfacedNote{
+					Title:      s.title,
+					Tokens:     s.tokens,
+					Included:   true,
+					HighConf:   s.semantic >= 0.7, // high confidence threshold
+					MatchTerms: s.matchTerms,
+				})
+			}
+			for _, s := range excluded {
+				displayNotes = append(displayNotes, cli.SurfacedNote{
+					Title:      s.title,
+					Tokens:     0,
+					Included:   false,
+					HighConf:   false,
+					MatchTerms: s.matchTerms,
+				})
+			}
+			cli.SurfacingVerbose(displayNotes, totalVault)
+		} else {
+			// Compact mode (default)
+			cli.SurfacingCompact(len(included), len(candidates))
+		}
 	}
 
 	// Collect injected paths for usage tracking
 	var injectedPaths []string
-	for _, s := range candidates[:len(parts)] {
+	for _, s := range included {
 		injectedPaths = append(injectedPaths, s.path)
 	}
 
@@ -170,6 +232,72 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 			),
 		},
 	}
+}
+
+// extractDisplayTerms extracts meaningful terms from the prompt for display purposes.
+// Returns short, recognizable terms that users will understand.
+func extractDisplayTerms(prompt string) []string {
+	var terms []string
+	seen := make(map[string]bool)
+
+	// Extract quoted phrases
+	quotedRe := regexp.MustCompile(`"([^"]+)"`)
+	for _, m := range quotedRe.FindAllStringSubmatch(prompt, -1) {
+		t := strings.TrimSpace(m[1])
+		lower := strings.ToLower(t)
+		if len(t) >= 2 && !seen[lower] {
+			terms = append(terms, t)
+			seen[lower] = true
+		}
+	}
+
+	// Extract significant words (4+ chars, skip common words)
+	wordRe := regexp.MustCompile(`\b[a-zA-Z]{4,}\b`)
+	for _, m := range wordRe.FindAllString(prompt, -1) {
+		lower := strings.ToLower(m)
+		if displayStopWords[lower] || seen[lower] {
+			continue
+		}
+		terms = append(terms, m)
+		seen[lower] = true
+		if len(terms) >= 5 { // cap at 5 terms for display
+			break
+		}
+	}
+
+	return terms
+}
+
+// findMatchingTerms returns which prompt terms appear in the note content.
+func findMatchingTerms(promptTerms []string, title, snippet string) []string {
+	content := strings.ToLower(title + " " + snippet)
+	var matched []string
+	for _, term := range promptTerms {
+		if strings.Contains(content, strings.ToLower(term)) {
+			matched = append(matched, term)
+		}
+		if len(matched) >= 3 { // cap at 3 for display
+			break
+		}
+	}
+	return matched
+}
+
+// displayStopWords are common words to skip in match term extraction.
+var displayStopWords = map[string]bool{
+	"what": true, "when": true, "where": true, "which": true, "while": true,
+	"with": true, "would": true, "could": true, "should": true, "about": true,
+	"after": true, "before": true, "being": true, "between": true, "both": true,
+	"each": true, "from": true, "have": true, "having": true, "here": true,
+	"into": true, "just": true, "like": true, "make": true, "more": true,
+	"most": true, "need": true, "only": true, "other": true, "over": true,
+	"same": true, "some": true, "such": true, "than": true, "that": true,
+	"their": true, "them": true, "then": true, "there": true, "these": true,
+	"they": true, "this": true, "those": true, "through": true, "under": true,
+	"very": true, "want": true, "were": true, "will": true, "your": true,
+	"also": true, "been": true, "does": true, "done": true, "going": true,
+	"help": true, "know": true, "look": true, "many": true, "much": true,
+	"show": true, "tell": true, "think": true, "using": true, "work": true,
 }
 
 // standardSearch performs vector search with keyword fallback.

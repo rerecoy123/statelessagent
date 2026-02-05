@@ -9,13 +9,14 @@ import (
 
 // ANSI color constants.
 const (
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Red    = "\033[31m"
-	Cyan   = "\033[36m"
-	Dim    = "\033[2m"
-	Bold   = "\033[1m"
-	Reset  = "\033[0m"
+	Green   = "\033[32m"
+	Yellow  = "\033[33m"
+	Red     = "\033[31m"
+	Cyan    = "\033[36m"
+	DimCyan = "\033[2;36m"
+	Dim     = "\033[2m"
+	Bold    = "\033[1m"
+	Reset   = "\033[0m"
 )
 
 // Box width is the inner content width (between the border characters).
@@ -153,4 +154,152 @@ func padRight(s string, width int) string {
 // runeLen counts the display width in runes.
 func runeLen(s string) int {
 	return len([]rune(s))
+}
+
+// --- Surfacing Display ---
+
+// SurfacedNote represents a note that was found during context surfacing.
+type SurfacedNote struct {
+	Title      string
+	Tokens     int      // 0 if not included
+	Included   bool     // whether it was injected into context
+	HighConf   bool     // high confidence = ✦, low = ✧
+	MatchTerms []string // keywords that matched
+}
+
+// surfacingVerbs are rotated randomly for delight.
+var surfacingVerbs = []string{
+	"surfaced", "unearthed", "recalled", "discovered", "found", "retrieved",
+}
+
+// randomVerb returns a random surfacing verb.
+func randomVerb() string {
+	// Use nanoseconds for cheap randomness without importing math/rand
+	ns := int(runeLen(fmt.Sprintf("%d", os.Getpid()))) // deterministic per process for consistency
+	return surfacingVerbs[ns%len(surfacingVerbs)]
+}
+
+// SurfacingCompact prints the single-line compact surfacing output.
+// Example: ✦ SAME has surfaced 3 of 847 memories
+func SurfacingCompact(included, total int) {
+	verb := randomVerb()
+	fmt.Fprintf(os.Stderr, "%s✦ %sSAME%s %shas %s%s %d of %d memories%s\n",
+		Cyan, Cyan, Reset, Dim, verb, Reset, included, total, Reset)
+}
+
+// SurfacingEmpty prints the playful empty state.
+// Example: ✦ SAME searched 847 memories — nothing matched
+func SurfacingEmpty(total int) {
+	fmt.Fprintf(os.Stderr, "%s✦ %sSAME%s %ssearched %d memories — nothing matched%s\n",
+		Cyan, Cyan, Reset, Dim, total, Reset)
+}
+
+// SurfacingVerbose prints the full verbose box with included/excluded notes.
+func SurfacingVerbose(notes []SurfacedNote, totalVault int) {
+	var included, found int
+	for _, n := range notes {
+		if n.Included {
+			included++
+		}
+		found++
+	}
+
+	verb := randomVerb()
+	boxWidth := 71
+
+	// Header
+	headerLeft := fmt.Sprintf("─ SAME %shas %s%s ", Dim, verb, Cyan)
+	headerRight := fmt.Sprintf(" added %d of %d memories ─", included, found)
+	headerLeftLen := 8 + len(verb) // "─ SAME has " + verb + " "
+	headerRightLen := runeLen(headerRight)
+	headerPad := boxWidth - headerLeftLen - headerRightLen
+	if headerPad < 0 {
+		headerPad = 0
+	}
+
+	fmt.Fprintf(os.Stderr, "%s╭%s%s%s%s╮%s\n",
+		Cyan, headerLeft, strings.Repeat("─", headerPad), headerRight, Cyan, Reset)
+	fmt.Fprintf(os.Stderr, "%s│%s│%s\n", Cyan, strings.Repeat(" ", boxWidth), Reset)
+
+	// Included section
+	fmt.Fprintf(os.Stderr, "%s│   ✓ Included%s│%s\n",
+		Cyan, strings.Repeat(" ", boxWidth-13), Reset)
+
+	for _, n := range notes {
+		if !n.Included {
+			continue
+		}
+		spark := "✦"
+		color := Cyan
+		if !n.HighConf {
+			spark = "✧"
+			color = DimCyan
+		}
+
+		// Title line with tokens
+		titleLine := fmt.Sprintf("      %s %s", spark, n.Title)
+		tokenStr := fmt.Sprintf("%d tokens", n.Tokens)
+		pad := boxWidth - runeLen(titleLine) - runeLen(tokenStr) - 2
+		if pad < 1 {
+			pad = 1
+		}
+		fmt.Fprintf(os.Stderr, "%s│%s%s%s%s%s  │%s\n",
+			Cyan, color, titleLine, strings.Repeat(" ", pad), tokenStr, Cyan, Reset)
+
+		// Match terms line (dim)
+		if len(n.MatchTerms) > 0 {
+			matchLine := fmt.Sprintf("        ↳ matched: %s", strings.Join(quoteTerms(n.MatchTerms), ", "))
+			if runeLen(matchLine) > boxWidth-4 {
+				matchLine = matchLine[:boxWidth-7] + "..."
+			}
+			pad := boxWidth - runeLen(matchLine) - 1
+			if pad < 0 {
+				pad = 0
+			}
+			fmt.Fprintf(os.Stderr, "%s│%s%s%s%s│%s\n",
+				Cyan, Dim, matchLine, Reset+Cyan, strings.Repeat(" ", pad), Reset)
+		}
+	}
+
+	// Also found section (excluded notes)
+	var excluded []SurfacedNote
+	for _, n := range notes {
+		if !n.Included {
+			excluded = append(excluded, n)
+		}
+	}
+
+	if len(excluded) > 0 {
+		fmt.Fprintf(os.Stderr, "%s│%s│%s\n", Cyan, strings.Repeat(" ", boxWidth), Reset)
+		fmt.Fprintf(os.Stderr, "%s│   ⊘ Also found%s│%s\n",
+			Cyan, strings.Repeat(" ", boxWidth-15), Reset)
+
+		for _, n := range excluded {
+			spark := "✧" // excluded are always lower confidence visually
+			titleLine := fmt.Sprintf("      %s %s", spark, n.Title)
+			pad := boxWidth - runeLen(titleLine) - 1
+			if pad < 0 {
+				pad = 0
+			}
+			fmt.Fprintf(os.Stderr, "%s│%s%s%s%s│%s\n",
+				Cyan, DimCyan, titleLine, strings.Repeat(" ", pad), Cyan, Reset)
+		}
+	}
+
+	// Footer
+	fmt.Fprintf(os.Stderr, "%s│%s│%s\n", Cyan, strings.Repeat(" ", boxWidth), Reset)
+	footerRight := "same quiet ↵"
+	footerPad := boxWidth - runeLen(footerRight) - 1
+	fmt.Fprintf(os.Stderr, "%s│%s%s%s │%s\n",
+		Cyan, strings.Repeat(" ", footerPad), Dim, footerRight, Reset)
+	fmt.Fprintf(os.Stderr, "%s╰%s╯%s\n", Cyan, strings.Repeat("─", boxWidth), Reset)
+}
+
+// quoteTerms wraps each term in quotes.
+func quoteTerms(terms []string) []string {
+	out := make([]string, len(terms))
+	for i, t := range terms {
+		out[i] = fmt.Sprintf("\"%s\"", t)
+	}
+	return out
 }
