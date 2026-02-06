@@ -13,6 +13,10 @@ Safety rails for multi-agent workflows.
   - Works across multiple Claude instances sharing same machine
 - **Simple display mode** — Clean list output that works in all terminals (now default)
   - Set `SAME_BOX=1` for fancy Unicode box output
+- **CI setup for vibe coders** — `same ci init` creates GitHub Actions workflow
+  - Auto-detects project type (Go, Node, Python)
+  - `same ci explain` teaches what CI is
+  - Educational output guides users through next steps
 
 ### Changed
 
