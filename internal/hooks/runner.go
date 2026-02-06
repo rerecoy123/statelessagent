@@ -26,6 +26,7 @@ type HookInput struct {
 // HookOutput is the JSON output for Claude Code hooks.
 type HookOutput struct {
 	HookSpecificOutput *HookSpecific `json:"hookSpecificOutput,omitempty"`
+	SystemMessage      string        `json:"systemMessage,omitempty"`
 }
 
 // HookSpecific contains the hook event and context.
@@ -100,6 +101,15 @@ func Run(hookName string) {
 		if len(pluginContexts) > 0 {
 			output = mergePluginOutput(output, eventName, pluginContexts)
 		}
+	}
+
+	// Attach pending verbose message (set by verboseDecision) as systemMessage.
+	// systemMessage is displayed to the user but NOT injected into Claude's context.
+	if msg := getPendingVerboseMsg(); msg != "" {
+		if output == nil {
+			output = &HookOutput{}
+		}
+		output.SystemMessage = msg
 	}
 
 	if output != nil {
