@@ -10,6 +10,58 @@ Give your AI coding agent persistent memory — local, automatic, private.
 curl -fsSL statelessagent.com/install.sh | bash
 ```
 
+<details>
+<summary><strong>Windows (PowerShell)</strong></summary>
+
+```powershell
+irm statelessagent.com/install.ps1 | iex
+```
+
+If blocked by execution policy, run first: `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
+
+</details>
+
+<details>
+<summary><strong>Manual install (or have your AI do it)</strong></summary>
+
+If you'd rather not pipe to bash, or you're having an AI assistant install for you:
+
+**macOS (Apple Silicon):**
+```bash
+mkdir -p ~/.local/bin
+curl -fsSL https://github.com/sgx-labs/statelessagent/releases/latest/download/same-darwin-arm64 -o ~/.local/bin/same
+chmod +x ~/.local/bin/same
+export PATH="$HOME/.local/bin:$PATH"  # add to ~/.zshrc to persist
+same init --yes
+```
+
+**macOS (Intel):**
+```bash
+mkdir -p ~/.local/bin
+curl -fsSL https://github.com/sgx-labs/statelessagent/releases/latest/download/same-darwin-amd64 -o ~/.local/bin/same
+chmod +x ~/.local/bin/same
+export PATH="$HOME/.local/bin:$PATH"
+same init --yes
+```
+
+**Linux (x86_64):**
+```bash
+mkdir -p ~/.local/bin
+curl -fsSL https://github.com/sgx-labs/statelessagent/releases/latest/download/same-linux-amd64 -o ~/.local/bin/same
+chmod +x ~/.local/bin/same
+export PATH="$HOME/.local/bin:$PATH"
+same init --yes
+```
+
+**Build from source (any platform):**
+```bash
+git clone --depth 1 https://github.com/sgx-labs/statelessagent.git
+cd statelessagent && make install
+same init --yes
+```
+
+</details>
+
 Requires [Ollama](https://ollama.ai) for local embeddings (or configure OpenAI).
 
 ## What it does

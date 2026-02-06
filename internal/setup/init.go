@@ -41,28 +41,68 @@ const (
 	LevelDev       ExperienceLevel = "dev"
 )
 
-// checkDependencies verifies Go 1.23+ and CGO are available.
-// This is only needed if the user is building from source.
-func checkDependencies() error {
-	// Check if 'go' is available
+// checkDependencies verifies runtime dependencies (Node, Ollama) and
+// optionally checks Go/CGO for users building from source.
+// Warns but does not block setup for missing deps.
+func checkDependencies() {
+	headerShown := false
+	showHeader := func() {
+		if !headerShown {
+			cli.Section("Dependencies")
+			headerShown = true
+		}
+	}
+
+	// ── Runtime dependencies ──────────────────────────────
+
+	// Check Node.js
+	if _, err := exec.LookPath("node"); err != nil {
+		showHeader()
+		fmt.Printf("  %s!%s Node.js not found\n", cli.Yellow, cli.Reset)
+		fmt.Println("    Some AI tool integrations (MCP server) require Node.js.")
+		fmt.Println("    SAME will work without it, but MCP features won't be available.")
+		fmt.Println()
+		fmt.Println("    Install from: https://nodejs.org")
+		fmt.Println()
+	} else {
+		showHeader()
+		fmt.Printf("  %s✓%s Node.js installed\n", cli.Green, cli.Reset)
+	}
+
+	// Check Ollama (just presence, checkOllama() later verifies it's running + has model)
+	if _, err := exec.LookPath("ollama"); err != nil {
+		showHeader()
+		fmt.Printf("  %s!%s Ollama not found\n", cli.Yellow, cli.Reset)
+		fmt.Println("    SAME needs Ollama to generate embeddings for your notes.")
+		fmt.Println()
+		fmt.Println("    Install from: https://ollama.ai")
+		fmt.Println()
+	} else {
+		showHeader()
+		fmt.Printf("  %s✓%s Ollama installed\n", cli.Green, cli.Reset)
+	}
+
+	// ── Build-from-source dependencies (Go, CGO) ─────────
+
 	goPath, err := exec.LookPath("go")
 	if err != nil {
 		// No Go installed — that's fine if using a pre-built binary
-		return nil
+		if headerShown {
+			fmt.Println()
+		}
+		return
 	}
 
-	// Get Go version
 	out, err := exec.Command(goPath, "version").Output()
 	if err != nil {
-		return nil // Can't check, assume it's fine
+		return
 	}
 
-	// Parse version from "go version go1.23.4 darwin/arm64"
 	versionStr := string(out)
 	re := regexp.MustCompile(`go(\d+)\.(\d+)`)
 	matches := re.FindStringSubmatch(versionStr)
 	if len(matches) < 3 {
-		return nil // Can't parse, assume it's fine
+		return
 	}
 
 	var major, minor int
@@ -70,68 +110,27 @@ func checkDependencies() error {
 	fmt.Sscanf(matches[2], "%d", &minor)
 
 	if major < 1 || (major == 1 && minor < 23) {
-		cli.Section("Dependencies")
-		fmt.Printf("  %s✗%s Go %d.%d detected (SAME requires Go 1.23+)\n\n",
+		showHeader()
+		fmt.Printf("  %s!%s Go %d.%d detected (SAME requires Go 1.23+ for building from source)\n",
 			cli.Yellow, cli.Reset, major, minor)
-		fmt.Println("  If you installed SAME via Homebrew or a binary,")
-		fmt.Println("  you can ignore this and continue.")
-		fmt.Println()
-		fmt.Println("  If you're building from source, upgrade Go:")
-		fmt.Println()
-		// Platform-specific instructions
-		if strings.Contains(strings.ToLower(versionStr), "darwin") {
-			fmt.Printf("  %sMac:%s\n", cli.Bold, cli.Reset)
-			fmt.Println("    brew upgrade go")
-			fmt.Println()
-			fmt.Println("  Or download from https://go.dev/dl/")
-		} else if strings.Contains(strings.ToLower(versionStr), "windows") {
-			fmt.Printf("  %sWindows:%s\n", cli.Bold, cli.Reset)
-			fmt.Println("    1. Download Go 1.23+ from https://go.dev/dl/")
-			fmt.Println("    2. Run the installer")
-			fmt.Println("    3. Restart your terminal")
-		} else {
-			fmt.Printf("  %sLinux:%s\n", cli.Bold, cli.Reset)
-			fmt.Println("    # Remove old version")
-			fmt.Println("    sudo rm -rf /usr/local/go")
-			fmt.Println()
-			fmt.Println("    # Download and install Go 1.23+")
-			fmt.Println("    wget https://go.dev/dl/go1.23.4.linux-amd64.tar.gz")
-			fmt.Println("    sudo tar -C /usr/local -xzf go1.23.4.linux-amd64.tar.gz")
-			fmt.Println()
-			fmt.Println("    # Add to PATH (add to ~/.bashrc or ~/.zshrc)")
-			fmt.Println("    export PATH=$PATH:/usr/local/go/bin")
-		}
+		fmt.Println("    If you installed SAME via a binary, you can ignore this.")
+		fmt.Println("    Upgrade Go: https://go.dev/dl/")
 		fmt.Println()
 	}
 
-	// Check CGO_ENABLED (only matters for building from source)
 	env := os.Getenv("CGO_ENABLED")
 	if env == "0" {
-		if major >= 1 && minor >= 23 {
-			cli.Section("Dependencies")
-		}
-		fmt.Printf("  %s✗%s CGO_ENABLED=0 detected\n\n",
+		showHeader()
+		fmt.Printf("  %s!%s CGO_ENABLED=0 detected (needed for SQLite with vector search)\n",
 			cli.Yellow, cli.Reset)
-		fmt.Println("  SAME requires CGO for SQLite with vector search.")
-		fmt.Println()
-		fmt.Println("  To fix:")
-		fmt.Println()
-		if strings.Contains(strings.ToLower(versionStr), "windows") {
-			fmt.Printf("  %sWindows:%s\n", cli.Bold, cli.Reset)
-			fmt.Println("    1. Install MinGW-w64 or TDM-GCC")
-			fmt.Println("    2. Run: set CGO_ENABLED=1")
-			fmt.Println("    3. Rebuild SAME")
-		} else {
-			fmt.Printf("  %sMac/Linux:%s\n", cli.Bold, cli.Reset)
-			fmt.Println("    export CGO_ENABLED=1")
-			fmt.Println()
-			fmt.Println("  Then rebuild SAME:")
-			fmt.Println("    go build -o same ./cmd/same")
-		}
+		fmt.Println("    If you installed SAME via a binary, you can ignore this.")
+		fmt.Println("    To fix: export CGO_ENABLED=1")
 		fmt.Println()
 	}
 
-	return nil
+	if headerShown {
+		fmt.Println()
+	}
 }
 
 // RunInit executes the interactive setup wizard.
@@ -142,7 +141,7 @@ func RunInit(opts InitOptions) error {
 	}
 	cli.Banner(version)
 
-	// Check dependencies (Go version, CGO)
+	// Check dependencies (Node, Ollama, Go version, CGO)
 	checkDependencies()
 
 	// Ask experience level first (unless auto-accepting)
