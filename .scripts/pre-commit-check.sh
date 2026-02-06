@@ -23,8 +23,8 @@ if [ -t 1 ] 2>/dev/null; then
 fi
 
 # --- Load blocklist from external file ---
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BLOCKLIST_FILE="$SCRIPT_DIR/.blocklist"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+BLOCKLIST_FILE="$REPO_ROOT/.scripts/.blocklist"
 
 if [ ! -f "$BLOCKLIST_FILE" ]; then
     echo -e "${YELLOW}WARNING: No blocklist file found at .scripts/.blocklist${RESET}"
