@@ -2,10 +2,12 @@
 # ==============================================================================
 # pre-commit-check.sh — Vault Data Leak Prevention
 # ==============================================================================
-# Blocks commits that contain vault-specific paths, personal identifiers,
-# or client-sensitive patterns. This hook exists because SAME is developed
-# separately from the vault it operates on — nothing from the vault should
-# ever appear in product source code.
+# Blocks commits that contain personal identifiers, client-sensitive patterns,
+# or real vault data. SAME references vault structure generically in its code
+# (e.g. _PRIVATE/, 01_Projects/) — that's expected product behavior.
+#
+# Hard blocks: personal identity, client names, local paths, real API keys.
+# These should NEVER appear anywhere in this repo.
 # ==============================================================================
 
 set -euo pipefail
@@ -21,41 +23,37 @@ if [ -t 1 ] 2>/dev/null; then
     RESET="\033[0m"
 fi
 
-# --- Patterns that should NEVER appear in product code ---
-PATTERNS=(
-    # Vault folder structure
-    "00_Inbox"
-    "01_Projects"
-    "02_Areas"
-    "03_Resources"
-    "04_Archive"
-    "05_Attachments"
-    "06_Metadata"
-    "07_Journal"
-    "_PRIVATE/"
-
+# --- Hard block: personal/client data that must NEVER appear ---
+HARD_PATTERNS=(
     # Personal identifiers
     "REDACTED"
     "REDACTED"
     "REDACTED"
     "REDACTED"
     "REDACTED"
+    "REDACTED"
 
-    # Local paths
+    # Local paths (real machine paths, not generic references)
     "/Users/REDACTED"
+    "C:\\\\Users\\\\Sean"
     "REDACTED"
     "REDACTED"
     "REDACTED"
 
-    # Real API keys (prefixes)
-    "sk-ant-api"
-    "sk-proj-"
-    "AIzaSy[A-Za-z0-9]"
+    # Client-sensitive (load from blocklist if present)
+    "REDACTED_CLIENT"
+    "REDACTED_CLIENT"
+    "REDACTED_CLIENT"
+
+    # Real API keys (actual key prefixes, not documentation references)
+    "sk-ant-api03"
+    "sk-proj-[A-Za-z0-9]{20}"
+    "AIzaSy[A-Za-z0-9]{30}"
 )
 
 # Build grep pattern
 PATTERN=""
-for p in "${PATTERNS[@]}"; do
+for p in "${HARD_PATTERNS[@]}"; do
     if [ -z "$PATTERN" ]; then
         PATTERN="$p"
     else
@@ -98,11 +96,11 @@ done <<< "$STAGED_FILES"
 # --- Report ---
 if [ "$FOUND" -gt 0 ]; then
     echo ""
-    echo -e "${RED}BLOCKED: Vault data detected in ${FOUND} file(s)${RESET}"
+    echo -e "${RED}BLOCKED: Personal/client data detected in ${FOUND} file(s)${RESET}"
     echo ""
     echo -e "$MATCHES"
     echo ""
-    echo "This repo must not contain vault paths, personal info, or client data."
+    echo "This repo must not contain personal identifiers, client names, or real paths."
     echo ""
     echo "To fix:"
     echo "  1. Remove the flagged content"
