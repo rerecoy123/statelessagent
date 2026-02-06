@@ -60,6 +60,16 @@ SAME is designed with a local-first security model:
 - All user inputs are validated before processing
 - SQL queries use parameterized statements (no injection risk)
 
+### Eval Data Boundary
+
+Evaluation test fixtures (ground truth, test queries, expected results) must **never** reference real vault content:
+
+- No real `_PRIVATE/` paths or note titles
+- No real client names, project names, or business terms
+- No real vault note content or snippets
+
+Eval data must be either **entirely synthetic** or use a **purpose-built demo vault** with public sample data.
+
 ## Known Limitations
 
 1. **Trust boundary:** Content surfaced to your AI tool is sent to that tool's API. SAME doesn't control what happens after context is injected.
