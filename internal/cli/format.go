@@ -194,8 +194,49 @@ func SurfacingEmpty(total int) {
 		Cyan, Cyan, Reset, Dim, total, Reset)
 }
 
-// SurfacingVerbose prints the full verbose box with included/excluded notes.
+// SurfacingVerbose prints surfaced notes. Uses simple list by default,
+// or fancy box if SAME_BOX=1 is set.
 func SurfacingVerbose(notes []SurfacedNote, totalVault int) {
+	if os.Getenv("SAME_BOX") == "1" || os.Getenv("SAME_BOX") == "true" {
+		surfacingBox(notes, totalVault)
+		return
+	}
+	surfacingSimple(notes, totalVault)
+}
+
+// surfacingSimple prints a clean, simple list format that works in all terminals.
+func surfacingSimple(notes []SurfacedNote, totalVault int) {
+	var included, excluded []SurfacedNote
+	for _, n := range notes {
+		if n.Included {
+			included = append(included, n)
+		} else {
+			excluded = append(excluded, n)
+		}
+	}
+
+	verb := randomVerb()
+	fmt.Fprintf(os.Stderr, "%sSAME %s %d memories:%s\n",
+		Cyan, verb, len(included), Reset)
+
+	for _, n := range included {
+		fmt.Fprintf(os.Stderr, "  %s+%s %s %s(%d tokens)%s\n",
+			Cyan, Reset, n.Title, Dim, n.Tokens, Reset)
+		if len(n.MatchTerms) > 0 {
+			fmt.Fprintf(os.Stderr, "    %smatched: %s%s\n",
+				Dim, strings.Join(quoteTerms(n.MatchTerms), ", "), Reset)
+		}
+	}
+
+	if len(excluded) > 0 {
+		fmt.Fprintf(os.Stderr, "  %s- also found: %s%s\n",
+			Dim, excluded[0].Title, Reset)
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+}
+
+// surfacingBox prints the fancy Unicode box format.
+func surfacingBox(notes []SurfacedNote, totalVault int) {
 	var included, found int
 	for _, n := range notes {
 		if n.Included {
