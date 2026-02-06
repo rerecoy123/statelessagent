@@ -23,8 +23,25 @@ const (
 )
 
 // runSessionBootstrap surfaces handoff, decisions, and stale notes at session start.
-func runSessionBootstrap(db *store.DB, _ *HookInput) *HookOutput {
+func runSessionBootstrap(db *store.DB, input *HookInput) *HookOutput {
+	sessionID := ""
+	if input != nil {
+		sessionID = input.SessionID
+	}
+	cleanStaleInstances(sessionID)
+	registerInstance(sessionID, "")
+
 	var sections []string
+
+	// Priority 0a: Previous session summary (from Claude Code's session index)
+	if prev := findPreviousSessionContext(sessionID); prev != "" {
+		sections = append(sections, prev)
+	}
+
+	// Priority 0b: Active instances (other Claude Code sessions)
+	if instances := findActiveInstances(sessionID); instances != "" {
+		sections = append(sections, instances)
+	}
 
 	// Priority 1: Latest handoff note
 	if handoff := findLatestHandoff(); handoff != "" {
