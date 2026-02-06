@@ -3,12 +3,22 @@
 
 $ErrorActionPreference = "Stop"
 
-# Colors
-$Red = "`e[91m"
-$DarkRed = "`e[31m"
-$Dim = "`e[2m"
-$Bold = "`e[1m"
-$Reset = "`e[0m"
+# Force TLS 1.2 (required for older Windows)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Colors - use [char]27 for PowerShell 5.1 compatibility
+$ESC = [char]27
+$Red = "$ESC[91m"
+$DarkRed = "$ESC[31m"
+$Dim = "$ESC[2m"
+$Bold = "$ESC[1m"
+$Reset = "$ESC[0m"
+
+# Detect if terminal supports ANSI (Windows Terminal, PS7, etc)
+$supportsANSI = $env:WT_SESSION -or $PSVersionTable.PSVersion.Major -ge 7 -or $env:TERM_PROGRAM
+if (-not $supportsANSI) {
+    $Red = ""; $DarkRed = ""; $Dim = ""; $Bold = ""; $Reset = ""
+}
 
 # Banner
 Write-Host ""
@@ -28,6 +38,7 @@ if (-not $arch) {
 }
 
 Write-Host "  Found: Windows (64-bit)"
+Write-Host "  PowerShell: $($PSVersionTable.PSVersion)"
 Write-Host "  Perfect, I have a version for you."
 Write-Host ""
 
@@ -43,7 +54,9 @@ try {
 } catch {
     Write-Host "  Couldn't reach GitHub to get the latest version."
     Write-Host "  Check your internet connection and try again."
-    Write-Host "  https://discord.gg/GZGHtrrKF2"
+    Write-Host ""
+    Write-Host "  If you're behind a corporate proxy, you may need IT help."
+    Write-Host "  Discord: https://discord.gg/GZGHtrrKF2"
     exit 1
 }
 
@@ -60,6 +73,7 @@ try {
     Write-Host "  Download failed. This might mean:"
     Write-Host "  - Your internet connection dropped"
     Write-Host "  - GitHub is having issues"
+    Write-Host "  - Corporate firewall is blocking the download"
     Write-Host ""
     Write-Host "  Try again in a minute. If it keeps failing:"
     Write-Host "  https://discord.gg/GZGHtrrKF2"
@@ -87,13 +101,34 @@ if (-not (Test-Path $installDir)) {
 $output = Join-Path $installDir "same.exe"
 Move-Item -Path $tempFile -Destination $output -Force
 
-# Verify it works
+# Unblock the file (removes "downloaded from internet" flag)
 try {
-    $installedVersion = & $output version 2>$null
+    Unblock-File -Path $output -ErrorAction SilentlyContinue
+} catch {
+    # Ignore - not critical
+}
+
+# Verify it works
+$installedVersion = $null
+try {
+    $installedVersion = & $output version 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
     Write-Host "  Installed: $installedVersion"
 } catch {
-    Write-Host "  Something went wrong - the program downloaded but won't run."
-    Write-Host "  Please share this in Discord: https://discord.gg/GZGHtrrKF2"
+    Write-Host ""
+    Write-Host "  ${Red}The program downloaded but won't run.${Reset}"
+    Write-Host ""
+    Write-Host "  This usually means Windows Defender or antivirus blocked it."
+    Write-Host "  Try these steps:"
+    Write-Host ""
+    Write-Host "  1. Open Windows Security"
+    Write-Host "  2. Go to Virus & threat protection > Protection history"
+    Write-Host "  3. Look for 'same.exe' and click 'Allow'"
+    Write-Host ""
+    Write-Host "  Or manually unblock: Right-click same.exe > Properties > Unblock"
+    Write-Host "  File location: $output"
+    Write-Host ""
+    Write-Host "  Still stuck? Discord: https://discord.gg/GZGHtrrKF2"
     exit 1
 }
 
@@ -107,49 +142,82 @@ $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($currentPath -notlike "*$installDir*") {
     $newPath = "$installDir;$currentPath"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Host "  Added SAME to your PATH."
-    Write-Host ""
-    Write-Host "  IMPORTANT: Close this PowerShell window and open a new one"
-    Write-Host "             for the changes to take effect."
-} else {
-    Write-Host "  SAME is already in your PATH."
+    Write-Host "  Added SAME to your PATH (permanent)."
 }
+
+# Also add to current session so user can use it immediately
+$env:Path = "$installDir;$env:Path"
+Write-Host "  SAME is now available in this terminal session."
 
 Write-Host ""
 
-# Check for Ollama
+# Check for Ollama - try multiple detection methods
 Write-Host "-----------------------------------------------------------"
 Write-Host ""
 
-$ollamaExists = Get-Command ollama -ErrorAction SilentlyContinue
-if ($ollamaExists) {
-    Write-Host "  [OK] Ollama is installed"
+$ollamaFound = $false
+$ollamaHow = ""
+
+# Method 1: Check if ollama command exists
+if (Get-Command ollama -ErrorAction SilentlyContinue) {
+    $ollamaFound = $true
+    $ollamaHow = "command"
+}
+
+# Method 2: Check if Ollama process is running
+if (-not $ollamaFound) {
+    $ollamaProcess = Get-Process -Name "ollama*" -ErrorAction SilentlyContinue
+    if ($ollamaProcess) {
+        $ollamaFound = $true
+        $ollamaHow = "process"
+    }
+}
+
+# Method 3: Check if Ollama API is responding
+if (-not $ollamaFound) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
+        if ($response.StatusCode -eq 200) {
+            $ollamaFound = $true
+            $ollamaHow = "api"
+        }
+    } catch {
+        # API not responding
+    }
+}
+
+if ($ollamaFound) {
+    Write-Host "  ${Bold}[OK]${Reset} Ollama is installed and running"
     Write-Host ""
-    Write-Host "  SAME is ready to use!"
+    Write-Host "  ${Bold}SAME is ready to use!${Reset}"
 } else {
-    Write-Host "  [!] Ollama is not installed yet"
+    Write-Host "  ${Bold}[!] Ollama is not installed yet${Reset}"
     Write-Host ""
-    Write-Host "  SAME needs Ollama to work. It's free and takes about 2 minutes:"
+    Write-Host "  SAME needs Ollama to work. It's free and easy:"
     Write-Host ""
-    Write-Host "  1. Open: https://ollama.ai  ${Dim}(Ctrl+click to open)${Reset}"
-    Write-Host "  2. Click 'Download' and run the installer"
-    Write-Host "  3. You'll see a llama icon in your system tray when it's running"
+    Write-Host "  1. Open: https://ollama.ai"
+    Write-Host "     ${Dim}(Ctrl+click the link to open in browser)${Reset}"
     Write-Host ""
-    Write-Host "  Stuck? Join our Discord: https://discord.gg/GZGHtrrKF2  ${Dim}(Ctrl+click)${Reset}"
+    Write-Host "  2. Click 'Download for Windows' and run the installer"
+    Write-Host ""
+    Write-Host "  3. After install, look for the llama icon in your system tray"
+    Write-Host "     ${Dim}(bottom-right corner, may be in hidden icons)${Reset}"
+    Write-Host ""
+    Write-Host "  Stuck? Join our Discord: https://discord.gg/GZGHtrrKF2"
 }
 
 Write-Host ""
 Write-Host "-----------------------------------------------------------"
 Write-Host ""
-Write-Host "  WHAT'S NEXT?"
+Write-Host "  ${Bold}WHAT'S NEXT?${Reset}"
 Write-Host ""
-Write-Host "  1. Close this PowerShell window and open a new one"
+Write-Host "  1. Navigate to your project folder:"
+Write-Host "     ${Dim}cd C:\Users\YourName\Documents\my-project${Reset}"
 Write-Host ""
-Write-Host "  2. Navigate to your project folder:"
-Write-Host "     cd C:\Users\YourName\Documents\my-project"
+Write-Host "  2. Run the setup wizard:"
+Write-Host "     ${Bold}same init${Reset}"
 Write-Host ""
-Write-Host "  3. Run the setup wizard:"
-Write-Host "     same init"
+Write-Host "  ${Dim}You can run 'same init' right now - no need to restart the terminal!${Reset}"
 Write-Host ""
-Write-Host "  Questions? Join us: https://discord.gg/GZGHtrrKF2  ${Dim}(Ctrl+click)${Reset}"
+Write-Host "  Questions? https://discord.gg/GZGHtrrKF2"
 Write-Host ""

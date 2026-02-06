@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.5.4 — Windows Installer Overhaul
+
+Fixed critical Windows installation issues.
+
+### Fixed
+
+- **PowerShell 5.1 compatibility** — ANSI escape codes now work in Windows PowerShell (not just PS7)
+- **TLS 1.2 enforcement** — Installer works on older Windows systems
+- **PATH works immediately** — No need to restart terminal after install
+- **Better Ollama detection** — Checks process and API, not just PATH
+- **Windows Defender guidance** — Clear instructions when antivirus blocks the binary
+- **Unblock downloaded file** — Removes "downloaded from internet" security flag
+
+### Added
+
+- PowerShell version display during install
+- Corporate proxy detection hint in error messages
+- Execution policy bypass instructions on website
+- Windows added to site structured data (SEO)
+
+---
+
 ## v0.5.3 — Push Protection & Display Fixes
 
 Safety rails for multi-agent workflows.
