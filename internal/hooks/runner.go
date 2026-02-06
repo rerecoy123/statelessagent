@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -65,6 +66,9 @@ func Run(hookName string) {
 			input.TranscriptPath = "" // clear invalid path
 		}
 	}
+
+	// Propagate config-driven noise paths to the store package for ranking filters.
+	store.NoisePaths = config.NoisePaths()
 
 	db, err := store.Open()
 	if err != nil {

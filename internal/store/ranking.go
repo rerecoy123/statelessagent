@@ -9,6 +9,10 @@ import (
 // Ported from hooks/context_surfacing.go to be shared across
 // the hook and MCP search paths.
 
+// NoisePaths holds path prefixes to filter from search results.
+// Set by the application at startup from config; defaults to empty (no filtering).
+var NoisePaths []string
+
 const (
 	// HighTierOverlap is the floating-point-safe threshold for >= 0.20.
 	// IEEE 754: 3/5 * 3/9 = 0.19999..., so we use 0.199 to avoid
@@ -305,11 +309,18 @@ func RankSearchResults(results []SearchResult, queryTerms []string) []SearchResu
 		items = append(items, rankedResult{result: r, titleOverlap: overlap})
 	}
 
-	// Filter raw experiment outputs
-	{
+	// Filter noise paths (configured via [vault] noise_paths or SAME_NOISE_PATHS)
+	if len(NoisePaths) > 0 {
 		var filtered []rankedResult
 		for _, item := range items {
-			if !strings.Contains(item.result.Path, "/raw_outputs/") {
+			noisy := false
+			for _, prefix := range NoisePaths {
+				if strings.Contains(item.result.Path, prefix) {
+					noisy = true
+					break
+				}
+			}
+			if !noisy {
 				filtered = append(filtered, item)
 			}
 		}

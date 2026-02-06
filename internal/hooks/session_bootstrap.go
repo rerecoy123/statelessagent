@@ -221,24 +221,26 @@ func findActiveDecisions() string {
 		}
 	}
 
-	// Check common project directories for decision files
-	projectDirs := []string{"01_Projects", "02_Areas"}
-	for _, dir := range projectDirs {
-		dirPath := filepath.Join(vaultPath, dir)
-		filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
-				return nil
-			}
-			name := strings.ToLower(info.Name())
-			if strings.Contains(name, "decision") && strings.HasSuffix(name, ".md") {
-				candidates = append(candidates, path)
+	// Walk entire vault for decision files, respecting SkipDirs
+	filepath.Walk(vaultPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if config.SkipDirs[info.Name()] {
+				return filepath.SkipDir
 			}
 			return nil
-		})
-	}
+		}
+		name := strings.ToLower(info.Name())
+		if strings.Contains(name, "decision") && strings.HasSuffix(name, ".md") {
+			// Skip the root decision log (already added above)
+			if path != rootLog {
+				candidates = append(candidates, path)
+			}
+		}
+		return nil
+	})
 
 	if len(candidates) == 0 {
 		return ""

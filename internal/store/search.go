@@ -376,7 +376,7 @@ func (db *DB) ContentTermSearch(terms []string, minTerms int, limit int) ([]RawS
 // optionally paths), requiring at least minMatches terms to appear.
 // When titleOnly is true, only n.title is checked (more precise, avoids
 // false positives from folder names). When false, both n.title and n.path
-// are checked (catches folder-organized content like "01_Projects/SAME Security Audit/").
+// are checked (catches folder-organized content like "projects/security-audit/").
 func (db *DB) KeywordSearchTitleMatch(terms []string, minMatches int, limit int, titleOnly ...bool) ([]RawSearchResult, error) {
 	if len(terms) == 0 || limit <= 0 || minMatches <= 0 {
 		return nil, nil
@@ -607,7 +607,7 @@ func (db *DB) HybridSearch(queryVec []float32, queryText string, opts SearchOpti
 	// 9. Post-process: apply title-overlap-aware ranking.
 	// Uses bidirectional term overlap to re-sort results so that
 	// title-relevant notes rank above vector-only semantic matches.
-	// Also filters /raw_outputs/ noise and near-dedups versioned files.
+	// Also filters configured noise paths and near-dedups versioned files.
 	// This step ALWAYS runs, regardless of whether keyword results
 	// were merged, to ensure filtering and dedup apply to all results.
 	queryTerms := QueryWordsForTitleMatch(queryText)

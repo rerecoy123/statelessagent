@@ -239,28 +239,28 @@ func TestIsConversational_Abbreviations(t *testing.T) {
 // --- titleOverlapScore ---
 
 func TestTitleOverlapScore_ExactMatch(t *testing.T) {
-	score := titleOverlapScore([]string{"agent", "roles"}, "Agent Roles Reference", "")
+	score := titleOverlapScore([]string{"team", "roles"}, "Team Roles Reference", "")
 	if score <= 0 {
 		t.Errorf("expected positive score for exact match, got %f", score)
 	}
 }
 
 func TestTitleOverlapScore_NoMatch(t *testing.T) {
-	score := titleOverlapScore([]string{"kubernetes", "deployment"}, "Agent Roles Reference", "")
+	score := titleOverlapScore([]string{"kubernetes", "deployment"}, "Team Roles Reference", "")
 	if score != 0 {
 		t.Errorf("expected zero for no match, got %f", score)
 	}
 }
 
 func TestTitleOverlapScore_PathMatch(t *testing.T) {
-	score := titleOverlapScore([]string{"same", "architecture"}, "Decisions & Conclusions", "01_Projects/SAME v2 Architecture/decisions_and_conclusions.md")
+	score := titleOverlapScore([]string{"alpha", "architecture"}, "Decisions & Conclusions", "projects/alpha-architecture/decisions.md")
 	if score <= 0 {
 		t.Errorf("expected positive score for path match, got %f", score)
 	}
 }
 
 func TestTitleOverlapScore_PluralMatch(t *testing.T) {
-	score := titleOverlapScore([]string{"role"}, "Agent Roles Reference", "")
+	score := titleOverlapScore([]string{"role"}, "Team Roles Reference", "")
 	if score <= 0 {
 		t.Errorf("expected positive score for plural match (role→roles), got %f", score)
 	}
@@ -274,8 +274,8 @@ func TestTitleOverlapScore_EmptyTerms(t *testing.T) {
 }
 
 func TestTitleOverlapScore_UnderscoreSplit(t *testing.T) {
-	// "agent_roles" should split into "agent" and "roles"
-	score := titleOverlapScore([]string{"agent"}, "agent_roles", "")
+	// "team_roles" should split into "team" and "roles"
+	score := titleOverlapScore([]string{"team"}, "team_roles", "")
 	if score <= 0 {
 		t.Errorf("expected positive score for underscore split, got %f", score)
 	}
@@ -387,7 +387,7 @@ func TestContentTermCoverage_CaseInsensitive(t *testing.T) {
 // --- overlapForSort ---
 
 func TestOverlapForSort_TitleMatch(t *testing.T) {
-	score := overlapForSort([]string{"agent", "roles"}, "Agent Roles Reference", "06_Metadata/agent_roles.md")
+	score := overlapForSort([]string{"team", "roles"}, "Team Roles Reference", "reference/team-roles.md")
 	if score <= 0 {
 		t.Errorf("expected positive score, got %f", score)
 	}
@@ -395,9 +395,9 @@ func TestOverlapForSort_TitleMatch(t *testing.T) {
 
 func TestOverlapForSort_PathOnly(t *testing.T) {
 	// Title has no match, but path does
-	score := overlapForSort([]string{"same", "architecture"}, "Brief", "01_Projects/SAME v2 Architecture/00_brief.md")
+	score := overlapForSort([]string{"alpha", "architecture"}, "Brief", "projects/alpha-architecture/design-brief.md")
 	// Should get half-strength path overlap
-	titleScore := titleOverlapScore([]string{"same", "architecture"}, "Brief", "")
+	titleScore := titleOverlapScore([]string{"alpha", "architecture"}, "Brief", "")
 	if titleScore > 0 {
 		t.Skipf("title matched unexpectedly, skipping path-only test")
 	}
@@ -452,7 +452,7 @@ func TestNearDedup_RemovesVersionedFiles(t *testing.T) {
 
 func TestNearDedup_KeepsDifferentNotes(t *testing.T) {
 	candidates := []scored{
-		{path: "agent_roles.md", title: "Agent Roles", titleOverlap: 0.5},
+		{path: "team_roles.md", title: "Team Roles", titleOverlap: 0.5},
 		{path: "decisions.md", title: "Decisions", titleOverlap: 0.4},
 	}
 	got := nearDedup(candidates, []string{"vault"})

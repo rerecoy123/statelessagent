@@ -65,11 +65,11 @@ func TestTitleOverlapScore(t *testing.T) {
 		},
 		{
 			name:   "path adds matching words",
-			terms:  []string{"SAME", "architecture"},
-			title:  "00_brief",
-			path:   "01_Projects/SAME v2 Architecture/00_brief.md",
+			terms:  []string{"alpha", "architecture"},
+			title:  "design-brief",
+			path:   "projects/alpha-architecture/design-brief.md",
 			wantGT: 0.05,
-			wantLT: 0.30,
+			wantLT: 0.50,
 		},
 		{
 			name:   "plural matching",
@@ -117,16 +117,16 @@ func TestOverlapForSort(t *testing.T) {
 	}{
 		{
 			name:  "title-only overlap preferred",
-			terms: []string{"SAME", "architecture"},
-			title: "SAME v2 Architecture Decisions",
-			path:  "01_Projects/SAME v2 Architecture/decisions.md",
+			terms: []string{"alpha", "architecture"},
+			title: "Project Alpha Decisions",
+			path:  "projects/alpha-architecture/decisions.md",
 			want:  -1, // positive, title-only is used
 		},
 		{
 			name:  "zero overlap returns zero",
 			terms: []string{"terraform"},
-			title: "Project Notes Hub",
-			path:  "02_Areas/Project Notes Hub.md",
+			title: "Reference Hub",
+			path:  "areas/reference-hub.md",
 			want:  0,
 		},
 	}
@@ -177,8 +177,8 @@ func TestRankSearchResults(t *testing.T) {
 
 func TestRankSearchResults_NearDedup(t *testing.T) {
 	results := []SearchResult{
-		{Path: "01_Projects/Guide.md", Title: "Guide", Score: 0.9},
-		{Path: "01_Projects/Guide v1.md", Title: "Guide v1", Score: 0.8},
+		{Path: "projects/guide.md", Title: "Guide", Score: 0.9},
+		{Path: "projects/guide-v1.md", Title: "Guide v1", Score: 0.8},
 		{Path: "other.md", Title: "Other", Score: 0.7},
 	}
 	queryTerms := []string{"Guide"}
@@ -188,7 +188,7 @@ func TestRankSearchResults_NearDedup(t *testing.T) {
 	// Should deduplicate versioned files
 	guideCount := 0
 	for _, r := range ranked {
-		if r.Path == "01_Projects/Guide.md" || r.Path == "01_Projects/Guide v1.md" {
+		if r.Path == "projects/guide.md" || r.Path == "projects/guide-v1.md" {
 			guideCount++
 		}
 	}
@@ -197,17 +197,22 @@ func TestRankSearchResults_NearDedup(t *testing.T) {
 	}
 }
 
-func TestRankSearchResults_RawOutputsFilter(t *testing.T) {
+func TestRankSearchResults_NoisePathsFilter(t *testing.T) {
+	// Set up noise paths for this test
+	origNoisePaths := NoisePaths
+	NoisePaths = []string{"experiments/", "raw_outputs/"}
+	defer func() { NoisePaths = origNoisePaths }()
+
 	results := []SearchResult{
-		{Path: "experiments/raw_outputs/TRIAL-001.md", Title: "Trial 001", Score: 0.9},
+		{Path: "experiments/trial-001.md", Title: "Trial 001", Score: 0.9},
 		{Path: "notes/real.md", Title: "Real Note", Score: 0.8},
 	}
 
 	ranked := RankSearchResults(results, []string{"trial"})
 
 	for _, r := range ranked {
-		if r.Path == "experiments/raw_outputs/TRIAL-001.md" {
-			t.Error("raw_outputs file should have been filtered")
+		if r.Path == "experiments/trial-001.md" {
+			t.Error("noise path file should have been filtered")
 		}
 	}
 	if len(ranked) != 1 {

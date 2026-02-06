@@ -47,11 +47,11 @@ var priorityTypes = map[string]bool{
 // indexer also skips these, but we filter here in case of stale index data.
 const privateDirPrefix = "_PRIVATE/"
 
-// Noise filter: paths that produce low-value context surfacing results.
-// Experiment raw outputs contain broad vault-related discussions that
-// semantically match almost any query, drowning out actual reference notes.
-var noisyPathPrefixes = []string{
-	"experiments/", // PE lab raw outputs (broad vault discussions)
+// noisyPathPrefixes returns the user-configured noise path prefixes.
+// Defaults to empty — no paths are filtered unless configured via
+// [vault] noise_paths in config.toml or SAME_NOISE_PATHS env var.
+func noisyPathPrefixes() []string {
+	return config.NoisePaths()
 }
 
 // Prompt injection patterns — content matching these is stripped from snippets
@@ -356,22 +356,6 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 			cli.SurfacingEmpty(totalVault)
 		}
 		return nil
-	}
-
-	// Filter raw experiment outputs — data files, not knowledge notes.
-	// These are raw LLM trial outputs that vector search picks up due
-	// to broad semantic similarity but are never useful as context.
-	// Applied after both standard and recency search paths.
-	{
-		var filtered []scored
-		for _, c := range candidates {
-			if !strings.Contains(c.path, "/raw_outputs/") {
-				filtered = append(filtered, c)
-			}
-		}
-		if len(filtered) > 0 {
-			candidates = filtered
-		}
 	}
 
 	// Inject pinned notes: always surface them regardless of search results.
@@ -704,7 +688,7 @@ func standardSearch(db *store.DB, queryVec []float32) []scored {
 	// minMatches=1, then filters by bidirectional overlap score. Uses
 	// permissive titleTerms (3+ chars) to catch short words like "home",
 	// "same" that keyword extraction misses. Searches both title and path
-	// to find notes in project directories (e.g., SAME v2 Architecture/00_brief.md).
+	// to find notes in project directories (e.g., project-alpha/design-brief.md).
 	if len(titleTerms) > 0 {
 		titleResults, titleErr := db.KeywordSearchTitleMatch(titleTerms, 1, maxResults*10)
 		if titleErr == nil {
@@ -718,7 +702,7 @@ func standardSearch(db *store.DB, queryVec []float32) []scored {
 				}
 				// Filter by max of title-only and path-inclusive overlap.
 				// Path components can DILUTE overlap when they add non-matching
-				// words (e.g., "01_Projects" adds {01, projects} to the
+				// words (e.g., "my-projects" adds {my, projects} to the
 				// denominator without matching query terms). Using just
 				// fullOverlap can reject candidates whose titles match.
 				fullOverlap := titleOverlapScore(titleTerms, r.Title, r.Path)
@@ -1468,9 +1452,9 @@ func isPrivatePath(path string) bool {
 		strings.HasPrefix(path, "_PRIVATE\\")
 }
 
-// isNoisyPath returns true if the path is a known source of low-value matches.
+// isNoisyPath returns true if the path matches a user-configured noise prefix.
 func isNoisyPath(path string) bool {
-	for _, prefix := range noisyPathPrefixes {
+	for _, prefix := range noisyPathPrefixes() {
 		if strings.Contains(path, prefix) {
 			return true
 		}
@@ -1802,9 +1786,9 @@ var meaningful2CharTerms = map[string]bool{
 // and a note's title + path. Returns queryCoverage * wordCoverage in [0, 1].
 //
 // Words are extracted from both the title and path (directory components),
-// with underscore splitting (agent_roles -> agent, roles) and simple plural
+// with underscore splitting (team_roles -> team, roles) and simple plural
 // matching (project <-> projects). This catches notes where the project/folder
-// name contains query terms even if the filename is generic (e.g., 00_brief.md).
+// name contains query terms even if the filename is generic (e.g., design-brief.md).
 func titleOverlapScore(queryTerms []string, title, path string) float64 {
 	if len(queryTerms) == 0 {
 		return 0
@@ -1822,7 +1806,7 @@ func titleOverlapScore(queryTerms []string, title, path string) float64 {
 	// Build lowercase set, splitting underscores and filtering short tokens
 	wordSet := make(map[string]bool, len(allWords))
 	for _, w := range allWords {
-		// Split underscore-separated words: "agent_roles" -> "agent", "roles"
+		// Split underscore-separated words: "team_roles" -> "team", "roles"
 		subWords := []string{w}
 		if strings.Contains(w, "_") {
 			subWords = strings.Split(w, "_")
@@ -1987,7 +1971,7 @@ func sharesStem(a, b string) bool {
 // Uses title-only overlap as the primary signal, but when path-inclusive
 // overlap is strong (>= 0.25), provides a reduced score (half-strength)
 // so path-matched notes survive gap-cap without competing with direct
-// title matches. This allows notes like "00_brief.md" in well-named
+// title matches. This allows notes like "design-brief.md" in well-named
 // project directories to appear alongside title-matched results.
 func overlapForSort(queryTerms []string, title, path string) float64 {
 	titleOnly := titleOverlapScore(queryTerms, title, "")

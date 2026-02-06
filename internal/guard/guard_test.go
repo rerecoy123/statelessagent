@@ -174,7 +174,7 @@ func TestIsPathAllowed(t *testing.T) {
 		{"package.json", true},
 		{"SECURITY.md", true},
 		{"README.md", true},
-		{"01_Projects/notes.md", false},
+		{"projects/notes.md", false},
 		{"Transcript 2 (Alice call).md", false},
 		{"_PRIVATE/secret.md", false},
 		{"random-file.txt", false},
@@ -416,7 +416,7 @@ func TestScanFiles_PathRejection(t *testing.T) {
 		reviewed:  &ReviewedTerms{},
 	}
 
-	result, err := s.ScanFiles([]string{"01_Projects/secret.md", "Transcript.md"})
+	result, err := s.ScanFiles([]string{"projects/secret.md", "Transcript.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +539,7 @@ func TestScanFiles_PathFilterDisabled(t *testing.T) {
 		return []byte("just some text"), nil
 	}
 
-	result, err := s.ScanFiles([]string{"01_Projects/notes.md"})
+	result, err := s.ScanFiles([]string{"projects/notes.md"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,6 +35,9 @@ var Version = "dev"
 // Serve starts the MCP server on stdio.
 func Serve() error {
 	var err error
+	// Propagate config-driven noise paths to the store package for ranking filters.
+	store.NoisePaths = config.NoisePaths()
+
 	db, err = store.Open()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)

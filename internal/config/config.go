@@ -49,6 +49,7 @@ type Config struct {
 type VaultConfig struct {
 	Path        string   `toml:"path"`
 	SkipDirs    []string `toml:"skip_dirs"`
+	NoisePaths  []string `toml:"noise_paths"`
 	HandoffDir  string   `toml:"handoff_dir"`
 	DecisionLog string   `toml:"decision_log"`
 }
@@ -155,6 +156,14 @@ func LoadConfig() (*Config, error) {
 			}
 		}
 	}
+	if v := os.Getenv("SAME_NOISE_PATHS"); v != "" {
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				cfg.Vault.NoisePaths = append(cfg.Vault.NoisePaths, p)
+			}
+		}
+	}
 
 	// Embedding provider overrides
 	if v := os.Getenv("SAME_EMBED_PROVIDER"); v != "" {
@@ -238,7 +247,7 @@ func generateTOMLContent(vaultPath string) string {
 	b.WriteString("#\n")
 	b.WriteString("# Priority: CLI flags > environment variables > this file > built-in defaults\n")
 	b.WriteString("# Environment variables: VAULT_PATH, OLLAMA_URL, SAME_HANDOFF_DIR,\n")
-	b.WriteString("#   SAME_DECISION_LOG, SAME_SKIP_DIRS, SAME_DATA_DIR\n\n")
+	b.WriteString("#   SAME_DECISION_LOG, SAME_SKIP_DIRS, SAME_NOISE_PATHS, SAME_DATA_DIR\n\n")
 
 	b.WriteString("[vault]\n")
 	if vaultPath != "" {
@@ -247,6 +256,7 @@ func generateTOMLContent(vaultPath string) string {
 		b.WriteString("# path = \"/path/to/your/notes\"  # auto-detected if unset\n")
 	}
 	b.WriteString("# skip_dirs = [\".venv\", \"build\"]  # added to built-in exclusions\n")
+	b.WriteString("# noise_paths = [\"experiments/\", \"raw_outputs/\"]  # paths filtered from context surfacing\n")
 	b.WriteString("handoff_dir = \"sessions\"\n")
 	b.WriteString("decision_log = \"decisions.md\"\n\n")
 
@@ -318,6 +328,25 @@ func DecisionLogPath() string {
 		return cfg.Vault.DecisionLog
 	}
 	return "decisions.md"
+}
+
+// NoisePaths returns the configured list of path prefixes to filter from surfacing.
+// Returns nil (no filtering) if unconfigured.
+func NoisePaths() []string {
+	if v := os.Getenv("SAME_NOISE_PATHS"); v != "" {
+		var paths []string
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				paths = append(paths, p)
+			}
+		}
+		return paths
+	}
+	if cfg := loadConfigSafe(); cfg != nil && len(cfg.Vault.NoisePaths) > 0 {
+		return cfg.Vault.NoisePaths
+	}
+	return nil
 }
 
 // MemoryMaxResults returns the configured maximum number of results to surface.
