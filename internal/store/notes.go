@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
@@ -170,9 +171,11 @@ func (db *DB) HasVectors() bool {
 }
 
 // GetContentHashes returns a map of path → content_hash for all notes.
-// Used for incremental reindexing.
+// Used for incremental reindexing. Only reads chunk_id=0 (the root chunk)
+// to avoid scanning all chunks — each note's chunks share the same hash.
+// Uses the covering index idx_vault_notes_path_hash for an index-only scan.
 func (db *DB) GetContentHashes() (map[string]string, error) {
-	rows, err := db.conn.Query("SELECT DISTINCT path, content_hash FROM vault_notes")
+	rows, err := db.conn.Query("SELECT path, content_hash FROM vault_notes WHERE chunk_id = 0")
 	if err != nil {
 		return nil, err
 	}
@@ -190,23 +193,30 @@ func (db *DB) GetContentHashes() (map[string]string, error) {
 }
 
 // DeleteByPath removes all chunks for a given note path.
+// Uses a transaction to ensure vectors and notes are deleted atomically.
 func (db *DB) DeleteByPath(path string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	// Delete vectors first (referential)
-	if _, err := db.conn.Exec(
+	if _, err := tx.Exec(
 		"DELETE FROM vault_notes_vec WHERE note_id IN (SELECT id FROM vault_notes WHERE path = ?)",
 		path,
 	); err != nil {
 		return fmt.Errorf("delete vectors: %w", err)
 	}
 
-	if _, err := db.conn.Exec("DELETE FROM vault_notes WHERE path = ?", path); err != nil {
+	if _, err := tx.Exec("DELETE FROM vault_notes WHERE path = ?", path); err != nil {
 		return fmt.Errorf("delete notes: %w", err)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 // DeleteAllNotes removes all notes and vectors. Used for force reindex.
@@ -224,6 +234,7 @@ func (db *DB) DeleteAllNotes() error {
 }
 
 // IncrementAccessCount increments the access count for notes at the given paths.
+// Uses a single batched UPDATE with an IN clause to avoid N+1 round-trips.
 func (db *DB) IncrementAccessCount(paths []string) error {
 	if len(paths) == 0 {
 		return nil
@@ -232,16 +243,17 @@ func (db *DB) IncrementAccessCount(paths []string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	stmt, err := db.conn.Prepare("UPDATE vault_notes SET access_count = access_count + 1 WHERE path = ?")
-	if err != nil {
-		return err
+	// Build IN clause with placeholders
+	placeholders := make([]string, len(paths))
+	args := make([]interface{}, len(paths))
+	for i, p := range paths {
+		placeholders[i] = "?"
+		args[i] = p
 	}
-	defer stmt.Close()
-
-	for _, p := range paths {
-		stmt.Exec(p)
-	}
-	return nil
+	query := "UPDATE vault_notes SET access_count = access_count + 1 WHERE path IN (" +
+		strings.Join(placeholders, ",") + ")"
+	_, err := db.conn.Exec(query, args...)
+	return err
 }
 
 // NoteCount returns the number of unique note paths in the index.

@@ -47,17 +47,21 @@ func Serve() error {
 	defer db.Close()
 
 	ec := config.EmbeddingProviderConfig()
-	ollamaURL, err := config.OllamaURL()
-	if err != nil {
-		return fmt.Errorf("ollama URL: %w", err)
-	}
-	embedClient, err = embedding.NewProvider(embedding.ProviderConfig{
+	provCfg := embedding.ProviderConfig{
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
-		BaseURL:    ollamaURL,
 		Dimensions: ec.Dimensions,
-	})
+	}
+	// Only pass the Ollama URL to the Ollama provider
+	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
+		ollamaURL, err := config.OllamaURL()
+		if err != nil {
+			return fmt.Errorf("ollama URL: %w", err)
+		}
+		provCfg.BaseURL = ollamaURL
+	}
+	embedClient, err = embedding.NewProvider(provCfg)
 	if err != nil {
 		return fmt.Errorf("embedding provider: %w", err)
 	}
@@ -348,10 +352,20 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 		return textResult("Error: content exceeds 100KB limit."), nil, nil
 	}
 
+	// S21: Only allow .md files to be saved via MCP
+	if !strings.HasSuffix(strings.ToLower(input.Path), ".md") {
+		return textResult("Error: only .md (markdown) files can be saved via MCP."), nil, nil
+	}
+
 	safePath := safeVaultPath(input.Path)
 	if safePath == "" {
 		return textResult("Error: path must be a relative path within the vault. Cannot write to _PRIVATE/."), nil, nil
 	}
+
+	// S11: Prepend a provenance header so readers know this was MCP-generated.
+	// This helps mitigate stored prompt injection by clearly marking
+	// machine-written content when it is later surfaced to an agent.
+	mcpHeader := "<!-- Note saved via SAME MCP tool. Review before trusting. -->\n"
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(safePath)
@@ -360,7 +374,7 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 	}
 
 	if input.Append {
-		f, err := os.OpenFile(safePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(safePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return textResult("Error: could not open file for appending."), nil, nil
 		}
@@ -370,13 +384,19 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 			return textResult("Error: could not write to file."), nil, nil
 		}
 	} else {
-		if err := os.WriteFile(safePath, []byte(input.Content), 0o644); err != nil {
+		content := mcpHeader + input.Content
+		if err := os.WriteFile(safePath, []byte(content), 0o600); err != nil {
 			return textResult("Error: could not write file."), nil, nil
 		}
 	}
 
-	// Index the new/updated note
-	indexer.Reindex(db, false)
+	// S7: Index only the saved file instead of triggering a full vault reindex.
+	// This avoids O(n) work per save_note call, preventing DoS on large vaults.
+	relPath := filepath.ToSlash(input.Path)
+	if err := indexer.IndexSingleFile(db, safePath, relPath, vaultRoot, embedClient); err != nil {
+		// Non-fatal: the note was saved, just not indexed yet
+		return textResult(fmt.Sprintf("Saved: %s (index update failed — run reindex to fix)", input.Path)), nil, nil
+	}
 
 	return textResult(fmt.Sprintf("Saved: %s", input.Path)), nil, nil
 }
@@ -419,7 +439,7 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 	}
 
 	// Append to decision log
-	f, err := os.OpenFile(safePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(safePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return textResult("Error: could not open decision log."), nil, nil
 	}
@@ -480,7 +500,7 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return textResult("Error: could not create handoff directory."), nil, nil
 	}
-	if err := os.WriteFile(safePath, []byte(buf.String()), 0o644); err != nil {
+	if err := os.WriteFile(safePath, []byte(buf.String()), 0o600); err != nil {
 		return textResult("Error: could not write handoff note."), nil, nil
 	}
 
@@ -605,14 +625,20 @@ func clampTopK(topK, defaultVal int) int {
 }
 
 // safeVaultPath resolves a relative path within the vault, blocking traversal attacks,
-// access to _PRIVATE/ content, and writes to dot-directories (.same/, .git/, etc.).
+// access to _PRIVATE/ content, writes to dot-directories (.same/, .git/, etc.),
+// and symlink escapes from the vault boundary.
 func safeVaultPath(path string) string {
+	// SECURITY: reject paths containing null bytes (can bypass C-level path checks)
+	if strings.ContainsRune(path, 0) {
+		return ""
+	}
 	if filepath.IsAbs(path) {
 		return ""
 	}
-	// SECURITY: block access to _PRIVATE/ directory
+	// SECURITY: block access to _PRIVATE/ directory (case-insensitive for macOS)
 	clean := filepath.ToSlash(filepath.Clean(path))
-	if strings.HasPrefix(clean, "_PRIVATE/") || clean == "_PRIVATE" {
+	upper := strings.ToUpper(clean)
+	if strings.HasPrefix(upper, "_PRIVATE/") || upper == "_PRIVATE" {
 		return ""
 	}
 	// SECURITY: block access to dot-directories and dot-files at root level
@@ -627,14 +653,47 @@ func safeVaultPath(path string) string {
 	if !strings.HasPrefix(full, vaultRoot+string(filepath.Separator)) && full != vaultRoot {
 		return ""
 	}
+
+	// SECURITY: resolve symlinks and verify the real path is still within the vault.
+	// A symlink inside the vault could point to an arbitrary location outside it.
+	resolvedVault, err := filepath.EvalSymlinks(vaultRoot)
+	if err != nil {
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		// If the file doesn't exist yet (e.g., save_note creating new dirs),
+		// walk up the path until we find an existing ancestor and verify it's
+		// still within the vault boundary.
+		ancestor := full
+		for {
+			ancestor = filepath.Dir(ancestor)
+			if ancestor == "." || ancestor == string(filepath.Separator) {
+				return ""
+			}
+			resolvedAncestor, aerr := filepath.EvalSymlinks(ancestor)
+			if aerr != nil {
+				continue
+			}
+			if !strings.HasPrefix(resolvedAncestor, resolvedVault+string(filepath.Separator)) && resolvedAncestor != resolvedVault {
+				return ""
+			}
+			return full
+		}
+	}
+	if !strings.HasPrefix(resolved, resolvedVault+string(filepath.Separator)) && resolved != resolvedVault {
+		return ""
+	}
 	return full
 }
 
 // filterPrivatePaths removes _PRIVATE/ results from search output (defense-in-depth).
+// Uses case-insensitive comparison for macOS compatibility.
 func filterPrivatePaths(results []store.SearchResult) []store.SearchResult {
 	filtered := results[:0]
 	for _, r := range results {
-		if !strings.HasPrefix(r.Path, "_PRIVATE/") && !strings.HasPrefix(r.Path, "_PRIVATE\\") {
+		upper := strings.ToUpper(r.Path)
+		if !strings.HasPrefix(upper, "_PRIVATE/") && !strings.HasPrefix(upper, "_PRIVATE\\") {
 			filtered = append(filtered, r)
 		}
 	}

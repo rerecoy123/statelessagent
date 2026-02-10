@@ -6,11 +6,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
 )
+
+// maxPluginOutput is the maximum size of plugin stdout we'll read (1 MB).
+// Prevents a misbehaving plugin from causing excessive memory usage.
+const maxPluginOutput = 1024 * 1024
+
+// shellMetaRe matches characters that have special meaning in shell contexts.
+// Used to reject commands/args that could enable shell injection.
+var shellMetaRe = regexp.MustCompile(`[;|&$` + "`" + `!(){}<>\\\n\r]`)
+
+// safeCommandNameRe matches a simple command name (no path separators, no metacharacters).
+// Allows alphanumeric, hyphens, underscores, and dots (e.g. "python3", "my-plugin.sh").
+var safeCommandNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // PluginConfig defines a custom hook plugin.
 type PluginConfig struct {
@@ -41,6 +54,79 @@ func LoadPlugins() []PluginConfig {
 	return pf.Plugins
 }
 
+// validatePlugin checks that a plugin's command and args are safe to execute.
+// Returns an error describing the problem if validation fails.
+//
+// Rules:
+//   - Command must be either an absolute path to an existing executable, or a
+//     simple command name (resolved via PATH) with no shell metacharacters.
+//   - Path traversal sequences ("..") are rejected in command paths.
+//   - Shell metacharacters (;|&$`!(){}<>\) are rejected in both command and args.
+//   - Null bytes are rejected everywhere.
+func validatePlugin(p PluginConfig) error {
+	if p.Command == "" {
+		return fmt.Errorf("empty command")
+	}
+
+	// Reject null bytes anywhere in command or args.
+	if strings.ContainsRune(p.Command, 0) {
+		return fmt.Errorf("command contains null byte")
+	}
+	for i, arg := range p.Args {
+		if strings.ContainsRune(arg, 0) {
+			return fmt.Errorf("arg[%d] contains null byte", i)
+		}
+	}
+
+	// Reject shell metacharacters in command.
+	if shellMetaRe.MatchString(p.Command) {
+		return fmt.Errorf("command contains shell metacharacters")
+	}
+
+	// Reject path traversal in command.
+	if strings.Contains(p.Command, "..") {
+		return fmt.Errorf("command contains path traversal")
+	}
+
+	if filepath.IsAbs(p.Command) {
+		// Absolute path: must point to an existing regular file that is executable.
+		info, err := os.Stat(p.Command)
+		if err != nil {
+			return fmt.Errorf("command not found: %s", p.Command)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("command is not a regular file: %s", p.Command)
+		}
+		if info.Mode().Perm()&0o111 == 0 {
+			return fmt.Errorf("command is not executable: %s", p.Command)
+		}
+	} else {
+		// Relative/bare name: must be a simple command name (no path separators).
+		if strings.ContainsAny(p.Command, "/\\") {
+			return fmt.Errorf("relative command paths not allowed (use absolute path): %s", p.Command)
+		}
+		if !safeCommandNameRe.MatchString(p.Command) {
+			return fmt.Errorf("command name contains invalid characters: %s", p.Command)
+		}
+		// Verify it resolves via PATH.
+		if _, err := exec.LookPath(p.Command); err != nil {
+			return fmt.Errorf("command not found in PATH: %s", p.Command)
+		}
+	}
+
+	// Validate args: reject shell metacharacters and path traversal.
+	for i, arg := range p.Args {
+		if shellMetaRe.MatchString(arg) {
+			return fmt.Errorf("arg[%d] contains shell metacharacters", i)
+		}
+		if strings.Contains(arg, "..") {
+			return fmt.Errorf("arg[%d] contains path traversal", i)
+		}
+	}
+
+	return nil
+}
+
 // RunPlugins executes all enabled plugins matching the given event.
 // Each plugin receives the same stdin JSON as built-in hooks.
 // Plugin stdout is merged into the output context.
@@ -53,6 +139,12 @@ func RunPlugins(event string, inputJSON []byte) []string {
 	var contexts []string
 	for _, p := range plugins {
 		if !p.Enabled || !strings.EqualFold(p.Event, event) {
+			continue
+		}
+
+		// SECURITY (S1): Validate command and args before execution.
+		if err := validatePlugin(p); err != nil {
+			fmt.Fprintf(os.Stderr, "same plugin %s: rejected: %v\n", p.Name, err)
 			continue
 		}
 
@@ -102,6 +194,11 @@ func runPlugin(p PluginConfig, inputJSON []byte, timeout time.Duration) (string,
 
 	if len(output) == 0 {
 		return "", nil
+	}
+
+	// SECURITY (S9): Enforce output size limit to prevent OOM from misbehaving plugins.
+	if len(output) > maxPluginOutput {
+		return "", fmt.Errorf("output too large (%d bytes, max %d)", len(output), maxPluginOutput)
 	}
 
 	// Try to parse as hook output JSON

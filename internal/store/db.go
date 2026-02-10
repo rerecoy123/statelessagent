@@ -152,11 +152,16 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_vault_notes_content_type ON vault_notes(content_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_vault_notes_domain ON vault_notes(domain)`,
 		`CREATE INDEX IF NOT EXISTS idx_vault_notes_workstream ON vault_notes(workstream)`,
+		// Composite indexes for common search query patterns:
+		// FuzzyTitleSearch, KeywordSearch, RecentNotes all filter on chunk_id=0 and sort by modified DESC.
+		`CREATE INDEX IF NOT EXISTS idx_vault_notes_chunk0_modified ON vault_notes(chunk_id, modified DESC)`,
+		// GetContentHashes needs DISTINCT path, content_hash — covering index avoids full table scan.
+		`CREATE INDEX IF NOT EXISTS idx_vault_notes_path_hash ON vault_notes(path, content_hash)`,
 
 		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS vault_notes_vec USING vec0(
 			note_id INTEGER PRIMARY KEY,
 			embedding float[%d]
-		)`, config.EmbeddingDim),
+		)`, config.EmbeddingDim()),
 
 		`CREATE TABLE IF NOT EXISTS session_log (
 			session_id TEXT PRIMARY KEY,

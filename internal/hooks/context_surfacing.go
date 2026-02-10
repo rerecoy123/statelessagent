@@ -25,6 +25,11 @@ const (
 	maxTokenBudget   = 800  // tightened from 1000; less context waste
 	minTitleOverlap  = 0.10 // bidirectional overlap threshold for title matching
 	highTierOverlap  = 0.199 // effective 0.20 with floating point margin (e.g., 3/5*3/9 = 0.19999...)
+	// maxPerNoteTokens caps any single note's contribution to the token budget.
+	// Prevents a large note from consuming the entire budget and crowding out
+	// other relevant results. At 400 tokens (~1600 chars), even a 10K-char
+	// note will leave room for 1-2 more results within the 800 token budget.
+	maxPerNoteTokens = 400
 )
 
 // Recency-aware weights: when query has recency intent, shift weight heavily to recency.
@@ -523,11 +528,22 @@ Suggested actions for the user:
 	totalTokens := 0
 
 	for i := range candidates {
+		// Cap per-note tokens to prevent a single large note from starving
+		// the budget. If the snippet alone exceeds the per-note limit,
+		// truncate it so other results get a fair share of the budget.
+		snippet := candidates[i].snippet
+		if snippet != "" {
+			maxSnipChars := maxPerNoteTokens * 4 // ~4 chars per token
+			if len(snippet) > maxSnipChars {
+				snippet = smartTruncate(snippet, maxSnipChars)
+			}
+		}
+
 		var entry string
-		if candidates[i].snippet != "" {
+		if snippet != "" {
 			entry = fmt.Sprintf("**%s** (%s, score: %.3f)\n%s\n%s",
 				candidates[i].title, candidates[i].contentType, candidates[i].composite,
-				candidates[i].path, candidates[i].snippet)
+				candidates[i].path, snippet)
 		} else {
 			entry = fmt.Sprintf("**%s** (%s, score: %.3f)\n%s",
 				candidates[i].title, candidates[i].contentType, candidates[i].composite,

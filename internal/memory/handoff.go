@@ -2,6 +2,7 @@ package memory
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -204,6 +205,11 @@ func generateSessionID() string {
 }
 
 func getMachineName() string {
-	name, _ := os.Hostname()
-	return name
+	name, err := os.Hostname()
+	if err != nil || name == "" {
+		return "unknown"
+	}
+	// SECURITY: hash the hostname to avoid leaking PII into handoff notes.
+	h := sha256.Sum256([]byte(name))
+	return "machine-" + hex.EncodeToString(h[:4])
 }

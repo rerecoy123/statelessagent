@@ -48,12 +48,16 @@ func SetupGuard(vaultPath string) error {
 		sameBin = "same"
 	}
 
+	// S19: Escape single quotes in the binary path for safe shell embedding.
+	// Replace each ' with '\'' (end quote, escaped quote, start quote).
+	escapedBin := strings.ReplaceAll(sameBin, "'", "'\\''")
+
 	hook := fmt.Sprintf(`#!/bin/sh
 # SAME Guard pre-commit hook
 # Installed by: same init
 # Scans staged files for PII, blocklisted terms, and unauthorized paths.
 
-SAME_BIN="%s"
+SAME_BIN='%s'
 
 if [ ! -x "$SAME_BIN" ] && ! command -v same >/dev/null 2>&1; then
     echo "Warning: SAME binary not found. Skipping guard check."
@@ -65,8 +69,8 @@ if command -v same >/dev/null 2>&1; then
     SAME_BIN="same"
 fi
 
-$SAME_BIN guard scan --staged
-`, sameBin)
+"$SAME_BIN" guard scan --staged
+`, escapedBin)
 
 	if err := os.MkdirAll(filepath.Dir(hookPath), 0o755); err != nil {
 		return fmt.Errorf("create hooks dir: %w", err)

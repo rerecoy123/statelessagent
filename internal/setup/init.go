@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,8 +134,64 @@ func checkDependencies() {
 	}
 }
 
+// acquireInitLock creates a lockfile to prevent concurrent init runs.
+// Returns a cleanup function that removes the lockfile, or an error if
+// another init is already running.
+func acquireInitLock() (func(), error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Can't determine home dir — skip locking rather than blocking init
+		return func() {}, nil
+	}
+	lockDir := filepath.Join(home, ".config", "same")
+	if err := os.MkdirAll(lockDir, 0o755); err != nil {
+		return func() {}, nil
+	}
+	lockPath := filepath.Join(lockDir, "init.lock")
+
+	// Try to create the lockfile exclusively.
+	// O_CREATE|O_EXCL fails atomically if the file already exists.
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			// Check if the lockfile is stale (older than 30 minutes)
+			if info, statErr := os.Stat(lockPath); statErr == nil {
+				if time.Since(info.ModTime()) > 30*time.Minute {
+					// Stale lock — remove and retry
+					os.Remove(lockPath)
+					f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+					if err != nil {
+						return nil, fmt.Errorf("another 'same init' is already running (lockfile: %s)", lockPath)
+					}
+				} else {
+					return nil, fmt.Errorf("another 'same init' is already running (lockfile: %s)", lockPath)
+				}
+			}
+		}
+		if f == nil {
+			return func() {}, nil // can't lock, proceed anyway
+		}
+	}
+
+	// Write PID for debugging
+	fmt.Fprintf(f, "%d\n", os.Getpid())
+	f.Close()
+
+	cleanup := func() {
+		os.Remove(lockPath)
+	}
+	return cleanup, nil
+}
+
 // RunInit executes the interactive setup wizard.
 func RunInit(opts InitOptions) error {
+	// S20: Prevent concurrent init runs with a lockfile
+	unlock, err := acquireInitLock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	version := opts.Version
 	if version == "" {
 		version = "dev"
@@ -243,7 +300,7 @@ func RunInit(opts InitOptions) error {
 		cli.Bold, cli.Reset,
 		config.HandoffDirectory(), config.DecisionLogPath())
 	fmt.Println()
-	fmt.Printf("  Run %ssame scope%s to review anytime.\n", cli.Bold, cli.Reset)
+	fmt.Printf("  Run %ssame status%s to review anytime.\n", cli.Bold, cli.Reset)
 
 	// Test search to prove it works
 	cli.Section("Testing")
@@ -293,6 +350,17 @@ func checkOllama() error {
 	ollamaURL := "http://localhost:11434"
 	if v := os.Getenv("OLLAMA_URL"); v != "" {
 		ollamaURL = v
+	}
+
+	// SECURITY: validate that the URL points to localhost before making any request.
+	// This prevents SSRF if OLLAMA_URL is set to an external host.
+	u, err := url.Parse(ollamaURL)
+	if err != nil {
+		return fmt.Errorf("invalid OLLAMA_URL: %w", err)
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return fmt.Errorf("OLLAMA_URL must point to localhost (got %s)", host)
 	}
 
 	httpClient := &http.Client{Timeout: 5 * time.Second}
@@ -934,17 +1002,21 @@ func runTestSearch(vaultPath string) string {
 
 	// Create embedding provider
 	ec := config.EmbeddingProviderConfig()
-	ollamaURL, err := config.OllamaURL()
-	if err != nil {
-		return ""
-	}
-	provider, err := embedding.NewProvider(embedding.ProviderConfig{
+	provCfg := embedding.ProviderConfig{
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
-		BaseURL:    ollamaURL,
 		Dimensions: ec.Dimensions,
-	})
+	}
+	// Only pass the Ollama URL to the Ollama provider
+	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
+		ollamaURL, err := config.OllamaURL()
+		if err != nil {
+			return ""
+		}
+		provCfg.BaseURL = ollamaURL
+	}
+	provider, err := embedding.NewProvider(provCfg)
 	if err != nil {
 		return ""
 	}

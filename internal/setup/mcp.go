@@ -27,7 +27,11 @@ func SetupMCP(vaultPath string) error {
 	// Load existing config or create new
 	var cfg mcpConfig
 	if data, err := os.ReadFile(mcpPath); err == nil {
-		json.Unmarshal(data, &cfg)
+		if jsonErr := json.Unmarshal(data, &cfg); jsonErr != nil {
+			// SECURITY: if the file exists but has invalid JSON (e.g., trailing comma),
+			// do NOT overwrite it with a fresh object — that would destroy the user's config.
+			return fmt.Errorf("parse %s: %w (fix the JSON manually to avoid data loss)", mcpPath, jsonErr)
+		}
 	}
 	if cfg.Servers == nil {
 		cfg.Servers = make(map[string]mcpServer)

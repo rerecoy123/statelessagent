@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -17,8 +18,53 @@ import (
 // Embedding model settings.
 const (
 	EmbeddingModel = "nomic-embed-text"
-	EmbeddingDim   = 768
 )
+
+// EmbeddingDim returns the configured embedding dimensions. It checks the
+// embedding provider config for an explicit dimensions setting, then falls
+// back to provider-specific defaults. This replaces the old hard-coded 768
+// constant so that non-Ollama providers (e.g., OpenAI at 1536) work correctly.
+func EmbeddingDim() int {
+	ec := EmbeddingProviderConfig()
+	if ec.Dimensions > 0 {
+		return ec.Dimensions
+	}
+	// Provider-specific defaults (must match embedding package defaults)
+	switch ec.Provider {
+	case "openai":
+		model := ec.Model
+		if model == "" {
+			model = "text-embedding-3-small"
+		}
+		switch model {
+		case "text-embedding-3-small":
+			return 1536
+		case "text-embedding-3-large":
+			return 3072
+		case "text-embedding-ada-002":
+			return 1536
+		default:
+			return 1536
+		}
+	default: // "ollama" or ""
+		model := ec.Model
+		if model == "" {
+			model = EmbeddingModel
+		}
+		switch model {
+		case "nomic-embed-text":
+			return 768
+		case "mxbai-embed-large":
+			return 1024
+		case "all-minilm":
+			return 384
+		case "snowflake-arctic-embed":
+			return 1024
+		default:
+			return 768
+		}
+	}
+}
 
 // Indexing settings.
 const (
@@ -541,7 +587,8 @@ func VaultPath() string {
 	return path
 }
 
-// validateVaultPath rejects vault paths that are too broad (e.g., /, /home, /Users).
+// validateVaultPath rejects vault paths that are too broad (e.g., /, /home, /Users)
+// and resolves symlinks to prevent symlink-based escapes.
 func validateVaultPath(path string) string {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -553,6 +600,28 @@ func validateVaultPath(path string) string {
 		if abs == d {
 			fmt.Fprintf(os.Stderr, "WARNING: VAULT_PATH=%q is too broad, ignoring.\n", abs)
 			return ""
+		}
+	}
+
+	// SECURITY: resolve symlinks and re-check the real path against dangerous roots.
+	// A symlink could point vault operations at /, /home, etc.
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		// Path may not exist yet (e.g., during init); skip symlink check
+		return path
+	}
+	for _, d := range dangerous {
+		if resolved == d {
+			fmt.Fprintf(os.Stderr, "WARNING: VAULT_PATH=%q resolves to %q which is too broad, ignoring.\n", abs, resolved)
+			return ""
+		}
+		// Also resolve the dangerous path itself through symlinks (e.g., on macOS
+		// /tmp -> /private/tmp) so we catch indirect matches.
+		if resolvedDangerous, err := filepath.EvalSymlinks(d); err == nil {
+			if resolved == resolvedDangerous {
+				fmt.Fprintf(os.Stderr, "WARNING: VAULT_PATH=%q resolves to %q which is too broad, ignoring.\n", abs, resolved)
+				return ""
+			}
 		}
 	}
 	return path
@@ -624,11 +693,48 @@ func DBPath() string {
 }
 
 // DataDir returns the data directory for the same binary.
+// SECURITY: Validates SAME_DATA_DIR is an existing, writable directory.
 func DataDir() string {
 	if v := os.Getenv("SAME_DATA_DIR"); v != "" {
-		return v
+		return validateDataDir(v)
 	}
 	return filepath.Join(VaultPath(), ".same", "data")
+}
+
+// validateDataDir checks that the given path is a valid directory (or can be
+// created). Falls back to the default data dir if the path is invalid.
+func validateDataDir(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q is not a valid path, using default.\n", dir)
+		return filepath.Join(VaultPath(), ".same", "data")
+	}
+
+	info, err := os.Stat(abs)
+	if err == nil {
+		// Path exists — must be a directory
+		if !info.IsDir() {
+			fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q is not a directory, using default.\n", abs)
+			return filepath.Join(VaultPath(), ".same", "data")
+		}
+		// Check writable by attempting to create a temp file
+		testFile := filepath.Join(abs, ".same_write_test")
+		if f, err := os.Create(testFile); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q is not writable, using default.\n", abs)
+			return filepath.Join(VaultPath(), ".same", "data")
+		} else {
+			f.Close()
+			os.Remove(testFile)
+		}
+		return abs
+	}
+
+	// Path doesn't exist — try to create it
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q cannot be created (%v), using default.\n", abs, err)
+		return filepath.Join(VaultPath(), ".same", "data")
+	}
+	return abs
 }
 
 // VaultRegistry holds registered vault paths with aliases.
@@ -660,14 +766,77 @@ func LoadRegistry() *VaultRegistry {
 }
 
 // Save writes the registry to disk.
+// C12: Uses a lockfile to prevent TOCTOU races when multiple processes
+// read and write vaults.json concurrently.
 func (r *VaultRegistry) Save() error {
 	path := RegistryPath()
 	os.MkdirAll(filepath.Dir(path), 0o755)
-	data, err := json.MarshalIndent(r, "", "  ")
+
+	// Acquire lockfile
+	lockPath := path + ".lock"
+	unlock, err := acquireFileLock(lockPath)
+	if err != nil {
+		// If locking fails, proceed without it (best effort)
+		data, err := json.MarshalIndent(r, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, data, 0o600)
+	}
+	defer unlock()
+
+	// Re-read the registry under the lock to merge any changes
+	// made by another process since we last read it.
+	data, readErr := os.ReadFile(path)
+	if readErr == nil {
+		var current VaultRegistry
+		if json.Unmarshal(data, &current) == nil && current.Vaults != nil {
+			// Merge: our entries take precedence over existing ones
+			for alias, vpath := range current.Vaults {
+				if _, exists := r.Vaults[alias]; !exists {
+					r.Vaults[alias] = vpath
+				}
+			}
+			if r.Default == "" && current.Default != "" {
+				r.Default = current.Default
+			}
+		}
+	}
+
+	out, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	return os.WriteFile(path, out, 0o600)
+}
+
+// acquireFileLock creates a lockfile using O_EXCL for atomic creation.
+// Returns a cleanup function and nil on success, or an error if the lock
+// cannot be acquired within a timeout.
+func acquireFileLock(lockPath string) (func(), error) {
+	const maxRetries = 20
+	const retryDelay = 50 * time.Millisecond
+
+	for i := 0; i < maxRetries; i++ {
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			fmt.Fprintf(f, "%d\n", os.Getpid())
+			f.Close()
+			return func() { os.Remove(lockPath) }, nil
+		}
+		if !os.IsExist(err) {
+			return nil, err
+		}
+		// Check for stale lock (older than 10 seconds)
+		if info, statErr := os.Stat(lockPath); statErr == nil {
+			if time.Since(info.ModTime()) > 10*time.Second {
+				os.Remove(lockPath)
+				continue
+			}
+		}
+		time.Sleep(retryDelay)
+	}
+	return nil, fmt.Errorf("could not acquire lock on %s", lockPath)
 }
 
 // ResolveVault resolves a vault alias to a path. Returns empty string if not found.

@@ -54,7 +54,11 @@ func SetupHooks(vaultPath string) error {
 	// Load existing settings or create new
 	existing := make(map[string]json.RawMessage)
 	if data, err := os.ReadFile(settingsPath); err == nil {
-		json.Unmarshal(data, &existing)
+		if jsonErr := json.Unmarshal(data, &existing); jsonErr != nil {
+			// SECURITY: if the file exists but has invalid JSON (e.g., trailing comma),
+			// do NOT overwrite it with a fresh object — that would destroy the user's settings.
+			return fmt.Errorf("parse %s: %w (fix the JSON manually to avoid data loss)", settingsPath, jsonErr)
+		}
 	}
 
 	// Parse existing hooks

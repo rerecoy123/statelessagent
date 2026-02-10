@@ -139,10 +139,18 @@ func ExtractDecisions(text string, requireRationale bool) []Decision {
 }
 
 // ExtractDecisionsFromMessages extracts decisions from conversation messages.
+// SECURITY: Only processes assistant messages to prevent adversarial injection
+// via crafted user messages that contain decision-like patterns.
 func ExtractDecisionsFromMessages(messages []Message) []Decision {
 	var all []Decision
 	for _, msg := range messages {
 		if len(msg.Content) < 20 {
+			continue
+		}
+		// Only extract decisions from assistant/tool outputs, not user messages.
+		// User messages could contain adversarial text designed to inject
+		// fake decisions into the decision log.
+		if msg.Role == "user" {
 			continue
 		}
 		decisions := ExtractDecisions(msg.Content, true)

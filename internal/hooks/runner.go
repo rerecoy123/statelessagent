@@ -17,6 +17,9 @@ import (
 // maxTranscriptSize is the maximum transcript file size we'll process (50 MB).
 const maxTranscriptSize = 50 * 1024 * 1024
 
+// maxStdinSize is the maximum size of stdin input we'll read (10 MB).
+const maxStdinSize = 10 * 1024 * 1024
+
 // AI-facing diagnostic messages. These are pre-written constants — no raw Go
 // error strings leak to the AI (could contain paths or internal state).
 const diagNoDB = `<same-diagnostic>
@@ -197,8 +200,17 @@ func Run(hookName string) {
 }
 
 // mergePluginOutput appends plugin contexts to the built-in hook output.
+// SECURITY (S8): Plugin output is sanitized to prevent XML tag injection
+// that could break the <plugin-context> wrapper or the <vault-context>
+// wrapper, which would let a malicious plugin inject system-level instructions.
 func mergePluginOutput(output *HookOutput, eventName string, pluginContexts []string) *HookOutput {
-	extra := "\n<plugin-context>\n" + strings.Join(pluginContexts, "\n---\n") + "\n</plugin-context>\n"
+	// Sanitize each plugin context to strip/neutralize structural XML tags.
+	sanitized := make([]string, len(pluginContexts))
+	for i, ctx := range pluginContexts {
+		sanitized[i] = sanitizeContextTags(ctx)
+	}
+
+	extra := "\n<plugin-context>\n" + strings.Join(sanitized, "\n---\n") + "\n</plugin-context>\n"
 
 	if output == nil {
 		return &HookOutput{
@@ -241,8 +253,9 @@ func validateTranscriptPath(path string, hookName string) bool {
 }
 
 // readInputRaw reads stdin and returns both the raw bytes and parsed input.
+// SECURITY: stdin is capped at maxStdinSize (10 MB) to prevent memory exhaustion.
 func readInputRaw() ([]byte, *HookInput, error) {
-	data, err := io.ReadAll(os.Stdin)
+	data, err := io.ReadAll(io.LimitReader(os.Stdin, maxStdinSize))
 	if err != nil {
 		return nil, nil, err
 	}
