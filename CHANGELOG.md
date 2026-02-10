@@ -2,10 +2,16 @@
 
 ## v0.6.0 — Reliability, Privacy & Polish
 
-Self-diagnosing retrieval, pinned notes, keyword fallback, vault privacy structure, RAG chat, interactive demo, and a full polish pass.
+Self-diagnosing retrieval, pinned notes, keyword fallback, vault privacy structure, RAG chat, interactive demo, write-side MCP tools, security hardening, and a full polish pass.
 
 ### Added
 
+- **Write-side MCP tools** — 5 new MCP tools bring the total to 11. Your AI can now save notes, log decisions, and create session handoffs — not just read:
+  - `save_note` — create or update markdown notes (auto-indexed, dot-dir protected, 100KB limit)
+  - `save_decision` — log structured decisions with status and date
+  - `create_handoff` — session handoffs with summary, pending items, and blockers
+  - `get_session_context` — one-call orientation: pinned notes + latest handoff + recent activity + stats
+  - `recent_activity` — recently modified notes (clamped to 50)
 - **`same ask`** — ask questions, get answers FROM your notes with source citations. Uses a local Ollama LLM to synthesize answers from semantically relevant notes. Auto-detects the best available chat model. 100% local, no cloud APIs. Example: `same ask "what did we decide about authentication?"`
 - **`same demo`** — interactive demo that creates a temporary vault with 6 realistic sample notes, indexes them, runs search, and showcases `same ask`. Works without Ollama (keyword-only mode). See SAME in action in under 60 seconds.
 - **`same tutorial`** — modular learn-by-doing system with 6 lessons: semantic search, decisions, pinning, privacy tiers, RAG chat, and session handoffs. Run all lessons (`same tutorial`) or jump to any topic (`same tutorial search`, `same tutorial pin`). Creates real notes and runs real commands — you learn the CLI by using it.
@@ -18,30 +24,52 @@ Self-diagnosing retrieval, pinned notes, keyword fallback, vault privacy structu
 - **FTS5 keyword fallback** — when Ollama is down or slow, context surfacing falls back to SQLite FTS5 full-text search instead of failing silently
 - **Doctor retrieval diagnostics** — 8 new `same doctor` checks: embedding config mismatch, SQLite PRAGMA integrity, retrieval utilization rate, config file validity, hook installation, DB integrity, index freshness, log file size
 - **Schema migration system** — `schema_meta` table with version-gated migrations; `GetMeta()`/`SetMeta()` for metadata storage; auto-migrates between schema versions
-- **Embedding mismatch guard** — detects when embedding provider/model/dimensions change without reindexing; surfaces clear guidance
+- **Embedding mismatch guard** — detects when embedding provider/model/dimensions change without reindexing; surfaces clear guidance; `Provider` interface gains `Model()` method
 - **Hook execution timeout** — 10-second timeout prevents hung Ollama from blocking prompts; returns `<same-diagnostic>` on timeout
 - **AI-facing diagnostics** — when hooks fail (DB missing, Ollama down), the AI sees `<same-diagnostic>` blocks with suggested user actions instead of silent failure
 - **Ollama retry with backoff** — 3 attempts with exponential backoff (0/2/4s) for 5xx and network errors
 - **Usage data pruning** — records older than 90 days pruned during reindex
 - **Configurable noise filtering** — `[vault] noise_paths` in config.toml or `SAME_NOISE_PATHS` env var
-- **23 new tests** — store (milestones, pins, delete, recent, access count, tags), search (keyword, content term, fuzzy title, hybrid), indexer (chunking, frontmatter parsing, vault walking)
+- **MCP directory manifests** — `server.json` (official MCP registry), `smithery.yaml` (Smithery.ai) for directory submissions
+- **GitHub Sponsors** — `.github/FUNDING.yml` configuration
+- **MCP server test coverage** — 22 tests for `safeVaultPath`, `filterPrivatePaths`, `clampTopK`, and helpers
+- **45+ new tests** — store, search, indexer, config, and MCP packages
+
+### Security
+
+11 fixes from 6 rounds of pre-release security auditing:
+
+- **Dot-path blocking in MCP** — `save_note` can no longer overwrite `.same/config.toml`, `.git/`, `.gitignore`
+- **DB path PII fix** — `index_stats` returns `same.db` not the full filesystem path
+- **MCP error sanitization** — all MCP error messages changed to static strings; no internal paths leak to AI
+- **`find_similar_notes` path validation** — now validates through `safeVaultPath`
+- **Write size limits** — 100KB max on `save_decision` and `create_handoff` content
+- **`<plugin-context>` tag sanitization** — opening tag now stripped (was only stripping closing tag)
+- **Config file permissions** — all config writes changed from 0o644 to 0o600 (5 occurrences)
+- **Backup file permissions** — `same repair` backup changed to 0o600
+- **OLLAMA_URL scheme validation** — blocks `file://`, `ftp://`; only `http`/`https` allowed
+- **Empty input validation** — `same search`, `same ask`, `same feedback` reject empty input
+- **Plugin timeout safety** — `cmd.Process` nil check before Kill()
 
 ### Fixed
 
 - **Replaced all panics with errors** — `OllamaURL()` and `validateLocalhostOnly()` now return errors instead of crashing
 - **TOML `skip_dirs` now applied** — `LoadConfig()` applies `[vault] skip_dirs` to the global `SkipDirs` map
 - **Verbose log permissions** — changed from 0o644 to 0o600 (owner-only)
+- **Noise path filter** — uses `HasPrefix` instead of `Contains` to prevent false matches
 
 ### Changed
 
+- **Go 1.25** — standardized across go.mod, CI, release workflow, install scripts, README
 - **Schema version 2** — adds FTS5 virtual table for keyword fallback; auto-migrates from v1
 - **Context surfacing resilience** — embedding failures trigger keyword fallback instead of returning errors
 - **CLI descriptions rewritten** — all user-facing commands use outcome language (e.g. "Scan your notes and rebuild the search index" instead of "Index vault into SQLite")
-- **README overhauled** — pain-first hero section, outcome-focused features, three-tier privacy table, updated CLI reference
-- **MCP tool descriptions improved** — all 6 tools rewritten with agent-oriented "when to use" guidance
+- **README restructured** — `same demo` above the fold, MCP tools table promoted, numbers section, SAME Lite callout, eval methodology
+- **MCP tool descriptions improved** — all 11 tools with agent-oriented "when to use" guidance
 - **Error messages friendlier** — "escapes vault boundary" → "outside your notes folder"; timeouts and connection failures include actionable guidance
 - **Box is now default display** — `full` mode shows the cyan Unicode box automatically
 - **Noise filtering off by default** — add `noise_paths` to config if you want path-based filtering
+- **Intel Mac install** — install.sh uses ARM binary + Rosetta instead of non-existent darwin-amd64
 
 ---
 

@@ -4,21 +4,44 @@
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev)
 [![Latest Release](https://img.shields.io/github/v/release/sgx-labs/statelessagent)](https://github.com/sgx-labs/statelessagent/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/sgx-labs/statelessagent)](https://github.com/sgx-labs/statelessagent)
+[![Discord](https://img.shields.io/discord/1468523556076785757?color=5865F2&label=Discord&logo=discord&logoColor=white)](https://discord.gg/Qg8AXavNWu)
 
 > Every AI session starts from zero. **Not anymore.**
 
-Tired of re-explaining your project architecture, your coding decisions, and where you left off — every single session? SAME gives your AI agent persistent memory across sessions, entirely on your machine.
+## Try it in 60 seconds
 
-**Your AI remembers your decisions. Your architecture. Where you left off. Automatically.**
+```bash
+curl -fsSL statelessagent.com/install.sh | bash
+same demo
+```
+
+`same demo` creates a temporary vault with sample notes, runs semantic search, and shows your AI answering questions from your notes — all locally, no accounts, no API keys. Works without Ollama.
+
+---
 
 ### Why SAME
 
-SAME is a memory engine — a foundation you control and customize to fit your workflow.
-
 - **Local-first** — your notes, decisions, and context never leave your machine. No cloud APIs, no accounts, no API keys
-- **Works immediately** — keyword search runs out of the box. Add [Ollama](https://ollama.ai) for semantic search that understands meaning, not just keywords (recommended)
-- **Single binary** — one `curl` command, no runtimes, no Docker, no package managers
-- **Yours to build on** — SQLite + MCP. Swap embedding providers, adjust retrieval, connect any MCP client. SAME adapts to you, not the other way around
+- **Single binary** — one `curl` command, no Python, no Docker, no runtimes, no package managers
+- **Works immediately** — keyword search runs out of the box. Add [Ollama](https://ollama.ai) for semantic search (recommended)
+- **Yours to build on** — SQLite + MCP. Swap embedding providers, adjust retrieval, connect any MCP client
+
+### The numbers
+
+| Metric | Value |
+|--------|-------|
+| Token reduction | **99.5%** — 40,000 tokens of notes → 200 tokens of targeted context |
+| Retrieval precision | **99.5%** across 105 ground-truth test cases |
+| MRR | **0.949** — the right note surfaces first, almost every time |
+| Coverage | **90.5%** — 9 out of 10 relevant notes found |
+| Prompt overhead | **<200ms** |
+| Binary size | **~10MB** |
+
+### No Ollama? No problem.
+
+SAME Lite runs with zero external dependencies — just the binary. Keyword search via SQLite FTS5 powers all features: search, ask, demo, tutorial, context surfacing. Install Ollama later and `same reindex` upgrades to full semantic mode instantly.
+
+---
 
 ## Install
 
@@ -71,18 +94,28 @@ same init --yes
 
 </details>
 
-Install [Ollama](https://ollama.ai) for the full semantic search experience (recommended). SAME also works without Ollama using keyword search — you're never blocked.
+## Quick start
+
+```bash
+same demo                              # see it in action (no setup needed)
+cd ~/my-project && same init           # set up your own project
+same ask "what did we decide about auth?"  # ask questions, get cited answers
+```
+
+`same init` finds your notes (including existing README.md, docs/, etc.), indexes them, and configures your AI tools. Works with or without Ollama.
+
+`same tutorial` — 6 hands-on lessons covering search, decisions, pinning, privacy, RAG, and session handoffs. Run `same tutorial search` to try just one.
 
 ## What happens when you use SAME
 
-- **Your AI picks up where you left off** — session handoffs are generated automatically, so the next session knows what happened in the last one.
-- **Decisions stick** — architectural choices, coding patterns, and project preferences are extracted and remembered. No more "we already decided to use JWT."
-- **The right notes surface at the right time** — semantic search finds relevant context from your notes and injects it into your AI's context window. No manual copy-pasting.
-- **Notes your AI actually uses get boosted** — a built-in feedback loop tracks which notes the agent references, improving retrieval over time.
-- **Ask questions, get answers** — `same ask` uses a local LLM to answer questions from your notes with source citations. "ChatGPT for your notes" — 100% local.
-- **Pin critical context** — `same pin` ensures your most important notes are always included, regardless of what you're working on.
-- **When something breaks, SAME tells you why** — `same doctor` runs 15 diagnostic checks and tells you exactly what to fix.
-- **Everything stays on your machine** — Ollama embeddings + SQLite. No cloud, no API keys, no accounts.
+- **Your AI picks up where you left off** — session handoffs are generated automatically, so the next session knows what happened in the last one
+- **Decisions stick** — architectural choices, coding patterns, and project preferences are extracted and remembered. No more "we already decided to use JWT"
+- **The right notes surface at the right time** — semantic search finds relevant context and injects it into your AI's context window. No manual copy-pasting
+- **Notes your AI actually uses get boosted** — a built-in feedback loop tracks which notes the agent references, improving retrieval over time
+- **Ask questions, get answers** — `same ask` uses a local LLM to answer questions from your notes with source citations. Like ChatGPT for your notes — 100% local
+- **Pin critical context** — `same pin` ensures your most important notes are always included, regardless of what you're working on
+- **When something breaks, SAME tells you why** — `same doctor` runs 15 diagnostic checks and tells you exactly what to fix
+- **Everything stays on your machine** — Ollama embeddings + SQLite. No cloud, no API keys, no accounts
 
 ## How it works
 
@@ -93,19 +126,32 @@ Your Notes  →  Ollama  →  SQLite  →  Agent Remembers
 
 SAME indexes your markdown notes into a local SQLite database with vector embeddings. When you use an AI coding tool, SAME's hooks automatically surface relevant context. Decisions get extracted, handoffs get generated, and the next session picks up where you left off.
 
-## Quick start
+## MCP Tools
 
-```bash
-same demo              # see it in action first (no notes needed)
-cd ~/my-project && same init   # or set up your own project
-same ask "what did we decide about auth?"  # ask questions, get answers
-```
+SAME exposes **11 tools** via MCP for any compatible client.
 
-`same demo` creates a temporary vault and walks you through search and RAG — all in under 60 seconds. Works without Ollama.
+### Read
 
-`same init` finds your notes (including existing README.md, docs/, etc.), indexes them, and configures your AI tools. Works with or without Ollama.
+| Tool | Description |
+|------|-------------|
+| `search_notes` | Semantic search across your notes |
+| `search_notes_filtered` | Search with domain/workstream/tag filters |
+| `get_note` | Read full note content by path |
+| `find_similar_notes` | Find related notes by similarity |
+| `get_session_context` | Get pinned notes, latest handoff, and recent activity |
+| `recent_activity` | See recently modified notes |
+| `reindex` | Re-scan and re-index the vault |
+| `index_stats` | Index health and statistics |
 
-`same tutorial` — 6 hands-on lessons covering search, decisions, pinning, privacy, RAG, and session handoffs. Run `same tutorial search` to try just one.
+### Write
+
+| Tool | Description |
+|------|-------------|
+| `save_note` | Create or update a markdown note (auto-indexed) |
+| `save_decision` | Log a structured project decision |
+| `create_handoff` | Write a session handoff for the next session |
+
+Your AI can now write to its memory, not just read from it. Decisions persist. Handoffs survive. Every session builds on the last.
 
 ## Works with
 
@@ -231,27 +277,6 @@ Configuration priority (highest wins):
 </details>
 
 <details>
-<summary><strong>MCP Server</strong></summary>
-
-SAME exposes 11 tools via MCP — read and write:
-
-| Tool | Description |
-|------|-------------|
-| `search_notes` | Semantic search across your notes |
-| `search_notes_filtered` | Search with domain/workstream/tag filters |
-| `get_note` | Read full note content by path |
-| `find_similar_notes` | Find related notes |
-| `save_note` | Create or update a note (auto-indexed) |
-| `save_decision` | Log a project decision |
-| `create_handoff` | Write a session handoff for the next session |
-| `get_session_context` | Get pinned notes, latest handoff, and recent activity |
-| `recent_activity` | See recently modified notes |
-| `reindex` | Re-index the vault |
-| `index_stats` | Index statistics |
-
-</details>
-
-<details>
 <summary><strong>Display Modes</strong></summary>
 
 Control how much SAME shows when surfacing context:
@@ -289,6 +314,8 @@ When enabled, a pre-push git hook blocks pushes unless a one-time ticket has bee
 <details>
 <summary><strong>Troubleshooting</strong></summary>
 
+Start with `same doctor` — it runs 15 checks and tells you exactly what's wrong.
+
 **"No vault found"**
 SAME can't find your notes directory. Fix:
 - Run `same init` from inside your notes folder
@@ -323,6 +350,21 @@ The SQLite database is missing or corrupted. Fix:
 
 </details>
 
+<details>
+<summary><strong>Eval methodology</strong></summary>
+
+SAME's retrieval is tuned against 105 ground-truth test cases — real queries paired with known-relevant notes. The eval harness measures:
+
+- **Precision** (99.5%) — when SAME surfaces a note, it's almost always relevant
+- **Coverage** (90.5%) — SAME finds ~9 out of 10 relevant notes
+- **MRR** (0.949) — the most relevant note is usually the first result
+
+Tuning constants: `maxDistance=16.3`, `minComposite=0.70`, `gapCap=0.65`. These are shared between hooks and MCP via `ranking.go`.
+
+The eval runs against synthetic vault data with known relevance judgments. No user data is used in evaluation.
+
+</details>
+
 ## FAQ
 
 **Do I need Obsidian?**
@@ -346,12 +388,15 @@ Yes. `same vault add work ~/work-notes && same vault default work`.
 ## Security & Privacy
 
 - All data stays local — no external API calls except Ollama on localhost
-- Ollama URL validated to localhost-only
+- Ollama URL validated to localhost-only (blocks `file://`, `ftp://`)
 - `_PRIVATE/` directories excluded from indexing and context surfacing
 - `research/` indexed but gitignored by default — your AI can search it, but it never leaves your machine
+- All MCP error messages sanitized — no internal paths leak to AI
+- Path traversal blocked across all MCP tools
+- Dot-directory writes blocked (`.git/`, `.same/`, `.env`)
+- Config files written with owner-only permissions (0o600)
 - Snippets scanned for prompt injection patterns before injection
-- Path traversal blocked in MCP `get_note` tool
-- **Push protection** — `same guard settings set push-protect on` requires explicit `same push-allow` before git push (prevents accidental pushes when running multiple agents)
+- **Push protection** — `same guard settings set push-protect on` requires explicit `same push-allow` before git push
 
 ## Building from Source
 
@@ -362,10 +407,14 @@ cd statelessagent && make install
 
 Requires Go 1.25+ and CGO.
 
+## Community
+
+[Discord](https://discord.gg/Qg8AXavNWu) · [GitHub Discussions](https://github.com/sgx-labs/statelessagent/discussions)
+
 ## Support
 
 [Buy me a coffee](https://buymeacoffee.com/sgxlabs) · [GitHub Sponsors](https://github.com/sponsors/sgx-labs)
 
 ## License
 
-BSL 1.1 — free for personal, educational, hobby, research, and evaluation use. Change date: 2030-02-02 (converts to Apache 2.0). See [LICENSE](LICENSE).
+Source available under BSL 1.1. Free for personal, educational, hobby, research, and evaluation use. Converts to Apache 2.0 on 2030-02-02. See [LICENSE](LICENSE).
