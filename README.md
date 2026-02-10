@@ -118,6 +118,8 @@ Go · SQLite + sqlite-vec · Ollama / OpenAI
 | `same related <path>` | Find similar notes |
 | `same reindex [--force]` | Re-index markdown files |
 | `same doctor` | System health check with fix suggestions |
+| `same repair` | Back up database and force-rebuild index |
+| `same feedback <path> up\|down` | Boost or penalize a note's retrieval confidence |
 | `same display full\|compact\|quiet` | Control output verbosity |
 | `same profile use precise\|balanced\|broad` | Adjust precision vs coverage |
 | `same config show` | Show effective configuration |
@@ -270,7 +272,8 @@ Hooks fire but no notes appear. Fix:
 
 **"Cannot open SAME database"**
 The SQLite database is missing or corrupted. Fix:
-- Run `same init` to set up from scratch
+- Run `same repair` to back up and rebuild automatically
+- Or run `same init` to set up from scratch
 - Or run `same reindex --force` to rebuild the index
 
 </details>
