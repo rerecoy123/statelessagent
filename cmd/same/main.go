@@ -541,7 +541,7 @@ func runSearch(query string, topK int, domain string, jsonOut bool) error {
 				return fmt.Errorf("can't connect to embedding provider — is Ollama running? (%w)", err)
 			}
 		} else {
-			if mismatchErr := db.CheckEmbeddingMeta(client.Name(), "", client.Dimensions()); mismatchErr != nil {
+			if mismatchErr := db.CheckEmbeddingMeta(client.Name(), client.Model(), client.Dimensions()); mismatchErr != nil {
 				return mismatchErr
 			}
 
@@ -627,7 +627,7 @@ func runRelated(notePath string, topK int, jsonOut bool) error {
 	if err != nil {
 		return fmt.Errorf("embedding provider: %w", err)
 	}
-	if mismatchErr := db.CheckEmbeddingMeta(client.Name(), "", client.Dimensions()); mismatchErr != nil {
+	if mismatchErr := db.CheckEmbeddingMeta(client.Name(), client.Model(), client.Dimensions()); mismatchErr != nil {
 		return mismatchErr
 	}
 

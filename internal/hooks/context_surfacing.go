@@ -373,7 +373,7 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	}
 
 	// Check for embedding model/dimension mismatch before searching
-	if mismatchErr := db.CheckEmbeddingMeta(embedProvider.Name(), "", embedProvider.Dimensions()); mismatchErr != nil {
+	if mismatchErr := db.CheckEmbeddingMeta(embedProvider.Name(), embedProvider.Model(), embedProvider.Dimensions()); mismatchErr != nil {
 		fmt.Fprintf(os.Stderr, "same: %v\n", mismatchErr)
 		return &HookOutput{
 			HookSpecificOutput: &HookSpecific{
