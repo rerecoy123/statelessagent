@@ -371,6 +371,22 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 			},
 		}
 	}
+
+	// Check for embedding model/dimension mismatch before searching
+	if mismatchErr := db.CheckEmbeddingMeta(embedProvider.Name(), "", embedProvider.Dimensions()); mismatchErr != nil {
+		fmt.Fprintf(os.Stderr, "same: %v\n", mismatchErr)
+		return &HookOutput{
+			HookSpecificOutput: &HookSpecific{
+				HookEventName: "UserPromptSubmit",
+				AdditionalContext: fmt.Sprintf(`<same-diagnostic>
+%s
+Suggested actions for the user:
+- Run "same reindex --force" to rebuild the index with the current embedding model
+</same-diagnostic>`, mismatchErr),
+			},
+		}
+	}
+
 	queryVec, err := embedProvider.GetQueryEmbedding(prompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "same: embed query failed: %v\n", err)

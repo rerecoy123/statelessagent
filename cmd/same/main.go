@@ -497,6 +497,12 @@ func runSearch(query string, topK int, domain string, jsonOut bool) error {
 	if err != nil {
 		return fmt.Errorf("embedding provider: %w", err)
 	}
+
+	// Check for embedding model/dimension mismatch
+	if mismatchErr := db.CheckEmbeddingMeta(client.Name(), "", client.Dimensions()); mismatchErr != nil {
+		return mismatchErr
+	}
+
 	queryVec, err := client.GetQueryEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("embed query: %w", err)
@@ -571,6 +577,15 @@ func runRelated(notePath string, topK int, jsonOut bool) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
+
+	// Check for embedding model/dimension mismatch
+	client, err := newEmbedProvider()
+	if err != nil {
+		return fmt.Errorf("embedding provider: %w", err)
+	}
+	if mismatchErr := db.CheckEmbeddingMeta(client.Name(), "", client.Dimensions()); mismatchErr != nil {
+		return mismatchErr
+	}
 
 	// Get the stored embedding for this note
 	noteVec, err := db.GetNoteEmbedding(notePath)
@@ -1451,6 +1466,17 @@ func runStatus() error {
 	} else {
 		fmt.Printf("  %snot registered%s\n",
 			cli.Dim, cli.Reset)
+	}
+
+	// Config
+	cli.Section("Config")
+	if w := config.ConfigWarning(); w != "" {
+		fmt.Printf("  %sconfig error:%s %s\n", cli.Red, cli.Reset, w)
+		fmt.Printf("  (using defaults — check .same/config.toml)\n")
+	} else if config.FindConfigFile() != "" {
+		fmt.Printf("  Loaded:  %s\n", cli.ShortenHome(config.FindConfigFile()))
+	} else {
+		fmt.Printf("  %sno config file%s (using defaults)\n", cli.Dim, cli.Reset)
 	}
 
 	cli.Footer()

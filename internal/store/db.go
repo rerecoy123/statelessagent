@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
@@ -122,6 +123,12 @@ func (db *DB) SessionStateCleanup(maxAgeSeconds int64) error {
 
 func (db *DB) migrate() error {
 	migrations := []string{
+		// Schema metadata table — stores version, embedding info, etc.
+		`CREATE TABLE IF NOT EXISTS schema_meta (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS vault_notes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			path TEXT NOT NULL,
@@ -210,5 +217,106 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("migration failed: %w\nSQL: %s", err, m)
 		}
 	}
+
+	// Version-gated migrations (run once, tracked in schema_meta)
+	currentVersion := db.SchemaVersion()
+	versionedMigrations := []struct {
+		version int
+		fn      func() error
+	}{
+		{1, db.migrateV1}, // establishes version tracking baseline
+	}
+	for _, m := range versionedMigrations {
+		if currentVersion < m.version {
+			if err := m.fn(); err != nil {
+				return fmt.Errorf("migration v%d: %w", m.version, err)
+			}
+			if err := db.SetMeta("schema_version", strconv.Itoa(m.version)); err != nil {
+				return fmt.Errorf("record migration v%d: %w", m.version, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// migrateV1 is a no-op that establishes version 1 as the baseline.
+func (db *DB) migrateV1() error {
+	return nil
+}
+
+// SchemaVersion returns the current schema version (0 if unset).
+func (db *DB) SchemaVersion() int {
+	v, ok := db.GetMeta("schema_version")
+	if !ok {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// GetMeta reads a value from the schema_meta table. Returns ("", false) if not found.
+func (db *DB) GetMeta(key string) (string, bool) {
+	var value string
+	err := db.conn.QueryRow(`SELECT value FROM schema_meta WHERE key = ?`, key).Scan(&value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
+}
+
+// SetMeta writes a key-value pair to the schema_meta table.
+func (db *DB) SetMeta(key, value string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	_, err := db.conn.Exec(
+		`INSERT INTO schema_meta (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, value,
+	)
+	return err
+}
+
+// SetEmbeddingMeta records the current embedding provider, model, and dimensions.
+// Called after a successful reindex to track what was used.
+func (db *DB) SetEmbeddingMeta(provider, model string, dims int) error {
+	if err := db.SetMeta("embed_provider", provider); err != nil {
+		return err
+	}
+	if err := db.SetMeta("embed_model", model); err != nil {
+		return err
+	}
+	return db.SetMeta("embed_dims", strconv.Itoa(dims))
+}
+
+// CheckEmbeddingMeta compares the given embedding config against what was used
+// at last reindex. Returns an error if there's a mismatch. Returns nil if no
+// stored metadata exists (pre-migration DB or first index).
+func (db *DB) CheckEmbeddingMeta(provider, model string, dims int) error {
+	storedProvider, hasProvider := db.GetMeta("embed_provider")
+	storedModel, hasModel := db.GetMeta("embed_model")
+	storedDimsStr, hasDims := db.GetMeta("embed_dims")
+
+	// No stored metadata = compatible (never block on upgrade or first use)
+	if !hasProvider && !hasModel && !hasDims {
+		return nil
+	}
+
+	storedDims, _ := strconv.Atoi(storedDimsStr)
+
+	// Check for dimension mismatch (most critical — causes garbage results)
+	if hasDims && dims > 0 && storedDims > 0 && storedDims != dims {
+		return fmt.Errorf("embedding dimensions changed from %d to %d — run 'same reindex --force' to rebuild", storedDims, dims)
+	}
+
+	// Check for provider/model mismatch
+	if hasProvider && hasModel && (storedProvider != provider || storedModel != model) {
+		return fmt.Errorf("embedding model changed from %s/%s to %s/%s — run 'same reindex --force' to rebuild",
+			storedProvider, storedModel, provider, model)
+	}
+
 	return nil
 }

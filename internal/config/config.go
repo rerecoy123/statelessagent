@@ -182,6 +182,12 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	// Apply TOML skip_dirs to the global SkipDirs map.
+	// Previously parsed but never applied — this fixes the bug.
+	if len(cfg.Vault.SkipDirs) > 0 {
+		RebuildSkipDirs(cfg.Vault.SkipDirs)
+	}
+
 	return cfg, nil
 }
 
@@ -438,6 +444,20 @@ func loadConfigSafe() *Config {
 		return nil
 	}
 	return cfg
+}
+
+// ConfigWarning returns any config file parse error, or empty string if OK.
+func ConfigWarning() string {
+	_, err := LoadConfig()
+	if err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// FindConfigFile returns the path to the active config file, or empty string if none found.
+func FindConfigFile() string {
+	return findConfigFile()
 }
 
 // defaultSkipDirs are directories to skip during vault walks.

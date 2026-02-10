@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/store"
@@ -24,6 +25,17 @@ Suggested actions for the user:
 - Run "same init" to set up SAME
 - Run "same doctor" to diagnose issues
 </same-diagnostic>`
+
+const diagTimeout = `<same-diagnostic>
+SAME timed out while processing your prompt. This usually means the embedding provider is slow or unresponsive.
+Suggested actions for the user:
+- Check if Ollama is running and responsive
+- Run "same doctor" to diagnose issues
+</same-diagnostic>`
+
+// hookTimeout is the maximum time allowed for hook execution.
+// Covers Ollama cold start (2-5s) + one retry (4s) with margin.
+const hookTimeout = 10 * time.Second
 
 const diagNoEmbed = `<same-diagnostic>
 SAME cannot connect to the embedding provider. Ollama may not be running.
@@ -112,40 +124,66 @@ func Run(hookName string) {
 
 	var output *HookOutput
 
-	switch hookName {
-	case "context-surfacing":
-		output = runContextSurfacing(db, input)
-	case "decision-extractor":
-		output = runDecisionExtractor(db, input)
-	case "handoff-generator":
-		output = runHandoffGenerator(db, input)
-	case "feedback-loop":
-		output = runFeedbackLoop(db, input)
-	case "staleness-check":
-		output = runStalenessCheck(db, input)
-	case "session-bootstrap":
-		output = runSessionBootstrap(db, input)
-	default:
-		fmt.Fprintf(os.Stderr, "same hook: unknown hook %q\n", hookName)
-		return
+	// Run hook dispatch with timeout to prevent hung embedding providers
+	// from blocking the user's prompt indefinitely.
+	type hookResult struct {
+		output *HookOutput
 	}
-
-	// Run plugins matching this hook's event
-	eventName := hookEventMap[hookName]
-	if eventName != "" {
-		pluginContexts := RunPlugins(eventName, inputData)
-		if len(pluginContexts) > 0 {
-			output = mergePluginOutput(output, eventName, pluginContexts)
+	ch := make(chan hookResult, 1)
+	go func() {
+		var out *HookOutput
+		switch hookName {
+		case "context-surfacing":
+			out = runContextSurfacing(db, input)
+		case "decision-extractor":
+			out = runDecisionExtractor(db, input)
+		case "handoff-generator":
+			out = runHandoffGenerator(db, input)
+		case "feedback-loop":
+			out = runFeedbackLoop(db, input)
+		case "staleness-check":
+			out = runStalenessCheck(db, input)
+		case "session-bootstrap":
+			out = runSessionBootstrap(db, input)
+		default:
+			fmt.Fprintf(os.Stderr, "same hook: unknown hook %q\n", hookName)
 		}
-	}
 
-	// Attach pending verbose message (set by verboseDecision) as systemMessage.
-	// systemMessage is displayed to the user but NOT injected into Claude's context.
-	if msg := getPendingVerboseMsg(); msg != "" {
-		if output == nil {
-			output = &HookOutput{}
+		// Run plugins matching this hook's event
+		eventName := hookEventMap[hookName]
+		if eventName != "" {
+			pluginContexts := RunPlugins(eventName, inputData)
+			if len(pluginContexts) > 0 {
+				out = mergePluginOutput(out, eventName, pluginContexts)
+			}
 		}
-		output.SystemMessage = msg
+
+		// Attach pending verbose message
+		if msg := getPendingVerboseMsg(); msg != "" {
+			if out == nil {
+				out = &HookOutput{}
+			}
+			out.SystemMessage = msg
+		}
+
+		ch <- hookResult{output: out}
+	}()
+
+	select {
+	case result := <-ch:
+		output = result.output
+	case <-time.After(hookTimeout):
+		fmt.Fprintf(os.Stderr, "same hook %s: timed out after %s\n", hookName, hookTimeout)
+		eventName := hookEventMap[hookName]
+		if eventName == "" {
+			eventName = "UserPromptSubmit"
+		}
+		output = &HookOutput{
+			HookSpecificOutput: &HookSpecific{
+				HookEventName:     eventName,
+				AdditionalContext: diagTimeout,
+			},
+		}
 	}
 
 	if output != nil {

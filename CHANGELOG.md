@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.7.0 — Foundation + Safety
+
+Schema migrations, embedding mismatch guard, hook timeout, and config surfacing.
+
+### Added
+
+- **Schema migration system** — `schema_meta` table with version-gated migrations enables safe schema evolution without `reindex --force`; `GetMeta()`/`SetMeta()` for key-value metadata storage
+- **Embedding mismatch guard** — detects when embedding provider/model/dimensions change without reindexing; surfaces clear "run `same reindex --force`" error in CLI commands and hook diagnostics
+- **Hook execution timeout** — 10-second timeout on hook dispatch prevents hung Ollama from blocking prompts; returns `<same-diagnostic>` on timeout instead of hanging
+- **Config section in `same status`** — shows loaded config path, parse errors, or defaults-only state
+- **`ConfigWarning()` and `FindConfigFile()` exports** — public API for config health checks
+
+### Fixed
+
+- **TOML `skip_dirs` now applied** — `RebuildSkipDirs()` was defined but never called; `LoadConfig()` now applies `[vault] skip_dirs` to the global `SkipDirs` map
+
+### Changed
+
+- **Reindex records embedding metadata** — after successful indexing, provider name, model, and dimensions are stored in `schema_meta` for mismatch detection
+
+---
+
 ## v0.6.0 — Production Polish
 
 Error handling, AI diagnostics, and reliability improvements.

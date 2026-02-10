@@ -183,6 +183,11 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 	stats.NotesInIndex = noteCount
 	stats.ChunksInIndex = chunkCount
 
+	// Record embedding metadata so mismatch guard can detect config changes
+	embedName := embedClient.Name()
+	embedDims := embedClient.Dimensions()
+	_ = db.SetEmbeddingMeta(embedName, ec.Model, embedDims)
+
 	// Save stats to file
 	saveStats(stats)
 

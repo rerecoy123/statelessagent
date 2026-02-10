@@ -379,5 +379,140 @@ func TestDecisionInsert(t *testing.T) {
 	}
 }
 
+func TestSchemaMetaTable(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// schema_meta table should exist after migrate()
+	var count int
+	err = db.Conn().QueryRow("SELECT COUNT(*) FROM schema_meta").Scan(&count)
+	if err != nil {
+		t.Fatalf("schema_meta table should exist: %v", err)
+	}
+}
+
+func TestGetSetMeta(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// Get non-existent key
+	_, ok := db.GetMeta("nonexistent")
+	if ok {
+		t.Error("expected ok=false for missing key")
+	}
+
+	// Set and get
+	if err := db.SetMeta("test_key", "test_value"); err != nil {
+		t.Fatalf("SetMeta: %v", err)
+	}
+	val, ok := db.GetMeta("test_key")
+	if !ok || val != "test_value" {
+		t.Errorf("expected 'test_value', got %q (ok=%v)", val, ok)
+	}
+
+	// Upsert
+	if err := db.SetMeta("test_key", "updated_value"); err != nil {
+		t.Fatalf("SetMeta upsert: %v", err)
+	}
+	val, ok = db.GetMeta("test_key")
+	if !ok || val != "updated_value" {
+		t.Errorf("expected 'updated_value', got %q", val)
+	}
+}
+
+func TestSchemaVersion(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// After migrate(), version should be 1 (migrateV1 ran)
+	v := db.SchemaVersion()
+	if v != 1 {
+		t.Errorf("expected schema version 1, got %d", v)
+	}
+}
+
+func TestSchemaVersionIdempotent(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// Running migrate() again should not change the version
+	v1 := db.SchemaVersion()
+	if err := db.migrate(); err != nil {
+		t.Fatalf("second migrate: %v", err)
+	}
+	v2 := db.SchemaVersion()
+	if v1 != v2 {
+		t.Errorf("version changed after re-migrate: %d -> %d", v1, v2)
+	}
+}
+
+func TestEmbeddingMetaGuard(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// No stored metadata: should return nil (compatible)
+	if err := db.CheckEmbeddingMeta("ollama", "nomic-embed-text", 768); err != nil {
+		t.Errorf("expected nil for empty metadata, got: %v", err)
+	}
+
+	// Store metadata
+	if err := db.SetEmbeddingMeta("ollama", "nomic-embed-text", 768); err != nil {
+		t.Fatalf("SetEmbeddingMeta: %v", err)
+	}
+
+	// Same config: should return nil
+	if err := db.CheckEmbeddingMeta("ollama", "nomic-embed-text", 768); err != nil {
+		t.Errorf("expected nil for matching config, got: %v", err)
+	}
+
+	// Different dimensions: should error
+	if err := db.CheckEmbeddingMeta("ollama", "nomic-embed-text", 1024); err == nil {
+		t.Error("expected error for dimension mismatch")
+	}
+
+	// Different provider/model: should error
+	if err := db.CheckEmbeddingMeta("openai", "text-embedding-3-small", 768); err == nil {
+		t.Error("expected error for provider/model mismatch")
+	}
+}
+
+func TestEmbeddingMetaGuardPartialMeta(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// Store only dims (simulates partial metadata)
+	if err := db.SetMeta("embed_dims", "768"); err != nil {
+		t.Fatalf("SetMeta: %v", err)
+	}
+
+	// Matching dims, no provider/model stored: should pass
+	if err := db.CheckEmbeddingMeta("ollama", "nomic-embed-text", 768); err != nil {
+		t.Errorf("expected nil for partial meta with matching dims, got: %v", err)
+	}
+
+	// Mismatched dims: should error
+	if err := db.CheckEmbeddingMeta("openai", "text-embedding-3-large", 1024); err == nil {
+		t.Error("expected error for dimension mismatch with partial meta")
+	}
+}
+
 // Suppress unused import warnings
 var _ = math.Pi
