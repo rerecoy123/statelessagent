@@ -156,6 +156,7 @@ func HooksInstalled(vaultPath string) map[string]bool {
 		"decision-extractor": false,
 		"handoff-generator":  false,
 		"feedback-loop":      false,
+		"session-bootstrap":  false,
 		"staleness-check":    false,
 	}
 

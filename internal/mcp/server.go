@@ -207,7 +207,7 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 		return textResult("Error embedding query. Is Ollama running?"), nil, nil
 	}
 
-	results, err := db.VectorSearch(queryVec, store.SearchOptions{TopK: topK})
+	results, err := db.HybridSearch(queryVec, input.Query, store.SearchOptions{TopK: topK})
 	if err != nil {
 		return textResult("Search error. Try running reindex() first."), nil, nil
 	}
@@ -238,7 +238,7 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 		}
 	}
 
-	results, err := db.VectorSearch(queryVec, store.SearchOptions{
+	results, err := db.HybridSearch(queryVec, input.Query, store.SearchOptions{
 		TopK:       topK,
 		Domain:     input.Domain,
 		Workstream: input.Workstream,

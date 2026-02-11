@@ -151,6 +151,7 @@ Need help? https://discord.gg/GZGHtrrKF2`,
 	root.AddCommand(statsCmd())
 	root.AddCommand(migrateCmd())
 	root.AddCommand(hookCmd())
+	root.AddCommand(hooksCmd())
 	root.AddCommand(mcpCmd())
 	root.AddCommand(benchCmd())
 	root.AddCommand(searchCmd())
@@ -510,6 +511,23 @@ func hookSubCmd(name, short string) *cobra.Command {
 	}
 }
 
+func hooksCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hooks",
+		Short: "List available hooks and their installation status",
+		Long: `Shows all available SAME hooks, what they do, and whether they are installed
+in your .claude/settings.json file.
+
+Hooks connect SAME to Claude Code to provide automatic context injection,
+decision extraction, and session handoffs.
+
+To install hooks, run: same init`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runHooksList()
+		},
+	}
+}
+
 func mcpCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
@@ -519,6 +537,105 @@ func mcpCmd() *cobra.Command {
 			return mcpserver.Serve()
 		},
 	}
+}
+
+func runHooksList() error {
+	// Define hook metadata: name, event, description
+	type hookInfo struct {
+		name        string
+		event       string
+		description string
+	}
+
+	hooks := []hookInfo{
+		{
+			name:        "context-surfacing",
+			event:       "UserPromptSubmit",
+			description: "Injects relevant notes into Claude's context before tool use",
+		},
+		{
+			name:        "decision-extractor",
+			event:       "Stop",
+			description: "Captures decisions and insights from the conversation",
+		},
+		{
+			name:        "handoff-generator",
+			event:       "Stop",
+			description: "Creates session handoff notes when Claude stops",
+		},
+		{
+			name:        "feedback-loop",
+			event:       "Stop",
+			description: "Tracks which surfaced notes were actually used",
+		},
+		{
+			name:        "session-bootstrap",
+			event:       "SessionStart",
+			description: "Orients the agent with vault context and previous session state",
+		},
+		{
+			name:        "staleness-check",
+			event:       "SessionStart",
+			description: "Flags notes that may be outdated",
+		},
+	}
+
+	cli.Header("SAME Hooks")
+
+	// Check installation status
+	vp := config.VaultPath()
+	var status map[string]bool
+	if vp != "" {
+		status = setup.HooksInstalled(vp)
+	} else {
+		// No vault — show all as not installed
+		status = map[string]bool{
+			"context-surfacing":  false,
+			"decision-extractor": false,
+			"handoff-generator":  false,
+			"feedback-loop":      false,
+			"session-bootstrap":  false,
+			"staleness-check":    false,
+		}
+	}
+
+	// Print table header
+	fmt.Printf("  %-24s %-18s %s\n", "Hook", "Event", "Status")
+	fmt.Printf("  %s\n", strings.Repeat("-", 70))
+
+	// Print each hook
+	for _, h := range hooks {
+		installed := status[h.name]
+		var statusStr string
+		if installed {
+			statusStr = fmt.Sprintf("%s\u2713 installed%s", cli.Green, cli.Reset)
+		} else {
+			statusStr = fmt.Sprintf("%s\u2717 not installed%s", cli.Dim, cli.Reset)
+		}
+
+		fmt.Printf("  %-24s %-18s %s\n", h.name, h.event, statusStr)
+		fmt.Printf("  %s%s%s\n\n", cli.Dim, h.description, cli.Reset)
+	}
+
+	// Footer with installation instructions
+	if vp == "" {
+		fmt.Printf("  %sNo vault detected. Run 'same init' to set up.%s\n\n", cli.Yellow, cli.Reset)
+	} else {
+		hasAny := false
+		for _, installed := range status {
+			if installed {
+				hasAny = true
+				break
+			}
+		}
+
+		if !hasAny {
+			fmt.Printf("  %sTo install hooks, run: same init%s\n\n", cli.Yellow, cli.Reset)
+		}
+	}
+
+	cli.Footer()
+	return nil
 }
 
 func runReindex(force bool) error {
@@ -563,6 +680,7 @@ func searchCmd() *cobra.Command {
 		topK     int
 		domain   string
 		jsonOut  bool
+		verbose  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "search [query]",
@@ -570,16 +688,17 @@ func searchCmd() *cobra.Command {
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := strings.Join(args, " ")
-			return runSearch(query, topK, domain, jsonOut)
+			return runSearch(query, topK, domain, jsonOut, verbose)
 		},
 	}
 	cmd.Flags().IntVar(&topK, "top-k", 5, "Number of results")
 	cmd.Flags().StringVar(&domain, "domain", "", "Filter by domain")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show raw scores for debugging")
 	return cmd
 }
 
-func runSearch(query string, topK int, domain string, jsonOut bool) error {
+func runSearch(query string, topK int, domain string, jsonOut bool, verbose bool) error {
 	if strings.TrimSpace(query) == "" {
 		return userError("Empty search query", "Provide a search term: same search \"your query\"")
 	}
@@ -657,7 +776,11 @@ func runSearch(query string, topK int, domain string, jsonOut bool) error {
 
 		fmt.Printf("\n%d. %s%s\n", i+1, r.Title, typeTag)
 		fmt.Printf("   %s\n", r.Path)
-		fmt.Printf("   Score: %.3f  Distance: %.1f  Confidence: %.3f\n", r.Score, r.Distance, r.Confidence)
+		if verbose {
+			fmt.Printf("   Score: %.3f  Distance: %.1f  Confidence: %.3f\n", r.Score, r.Distance, r.Confidence)
+		} else {
+			fmt.Printf("   Match: %s\n", formatRelevance(r.Score))
+		}
 
 		// Show first 150 chars of snippet
 		snippet := r.Snippet
@@ -678,6 +801,7 @@ func relatedCmd() *cobra.Command {
 	var (
 		topK    int
 		jsonOut bool
+		verbose bool
 	)
 	cmd := &cobra.Command{
 		Use:   "related [note-path]",
@@ -685,15 +809,16 @@ func relatedCmd() *cobra.Command {
 		Long:  "Find notes related to a specific vault note using its stored embedding. Path is relative to vault root.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRelated(args[0], topK, jsonOut)
+			return runRelated(args[0], topK, jsonOut, verbose)
 		},
 	}
 	cmd.Flags().IntVar(&topK, "top-k", 5, "Number of related notes to show")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show raw scores for debugging")
 	return cmd
 }
 
-func runRelated(notePath string, topK int, jsonOut bool) error {
+func runRelated(notePath string, topK int, jsonOut bool, verbose bool) error {
 	db, err := store.Open()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -757,7 +882,11 @@ func runRelated(notePath string, topK int, jsonOut bool) error {
 
 		fmt.Printf("\n%d. %s%s\n", i+1, r.Title, typeTag)
 		fmt.Printf("   %s\n", r.Path)
-		fmt.Printf("   Score: %.3f  Distance: %.1f\n", r.Score, r.Distance)
+		if verbose {
+			fmt.Printf("   Score: %.3f  Distance: %.1f\n", r.Score, r.Distance)
+		} else {
+			fmt.Printf("   Match: %s\n", formatRelevance(r.Score))
+		}
 
 		snippet := r.Snippet
 		if len(snippet) > 150 {
@@ -773,43 +902,101 @@ func runRelated(notePath string, topK int, jsonOut bool) error {
 }
 
 func doctorCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check system health and diagnose issues",
 		Long:  "Runs health checks on your SAME setup: verifies Ollama is running, your notes are indexed, and search is working.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDoctor()
+			return runDoctor(jsonOut)
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	return cmd
 }
 
-func runDoctor() error {
+// DoctorResult represents a single health check result
+type DoctorResult struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"` // "pass", "warn", "fail"
+	Message string `json:"message,omitempty"`
+	Hint    string `json:"hint,omitempty"`
+}
+
+// DoctorReport represents the complete health check report
+type DoctorReport struct {
+	Checks  []DoctorResult `json:"checks"`
+	Summary struct {
+		Total   int `json:"total"`
+		Passed  int `json:"passed"`
+		Warned  int `json:"warned"`
+		Failed  int `json:"failed"`
+	} `json:"summary"`
+}
+
+// sanitizeErrorForJSON removes potentially sensitive information from error messages
+// SECURITY: Prevents leaking absolute file paths, hostnames, or other PII in JSON output
+func sanitizeErrorForJSON(err error) string {
+	msg := err.Error()
+	// Remove absolute paths by stripping anything that looks like a filesystem path
+	// This is a simple heuristic: if the error contains a '/', replace with generic message
+	if strings.Contains(msg, "/") || strings.Contains(msg, "\\") {
+		// Try to extract just the error type without the path
+		if idx := strings.LastIndex(msg, ":"); idx != -1 {
+			return strings.TrimSpace(msg[idx+1:])
+		}
+		return "operation failed"
+	}
+	return msg
+}
+
+func runDoctor(jsonOut bool) error {
 	passed := 0
 	failed := 0
+	var results []DoctorResult
 
 	check := func(name string, hint string, fn func() (string, error)) {
 		detail, err := fn()
 		if err != nil {
-			fmt.Printf("  %s✗%s %s: %s\n",
-				cli.Red, cli.Reset, name, err)
-			if hint != "" {
-				fmt.Printf("    → %s\n", hint)
+			if jsonOut {
+				results = append(results, DoctorResult{
+					Name:    name,
+					Status:  "fail",
+					Message: sanitizeErrorForJSON(err),
+					Hint:    hint,
+				})
+			} else {
+				fmt.Printf("  %s✗%s %s: %s\n",
+					cli.Red, cli.Reset, name, err)
+				if hint != "" {
+					fmt.Printf("    → %s\n", hint)
+				}
 			}
 			failed++
 		} else {
-			if detail != "" {
-				fmt.Printf("  %s✓%s %s (%s)\n",
-					cli.Green, cli.Reset, name, detail)
+			if jsonOut {
+				results = append(results, DoctorResult{
+					Name:    name,
+					Status:  "pass",
+					Message: detail,
+				})
 			} else {
-				fmt.Printf("  %s✓%s %s\n",
-					cli.Green, cli.Reset, name)
+				if detail != "" {
+					fmt.Printf("  %s✓%s %s (%s)\n",
+						cli.Green, cli.Reset, name, detail)
+				} else {
+					fmt.Printf("  %s✓%s %s\n",
+						cli.Green, cli.Reset, name)
+				}
 			}
 			passed++
 		}
 	}
 
-	cli.Header("SAME Health Check")
-	fmt.Println()
+	if !jsonOut {
+		cli.Header("SAME Health Check")
+		fmt.Println()
+	}
 
 	// 1. Vault path
 	check("Vault path", "run 'same init' or set VAULT_PATH", func() (string, error) {
@@ -960,7 +1147,8 @@ func runDoctor() error {
 			return "", err
 		}
 		if !strings.Contains(ollamaURL, "localhost") && !strings.Contains(ollamaURL, "127.0.0.1") && !strings.Contains(ollamaURL, "::1") {
-			return "", fmt.Errorf("non-localhost: %s", ollamaURL)
+			// SECURITY: Don't leak the actual URL in error message
+			return "", fmt.Errorf("Ollama URL is not localhost")
 		}
 		return "", nil
 	})
@@ -1111,6 +1299,27 @@ func runDoctor() error {
 		}
 		return detail, nil
 	})
+
+	if jsonOut {
+		report := DoctorReport{
+			Checks: results,
+		}
+		report.Summary.Total = len(results)
+		report.Summary.Passed = passed
+		report.Summary.Warned = 0 // Currently no warnings, only pass/fail
+		report.Summary.Failed = failed
+
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal JSON: %w", err)
+		}
+		fmt.Println(string(data))
+
+		if failed > 0 {
+			return fmt.Errorf("%d check(s) failed", failed)
+		}
+		return nil
+	}
 
 	cli.Box([]string{
 		fmt.Sprintf("%d passed, %d failed", passed, failed),
@@ -1567,7 +1776,8 @@ Run this command from inside your project folder.`,
 // ---------- status ----------
 
 func statusCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "See what SAME is tracking in your project",
 		Long: `Shows you the current state of SAME for your project:
@@ -1577,17 +1787,130 @@ func statusCmd() *cobra.Command {
 
 Run this anytime to see if SAME is working.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus()
+			return runStatus(jsonOut)
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	return cmd
 }
 
-func runStatus() error {
+// StatusData represents the status information for JSON output
+type StatusData struct {
+	Vault struct {
+		Path       string  `json:"path"` // Just the directory name, not full absolute path
+		Notes      int     `json:"notes"`
+		Chunks     int     `json:"chunks"`
+		IndexedAgo string  `json:"indexed_ago,omitempty"`
+		DBSizeMB   float64 `json:"db_size_mb,omitempty"`
+	} `json:"vault"`
+	Ollama struct {
+		Status string `json:"status"` // "running", "not_running", "invalid_url"
+		Model  string `json:"model,omitempty"`
+		Error  string `json:"error,omitempty"`
+	} `json:"ollama"`
+	Hooks map[string]bool `json:"hooks"`
+	MCP   struct {
+		Installed bool `json:"installed"`
+	} `json:"mcp"`
+	Config struct {
+		Loaded  string `json:"loaded,omitempty"` // Just the filename, not full path
+		Warning string `json:"warning,omitempty"`
+	} `json:"config"`
+	Initialized bool `json:"initialized"`
+}
+
+func runStatus(jsonOut bool) error {
 	vp := config.VaultPath()
 	if vp == "" {
 		return config.ErrNoVault
 	}
 
+	if jsonOut {
+		// Collect data for JSON output
+		data := StatusData{}
+		// SECURITY: Only include vault directory name, not full absolute path
+		data.Vault.Path = filepath.Base(vp)
+		data.Hooks = make(map[string]bool)
+
+		db, err := store.Open()
+		if err != nil {
+			data.Initialized = false
+		} else {
+			defer db.Close()
+			data.Initialized = true
+
+			noteCount, _ := db.NoteCount()
+			chunkCount, _ := db.ChunkCount()
+			data.Vault.Notes = noteCount
+			data.Vault.Chunks = chunkCount
+
+			// Index age
+			indexAge, _ := db.IndexAge()
+			if indexAge > 0 {
+				data.Vault.IndexedAgo = formatDuration(indexAge)
+			}
+
+			// DB size
+			dbPath := config.DBPath()
+			if info, err := os.Stat(dbPath); err == nil {
+				data.Vault.DBSizeMB = float64(info.Size()) / (1024 * 1024)
+			}
+		}
+
+		// Ollama status
+		ollamaURL, ollamaErr := config.OllamaURL()
+		if ollamaErr != nil {
+			data.Ollama.Status = "invalid_url"
+			// SECURITY: Sanitize error message to avoid leaking URL details
+			if strings.Contains(ollamaErr.Error(), "invalid OLLAMA_URL") {
+				data.Ollama.Error = "invalid OLLAMA_URL format"
+			} else {
+				data.Ollama.Error = ollamaErr.Error()
+			}
+		} else {
+			httpClient := &http.Client{Timeout: time.Second}
+			resp, err := httpClient.Get(ollamaURL + "/api/tags")
+			if err != nil {
+				data.Ollama.Status = "not_running"
+			} else {
+				resp.Body.Close()
+				data.Ollama.Status = "running"
+				data.Ollama.Model = config.EmbeddingModel
+			}
+		}
+
+		// Hooks
+		hookStatus := setup.HooksInstalled(vp)
+		hookNames := []string{
+			"context-surfacing",
+			"decision-extractor",
+			"handoff-generator",
+			"staleness-check",
+		}
+		for _, name := range hookNames {
+			data.Hooks[name] = hookStatus[name]
+		}
+
+		// MCP
+		data.MCP.Installed = setup.MCPInstalled(vp)
+
+		// Config
+		if w := config.ConfigWarning(); w != "" {
+			data.Config.Warning = w
+		} else if cf := config.FindConfigFile(); cf != "" {
+			// SECURITY: Only include filename, not full path
+			data.Config.Loaded = filepath.Base(cf)
+		}
+
+		jsonBytes, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal JSON: %w", err)
+		}
+		fmt.Println(string(jsonBytes))
+		return nil
+	}
+
+	// Original display logic for non-JSON output
 	cli.Header("SAME Status")
 
 	cli.Section("Vault")
@@ -1700,6 +2023,22 @@ func formatDuration(d time.Duration) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+
+func formatRelevance(score float64) string {
+	// score is 0-1, higher is better
+	pct := int(score * 100)
+	stars := int(score * 5)
+	if stars > 5 {
+		stars = 5
+	}
+	if stars < 1 {
+		stars = 1
+	}
+	filled := strings.Repeat("★", stars)
+	empty := strings.Repeat("☆", 5-stars)
+	return fmt.Sprintf("%s%s %d%%", filled, empty, pct)
 }
 
 // ---------- log ----------
@@ -1891,12 +2230,17 @@ func setupSubCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println("\n  Available MCP tools:")
-			fmt.Println("    search_notes          Semantic search")
-			fmt.Println("    search_notes_filtered Search with filters")
+			fmt.Println("    search_notes          Semantic search across your vault")
+			fmt.Println("    search_notes_filtered Search with domain/tag/type filters")
 			fmt.Println("    get_note              Read a note by path")
-			fmt.Println("    find_similar_notes    Find related notes")
+			fmt.Println("    find_similar_notes    Find related notes by similarity")
+			fmt.Println("    save_note             Save a new note to the vault")
+			fmt.Println("    save_decision         Record a decision or insight")
+			fmt.Println("    create_handoff        Create a session handoff note")
+			fmt.Println("    get_session_context   Get current session context")
+			fmt.Println("    recent_activity       View recently modified notes")
 			fmt.Println("    reindex               Re-index the vault")
-			fmt.Println("    index_stats           Index statistics")
+			fmt.Println("    index_stats           Index statistics and health")
 			return nil
 		},
 	}

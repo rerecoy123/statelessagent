@@ -6,6 +6,12 @@ build/
 *.so
 *.dylib
 
+# Built binary
+/same
+
+# Backup files
+*.bak*
+
 # Go
 vendor/
 
@@ -52,3 +58,6 @@ website/playbook/
 
 # Local research & strategy notes (never commit — may contain competitive intel, PII)
 .research/
+docs/eval-methodology.md
+docs/security-research.md
+docs/strategy-and-vision.md

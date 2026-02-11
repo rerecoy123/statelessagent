@@ -285,7 +285,7 @@ func (db *DB) KeywordSearch(terms []string, limit int) ([]RawSearchResult, error
 		SELECT 0 as distance, n.id, n.path, n.title, n.chunk_heading, n.text,
 			n.domain, n.workstream, n.tags, n.content_type, n.confidence, n.modified
 		FROM vault_notes n
-		WHERE n.chunk_id = 0 AND n.path NOT LIKE '_PRIVATE/%%' AND EXISTS (
+		WHERE n.chunk_id = 0 AND UPPER(n.path) NOT LIKE '_PRIVATE/%%' AND EXISTS (
 			SELECT 1 FROM vault_notes n2
 			WHERE n2.path = n.path AND (%s)
 		)
@@ -437,7 +437,7 @@ func (db *DB) KeywordSearchTitleMatch(terms []string, minMatches int, limit int,
 		SELECT 0 as distance, n.id, n.path, n.title, n.chunk_heading, n.text,
 			n.domain, n.workstream, n.tags, n.content_type, n.confidence, n.modified
 		FROM vault_notes n
-		WHERE n.chunk_id = 0 AND n.path NOT LIKE '_PRIVATE/%%' AND (%s) >= ?
+		WHERE n.chunk_id = 0 AND UPPER(n.path) NOT LIKE '_PRIVATE/%%' AND (%s) >= ?
 		ORDER BY (%s) DESC, n.modified DESC
 		LIMIT ?`,
 		scoreExpr, scoreExpr)
@@ -691,7 +691,7 @@ func (db *DB) FuzzyTitleSearch(terms []string, limit int) ([]RawSearchResult, er
 	rows, err := db.conn.Query(`
 		SELECT 0 as distance, n.id, n.path, n.title, n.chunk_heading, n.text,
 			n.domain, n.workstream, n.tags, n.content_type, n.confidence, n.modified
-		FROM vault_notes n WHERE n.chunk_id = 0 AND n.path NOT LIKE '_PRIVATE/%'
+		FROM vault_notes n WHERE n.chunk_id = 0 AND UPPER(n.path) NOT LIKE '_PRIVATE/%'
 		ORDER BY n.modified DESC
 		LIMIT ?`, scanLimit)
 	if err != nil {
@@ -835,6 +835,19 @@ func ExtractSearchTerms(query string) []string {
 	return terms
 }
 
+// sanitizeFTS5Term strips FTS5 special operators from a search term to prevent
+// injection of FTS5 query syntax.
+func sanitizeFTS5Term(term string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '*', '^', '-', '"', '{', '}', '(', ')':
+			return -1
+		default:
+			return r
+		}
+	}, term)
+}
+
 // FTS5Search performs a full-text search using the FTS5 index with BM25 ranking.
 // Used as a fallback when embedding provider is unavailable.
 // Returns an error if FTS5 is not available.
@@ -853,14 +866,25 @@ func (db *DB) FTS5Search(query string, opts SearchOptions) ([]SearchResult, erro
 	if len(terms) == 0 {
 		return nil, nil
 	}
-	ftsQuery := strings.Join(terms, " OR ")
+	// Sanitize terms to prevent FTS5 operator injection
+	sanitizedTerms := make([]string, 0, len(terms))
+	for _, term := range terms {
+		sanitized := sanitizeFTS5Term(term)
+		if sanitized != "" {
+			sanitizedTerms = append(sanitizedTerms, sanitized)
+		}
+	}
+	if len(sanitizedTerms) == 0 {
+		return nil, nil
+	}
+	ftsQuery := strings.Join(sanitizedTerms, " OR ")
 
 	rows, err := db.conn.Query(`
 		SELECT n.path, n.title, n.chunk_heading, n.text,
 			n.domain, n.workstream, n.tags, n.content_type, n.confidence, n.modified
 		FROM vault_notes_fts f
 		JOIN vault_notes n ON n.id = f.rowid
-		WHERE vault_notes_fts MATCH ?
+		WHERE vault_notes_fts MATCH ? AND UPPER(n.path) NOT LIKE '_PRIVATE/%%'
 		ORDER BY bm25(vault_notes_fts) ASC
 		LIMIT ?`,
 		ftsQuery, opts.TopK*3,

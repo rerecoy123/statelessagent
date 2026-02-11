@@ -682,7 +682,8 @@ func OllamaURL() (string, error) {
 	}
 	host := u.Hostname()
 	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
-		return "", fmt.Errorf("%w: got %s", ErrOllamaNotLocal, host)
+		// SECURITY: Don't leak the hostname in error message
+		return "", ErrOllamaNotLocal
 	}
 	return raw, nil
 }
