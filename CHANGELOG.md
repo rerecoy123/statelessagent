@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.6.1 — Hardening, Recovery & Visibility
+
+Security hardening, crash recovery, search improvements, UX polish, and every hook now proves it's working.
+
+### Added
+
+- **SessionStart crash recovery** — 3-tier priority cascade recovers context even when terminal is closed without Stop firing: handoff (full, completeness 1.0) → instance registry (partial, 0.4) → session index (minimal, 0.3). Schema v3 adds `session_recovery` table for telemetry.
+- **Hook status lines** — every hook now prints a one-line receipt to stderr: session recovery source, decisions extracted, handoffs saved, stale notes flagged, referenced notes boosted. `same display quiet` silences all output.
+- **HybridSearch for MCP and CLI** — `search_notes`, `search_notes_filtered`, and `same search` now use HybridSearch (semantic + keyword + fuzzy title) instead of raw VectorSearch. Better results for partial matches and typos.
+- **Command groups** — `same --help` organizes commands into 5 groups: Essential, Search & Browse, Configuration, Advanced, Other
+- **`same hooks`** — new command showing all 6 hooks with name, event, status, and description
+- **`--json` flag** — `same status --json` and `same doctor --json` for machine-readable output
+- **Star ratings** — search results show `★★★★☆ 85%` instead of raw scores. `--verbose` for raw numbers.
+- **98 new tests** — security (plugin injection, path traversal, symlinks), edge cases (empty inputs, large inputs, concurrent access), store operations
+
+### Security
+
+22 vulnerabilities fixed (3 critical, 8 high, 11 medium):
+
+- **CRITICAL: Plugin command injection** — `validatePlugin()` with shell metachar regex, path traversal block, exec permission check
+- **CRITICAL: Hard-coded vec0 768 dims** — `EmbeddingDim()` now dynamic per provider/model
+- **CRITICAL: OpenAI gets Ollama URL** — conditional BaseURL, only set for Ollama provider
+- **HIGH: SSRF in init** — localhost validation (127.0.0.1/::1/localhost) before HTTP
+- **HIGH: Symlink escape** — `EvalSymlinks()` + ancestor walk in safeVaultPath and config
+- **HIGH: Settings destruction** — return error on malformed JSON instead of silent overwrite
+- **HIGH: Embedding mismatch** — use resolved model name in SetEmbeddingMeta
+- **HIGH: PII via os.Hostname()** — SHA-256 hash → `machine-a1b2c3d4` format
+- **FTS5 query injection** — `sanitizeFTS5Term()` strips `*`, `^`, `-`, `"` and other operators
+- **Case-insensitive `_PRIVATE/`** — `UPPER(n.path) NOT LIKE` across all SQL queries
+- **JSON error sanitization** — vault paths → directory name only, no raw hostnames in errors
+- **File permissions** — all MCP/config writes to 0o600
+
+### Fixed
+
+- **Embedding pipeline** — OpenAI provider URL, retry logic, all-zero vector detection, API key leak prevention, dimension validation
+- **Search quality** — absolute+relative scoring blend, per-note token cap (400), FTS5 OR instead of AND, composite indexes for common queries
+- **`same scope` → `same status`** — referenced non-existent command
+- **Indexer double-read** — eliminated redundant file reads during indexing
+- **IncrementAccessCount** — batch update instead of per-path
+
+### Changed
+
+- **README rewritten** — pain-first opening, architecture diagram, feature matrix, competitor comparison table, honest benchmarks (removed aspirational token claim)
+- **Schema v3** — adds `session_recovery` table; auto-migrates from v2
+- **MCP tool list updated** — setup now shows all 11 tools with accurate descriptions
+
+---
+
 ## v0.6.0 — Reliability, Privacy & Polish
 
 Self-diagnosing retrieval, pinned notes, keyword fallback, vault privacy structure, RAG chat, interactive demo, write-side MCP tools, security hardening, and a full polish pass.
