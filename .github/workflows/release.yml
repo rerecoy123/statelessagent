@@ -97,3 +97,30 @@ jobs:
             artifacts/same-darwin-arm64/same-darwin-arm64
             artifacts/same-linux-amd64/same-linux-amd64
             artifacts/same-windows-amd64.exe/same-windows-amd64.exe
+
+  npm-publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify version match
+        run: |
+          MAKE_VERSION=$(grep '^VERSION' Makefile | head -1 | awk '{print $NF}')
+          NPM_VERSION=$(node -p "require('./npm/package.json').version")
+          if [ "$MAKE_VERSION" != "$NPM_VERSION" ]; then
+            echo "Version mismatch: Makefile=$MAKE_VERSION npm=$NPM_VERSION"
+            exit 1
+          fi
+          echo "Version match: $MAKE_VERSION"
+
+      - name: Publish to npm
+        working-directory: npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

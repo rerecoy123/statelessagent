@@ -1,0 +1,36 @@
+{
+  "name": "@sgx-labs/same",
+  "version": "0.6.1",
+  "description": "Persistent memory for AI coding agents. Local-first, SQLite + vector search. MCP server with 11 tools.",
+  "homepage": "https://statelessagent.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sgx-labs/statelessagent"
+  },
+  "license": "BSL-1.1",
+  "bin": {
+    "same": "bin/same"
+  },
+  "scripts": {
+    "postinstall": "node lib/install.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-memory",
+    "claude",
+    "cursor",
+    "coding-agent",
+    "sqlite",
+    "vector-search",
+    "local-first"
+  ]
+}

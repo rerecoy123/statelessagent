@@ -27,8 +27,9 @@ same demo
 ## Quickstart
 
 ```bash
-# 1. Install
-curl -fsSL statelessagent.com/install.sh | bash
+# 1. Install (pick one)
+curl -fsSL statelessagent.com/install.sh | bash   # direct binary
+npx @sgx-labs/same                                 # or via npm
 
 # 2. Point SAME at your project
 cd ~/my-project && same init
@@ -204,6 +205,9 @@ Privacy is structural — filesystem-level, not policy-based. `same init` create
 ```bash
 # macOS / Linux
 curl -fsSL statelessagent.com/install.sh | bash
+
+# Or via npm (any platform — downloads prebuilt binary)
+npm install -g @sgx-labs/same
 
 # Windows (PowerShell)
 irm statelessagent.com/install.ps1 | iex

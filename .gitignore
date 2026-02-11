@@ -61,3 +61,8 @@ website/playbook/
 docs/eval-methodology.md
 docs/security-research.md
 docs/strategy-and-vision.md
+
+# NPM wrapper (downloaded binaries)
+npm/bin/same-binary
+npm/bin/same-binary.exe
+npm/node_modules/

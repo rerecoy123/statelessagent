@@ -14,6 +14,7 @@ Security hardening, crash recovery, search improvements, UX polish, and every ho
 - **`--json` flag** — `same status --json` and `same doctor --json` for machine-readable output
 - **Star ratings** — search results show `★★★★☆ 85%` instead of raw scores. `--verbose` for raw numbers.
 - **98 new tests** — security (plugin injection, path traversal, symlinks), edge cases (empty inputs, large inputs, concurrent access), store operations
+- **NPM distribution** — `npx @sgx-labs/same mcp --vault /path` for MCP clients. Zero-dependency wrapper downloads prebuilt binary from GitHub Releases at install time. Release workflow auto-publishes to npm on tag push.
 
 ### Security
 
