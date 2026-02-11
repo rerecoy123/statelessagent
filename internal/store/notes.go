@@ -220,17 +220,24 @@ func (db *DB) DeleteByPath(path string) error {
 }
 
 // DeleteAllNotes removes all notes and vectors. Used for force reindex.
+// Uses a transaction to ensure vectors and notes are deleted atomically.
 func (db *DB) DeleteAllNotes() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if _, err := db.conn.Exec("DELETE FROM vault_notes_vec"); err != nil {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM vault_notes_vec"); err != nil {
 		return fmt.Errorf("delete all vectors: %w", err)
 	}
-	if _, err := db.conn.Exec("DELETE FROM vault_notes"); err != nil {
+	if _, err := tx.Exec("DELETE FROM vault_notes"); err != nil {
 		return fmt.Errorf("delete all notes: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // IncrementAccessCount increments the access count for notes at the given paths.
@@ -303,7 +310,14 @@ func (db *DB) GetStaleNotes(maxResults int, overdueOnly bool) ([]NoteRecord, err
 	}
 	defer rows.Close()
 
-	return scanNotes(rows)
+	results, err := scanNotes(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results, nil
 }
 
 // GetNoteEmbedding returns the first chunk's embedding for a note.

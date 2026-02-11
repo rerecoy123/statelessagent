@@ -1,0 +1,2 @@
+bin/same text eol=lf
+bin/same.cmd text eol=crlf

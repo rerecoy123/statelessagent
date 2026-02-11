@@ -1,4 +1,4 @@
-#!/bin/sh
+#\!/bin/sh
 # SAME — npm wrapper shim
 # Delegates to the downloaded Go binary. If missing, triggers install.
 
@@ -7,10 +7,10 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BINARY="$DIR/same-binary"
 
-if [ ! -x "$BINARY" ]; then
+if [ \! -x "$BINARY" ]; then
   echo "[same] Binary not found, downloading..." >&2
   node "$DIR/../lib/install.js"
-  if [ ! -x "$BINARY" ]; then
+  if [ \! -x "$BINARY" ]; then
     echo "[same] Failed to download binary. Please check your network connection." >&2
     echo "[same] You can also install manually: https://github.com/sgx-labs/statelessagent/releases" >&2
     exit 1

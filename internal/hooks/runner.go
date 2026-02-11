@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
@@ -123,17 +124,23 @@ func Run(hookName string) {
 		}
 		return
 	}
-	defer db.Close()
+	// Do NOT defer db.Close() here — we must wait for the goroutine to
+	// finish before closing, to prevent use-after-close when the timeout
+	// fires but the goroutine is still writing to the DB.
 
 	var output *HookOutput
 
 	// Run hook dispatch with timeout to prevent hung embedding providers
 	// from blocking the user's prompt indefinitely.
+	// A WaitGroup ensures the goroutine has finished before we close the DB.
 	type hookResult struct {
 		output *HookOutput
 	}
 	ch := make(chan hookResult, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		var out *HookOutput
 		switch hookName {
 		case "context-surfacing":
@@ -188,6 +195,12 @@ func Run(hookName string) {
 			},
 		}
 	}
+
+	// Wait for the goroutine to finish before closing the DB.
+	// On timeout, this blocks briefly until the goroutine returns,
+	// preventing writes to a closed database.
+	wg.Wait()
+	db.Close()
 
 	if output != nil {
 		data, err := json.Marshal(output)

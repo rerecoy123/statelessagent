@@ -938,3 +938,130 @@ func TestHasTags_EmptyTags(t *testing.T) {
 		t.Error("expected false for empty tags")
 	}
 }
+
+// --- Bug fix verification tests ---
+
+func TestDeleteAllNotes_Atomic(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// Insert several notes with embeddings
+	vec := make([]float32, 768)
+	vec[0] = 1.0
+	for i := 0; i < 5; i++ {
+		rec := &NoteRecord{
+			Path: "notes/atomic-" + string(rune('a'+i)) + ".md", Title: "Atomic Test",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)", Text: "atomic content",
+			Modified: 1700000000, ContentHash: "at-" + string(rune('a'+i)),
+			ContentType: "note", Confidence: 0.5,
+		}
+		if err := db.InsertNote(rec, vec); err != nil {
+			t.Fatalf("InsertNote %d: %v", i, err)
+		}
+	}
+
+	// Verify notes and vectors exist
+	noteCount, err := db.NoteCount()
+	if err != nil {
+		t.Fatalf("NoteCount before delete: %v", err)
+	}
+	if noteCount == 0 {
+		t.Fatal("expected notes before delete")
+	}
+	if !db.HasVectors() {
+		t.Fatal("expected vectors before delete")
+	}
+
+	// Delete all notes
+	if err := db.DeleteAllNotes(); err != nil {
+		t.Fatalf("DeleteAllNotes: %v", err)
+	}
+
+	// Verify both notes and vectors are gone
+	noteCount, err = db.NoteCount()
+	if err != nil {
+		t.Fatalf("NoteCount after delete: %v", err)
+	}
+	if noteCount != 0 {
+		t.Errorf("expected 0 notes after DeleteAllNotes, got %d", noteCount)
+	}
+	if db.HasVectors() {
+		t.Error("expected no vectors after DeleteAllNotes")
+	}
+}
+
+func TestRecordMilestone_Concurrent(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	// Run RecordMilestone from multiple goroutines concurrently.
+	// The primary assertion is no panics or data races (run with -race).
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			key := "concurrent_milestone_" + string(rune('a'+idx%10))
+			db.RecordMilestone(key)
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify at least some milestones were recorded
+	anyShown := false
+	for i := 0; i < 10; i++ {
+		key := "concurrent_milestone_" + string(rune('a'+i))
+		if db.MilestoneShown(key) {
+			anyShown = true
+			break
+		}
+	}
+	if !anyShown {
+		t.Error("expected at least one milestone to be recorded after concurrent writes")
+	}
+}
+
+func TestGetStaleNotes_TrimsToMaxResults(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	vec := make([]float32, 768)
+
+	// Insert more stale notes than we will request
+	for i := 0; i < 10; i++ {
+		rec := &NoteRecord{
+			Path:        "notes/stale-" + string(rune('a'+i)) + ".md",
+			Title:       "Stale Note",
+			Tags:        "[]",
+			ChunkID:     0,
+			ChunkHeading: "(full)",
+			Text:        "stale content",
+			Modified:    1700000000,
+			ContentHash: "st-" + string(rune('a'+i)),
+			ContentType: "note",
+			Confidence:  0.5,
+			ReviewBy:    "2020-01-01",
+		}
+		if err := db.InsertNote(rec, vec); err != nil {
+			t.Fatalf("InsertNote %d: %v", i, err)
+		}
+	}
+
+	// Request only 3 results
+	results, err := db.GetStaleNotes(3, false)
+	if err != nil {
+		t.Fatalf("GetStaleNotes: %v", err)
+	}
+	if len(results) > 3 {
+		t.Errorf("expected at most 3 results, got %d", len(results))
+	}
+}

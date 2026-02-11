@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
@@ -137,13 +138,28 @@ func verboseLogPath() string {
 
 // pendingVerboseMsg accumulates the verbose status line for this invocation.
 // Read by Run() in runner.go to attach as systemMessage in the JSON output.
-var pendingVerboseMsg string
+// Guarded by pendingVerboseMu to prevent races between the handler goroutine
+// (which writes via verboseDecision) and the main goroutine (which reads via
+// getPendingVerboseMsg in runner.go).
+var (
+	pendingVerboseMsg string
+	pendingVerboseMu  sync.Mutex
+)
 
 // getPendingVerboseMsg returns and clears the pending verbose message.
 func getPendingVerboseMsg() string {
+	pendingVerboseMu.Lock()
+	defer pendingVerboseMu.Unlock()
 	msg := pendingVerboseMsg
 	pendingVerboseMsg = ""
 	return msg
+}
+
+// setPendingVerboseMsg sets the pending verbose message under the mutex.
+func setPendingVerboseMsg(msg string) {
+	pendingVerboseMu.Lock()
+	defer pendingVerboseMu.Unlock()
+	pendingVerboseMsg = msg
 }
 
 // verboseDecision writes a styled decision box to both stderr and verbose.log.
@@ -179,8 +195,8 @@ func verboseDecision(decision, mode string, jaccard float64, prompt string, titl
 
 	// 1. systemMessage: only for injects. Skips are silent — no noise, no error look.
 	if decision == "inject" {
-		pendingVerboseMsg = fmt.Sprintf("✦ %s — %d notes · ~%d tokens: %s",
-			verb, len(titles), tokens, strings.Join(titles, ", "))
+		setPendingVerboseMsg(fmt.Sprintf("✦ %s — %d notes · ~%d tokens: %s",
+			verb, len(titles), tokens, strings.Join(titles, ", ")))
 	}
 
 	// 2. stderr: ANSI-styled box, visible when Ctrl+O verbose is expanded.
@@ -1793,39 +1809,51 @@ func sanitizeSnippet(text string) string {
 	return text
 }
 
-// sanitizeContextTags strips XML-like closing tags from note content that
-// could break the <vault-context> wrapper and enable indirect prompt
-// injection. A crafted note containing "</vault-context>" would cause the
-// AI to interpret subsequent note content as system-level instructions.
+// sanitizeContextTags strips XML-like tags from note content that could
+// break structural wrappers (vault-context, plugin-context, session-bootstrap,
+// vault-handoff, vault-decisions, same-diagnostic) and enable indirect prompt
+// injection. A crafted note containing "</vault-context>\n<same-diagnostic>"
+// would escape the context wrapper and inject system-level instructions.
 func sanitizeContextTags(text string) string {
-	// Case-insensitive replacement of closing tags for our wrapper elements
+	// All tag names used as structural wrappers in the hook system.
+	// Each pair (open + close) must be neutralized to prevent escape.
+	tagNames := []string{
+		"vault-context",
+		"plugin-context",
+		"session-bootstrap",
+		"vault-handoff",
+		"vault-decisions",
+		"same-diagnostic",
+	}
+
+	// Case-insensitive replacement: scan character-by-character and replace
+	// any matching XML open/close tag with bracket-escaped equivalents.
 	lower := strings.ToLower(text)
 	var result strings.Builder
 	result.Grow(len(text))
 	i := 0
 	for i < len(text) {
-		if i+len("</vault-context>") <= len(text) && lower[i:i+len("</vault-context>")] == "</vault-context>" {
-			result.WriteString("[/vault-context]")
-			i += len("</vault-context>")
-			continue
+		matched := false
+		for _, tag := range tagNames {
+			closeTag := "</" + tag + ">"
+			openTag := "<" + tag + ">"
+			if i+len(closeTag) <= len(text) && lower[i:i+len(closeTag)] == closeTag {
+				result.WriteString("[/" + tag + "]")
+				i += len(closeTag)
+				matched = true
+				break
+			}
+			if i+len(openTag) <= len(text) && lower[i:i+len(openTag)] == openTag {
+				result.WriteString("[" + tag + "]")
+				i += len(openTag)
+				matched = true
+				break
+			}
 		}
-		if i+len("</plugin-context>") <= len(text) && lower[i:i+len("</plugin-context>")] == "</plugin-context>" {
-			result.WriteString("[/plugin-context]")
-			i += len("</plugin-context>")
-			continue
+		if !matched {
+			result.WriteByte(text[i])
+			i++
 		}
-		if i+len("<vault-context>") <= len(text) && lower[i:i+len("<vault-context>")] == "<vault-context>" {
-			result.WriteString("[vault-context]")
-			i += len("<vault-context>")
-			continue
-		}
-		if i+len("<plugin-context>") <= len(text) && lower[i:i+len("<plugin-context>")] == "<plugin-context>" {
-			result.WriteString("[plugin-context]")
-			i += len("<plugin-context>")
-			continue
-		}
-		result.WriteByte(text[i])
-		i++
 	}
 	return result.String()
 }

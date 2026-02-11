@@ -29,7 +29,7 @@ same demo
 ```bash
 # 1. Install (pick one)
 curl -fsSL statelessagent.com/install.sh | bash   # direct binary
-npx @sgx-labs/same                                 # or via npm
+npm install -g @sgx-labs/same                      # or via npm
 
 # 2. Point SAME at your project
 cd ~/my-project && same init

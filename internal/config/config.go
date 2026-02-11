@@ -406,7 +406,7 @@ func MemoryMaxResults() int {
 	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.MaxResults > 0 {
 		return cfg.Memory.MaxResults
 	}
-	return 2
+	return 4
 }
 
 // MemoryDistanceThreshold returns the configured maximum L2 distance threshold.
@@ -422,7 +422,7 @@ func MemoryCompositeThreshold() float64 {
 	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.CompositeThreshold > 0 {
 		return cfg.Memory.CompositeThreshold
 	}
-	return 0.65
+	return 0.35
 }
 
 // MemoryMaxTokenBudget returns the configured maximum token budget for context injection.
@@ -430,7 +430,7 @@ func MemoryMaxTokenBudget() int {
 	if cfg := loadConfigSafe(); cfg != nil && cfg.Memory.MaxTokenBudget > 0 {
 		return cfg.Memory.MaxTokenBudget
 	}
-	return 800
+	return 1600
 }
 
 // EmbeddingProvider returns the configured embedding provider name.

@@ -648,12 +648,17 @@ func runReindex(force bool) error {
 	indexer.Version = Version
 	stats, err := indexer.Reindex(db, force)
 	if err != nil {
-		// If embedding provider failed, offer lite mode
-		fmt.Fprintf(os.Stderr, "  Ollama not available — indexing with keyword search only.\n")
-		fmt.Fprintf(os.Stderr, "  Start Ollama and run 'same reindex' again for semantic search.\n\n")
-		stats, err = indexer.ReindexLite(db, force, nil)
-		if err != nil {
-			return err
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "ollama") || strings.Contains(errMsg, "connection") || strings.Contains(errMsg, "refused") {
+			// Ollama-specific fallback — offer lite mode
+			fmt.Fprintf(os.Stderr, "  Ollama not available — indexing with keyword search only.\n")
+			fmt.Fprintf(os.Stderr, "  Start Ollama and run 'same reindex' again for semantic search.\n\n")
+			stats, err = indexer.ReindexLite(db, force, nil)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("reindex failed: %w", err)
 		}
 	}
 
@@ -747,7 +752,7 @@ func runSearch(query string, topK int, domain string, jsonOut bool, verbose bool
 				return fmt.Errorf("embed query: %w", err)
 			}
 
-			results, err = db.VectorSearch(queryVec, store.SearchOptions{
+			results, err = db.HybridSearch(queryVec, query, store.SearchOptions{
 				TopK:   topK,
 				Domain: domain,
 			})
@@ -1185,7 +1190,7 @@ func runDoctor(jsonOut bool) error {
 		return fmt.Sprintf("%d hooks active", activeCount), nil
 	})
 
-	// 10. Database integrity (orphaned chunks)
+	// 10. Database integrity (orphaned vectors)
 	check("Database integrity", "run 'same reindex' to rebuild", func() (string, error) {
 		db, err := store.Open()
 		if err != nil {
@@ -1194,15 +1199,15 @@ func runDoctor(jsonOut bool) error {
 		defer db.Close()
 		var orphaned int
 		err = db.Conn().QueryRow(`
-			SELECT COUNT(*) FROM vault_chunks c
-			LEFT JOIN vault_notes n ON c.note_path = n.path AND c.chunk_id = n.chunk_id
-			WHERE n.path IS NULL
+			SELECT COUNT(*) FROM vault_notes_vec v
+			LEFT JOIN vault_notes n ON v.note_id = n.id
+			WHERE n.id IS NULL
 		`).Scan(&orphaned)
 		if err != nil {
 			return "", nil // table may not exist yet, not an error
 		}
 		if orphaned > 0 {
-			return "", fmt.Errorf("%d orphaned chunks", orphaned)
+			return "", fmt.Errorf("%d orphaned vectors", orphaned)
 		}
 		return "", nil
 	})

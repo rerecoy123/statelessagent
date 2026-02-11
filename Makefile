@@ -18,7 +18,7 @@ build:
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/same
 
 test:
-	go test ./... -v -count=1
+	go test -race ./... -v -count=1
 
 # Native macOS arm64 build (native CC, no zig needed)
 darwin-arm64:

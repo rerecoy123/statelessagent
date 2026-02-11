@@ -159,6 +159,38 @@ func TestCurrentProfile_Default(t *testing.T) {
 	}
 }
 
+func TestConfigDefaultsConsistent(t *testing.T) {
+	// Verify that accessor fallback values match DefaultConfig() values.
+	// This catches the bug where accessors returned different defaults
+	// than DefaultConfig(), causing inconsistent behavior when no config
+	// file is present.
+	defaults := DefaultConfig()
+
+	// MemoryCompositeThreshold fallback should match DefaultConfig
+	got := MemoryCompositeThreshold()
+	if got != defaults.Memory.CompositeThreshold {
+		t.Errorf("MemoryCompositeThreshold() = %v, want %v (from DefaultConfig)", got, defaults.Memory.CompositeThreshold)
+	}
+
+	// MemoryMaxResults fallback should match DefaultConfig
+	gotInt := MemoryMaxResults()
+	if gotInt != defaults.Memory.MaxResults {
+		t.Errorf("MemoryMaxResults() = %d, want %d (from DefaultConfig)", gotInt, defaults.Memory.MaxResults)
+	}
+
+	// MemoryMaxTokenBudget fallback should match DefaultConfig
+	gotInt = MemoryMaxTokenBudget()
+	if gotInt != defaults.Memory.MaxTokenBudget {
+		t.Errorf("MemoryMaxTokenBudget() = %d, want %d (from DefaultConfig)", gotInt, defaults.Memory.MaxTokenBudget)
+	}
+
+	// MemoryDistanceThreshold fallback should match DefaultConfig
+	gotFloat := MemoryDistanceThreshold()
+	if gotFloat != defaults.Memory.DistanceThreshold {
+		t.Errorf("MemoryDistanceThreshold() = %v, want %v (from DefaultConfig)", gotFloat, defaults.Memory.DistanceThreshold)
+	}
+}
+
 func TestErrConstants(t *testing.T) {
 	if ErrNoVault == nil {
 		t.Error("ErrNoVault should not be nil")

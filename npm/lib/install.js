@@ -5,7 +5,6 @@
 // Uses only Node built-ins. ES5 syntax for Node 14 compat.
 
 var https = require("https");
-var http = require("http");
 var fs = require("fs");
 var os = require("os");
 var path = require("path");
@@ -13,6 +12,9 @@ var path = require("path");
 var VERSION = require("../package.json").version;
 var BASE_URL =
   "https://github.com/sgx-labs/statelessagent/releases/download/v" + VERSION;
+
+var MAX_REDIRECTS = 5;
+var REQUEST_TIMEOUT = 30000; // 30 seconds
 
 var PLATFORM_MAP = {
   "darwin-arm64": "darwin-arm64",
@@ -32,33 +34,64 @@ function getBinarySuffix() {
     );
     return null;
   }
+  if (key === "darwin-x64") {
+    console.log("[same] Intel Mac detected — using ARM64 binary via Rosetta.");
+  }
   return suffix;
 }
 
-function download(url, dest, cb) {
-  var mod = url.indexOf("https") === 0 ? https : http;
-  mod
-    .get(url, function (res) {
-      // Follow redirects (GitHub → CDN)
+function download(url, dest, cb, redirects) {
+  if (redirects === undefined) redirects = 0;
+  if (redirects > MAX_REDIRECTS) {
+    cb(new Error("Too many redirects (max " + MAX_REDIRECTS + ")"));
+    return;
+  }
+
+  if (url.indexOf("https") !== 0) {
+    cb(new Error("Refusing non-HTTPS URL: " + url));
+    return;
+  }
+  var req = https
+    .get(url, { timeout: REQUEST_TIMEOUT }, function (res) {
+      // Follow HTTPS redirects only (GitHub → CDN)
       if (
-        (res.statusCode === 301 || res.statusCode === 302) &&
+        (res.statusCode >= 301 && res.statusCode <= 303 ||
+         res.statusCode === 307 || res.statusCode === 308) &&
         res.headers.location
       ) {
-        return download(res.headers.location, dest, cb);
+        return download(res.headers.location, dest, cb, redirects + 1);
       }
       if (res.statusCode !== 200) {
-        cb(new Error("HTTP " + res.statusCode + " from " + url));
+        var msg = "HTTP " + res.statusCode;
+        if (res.statusCode === 403 || res.statusCode === 429) {
+          msg += " (rate limited — try again in a few minutes)";
+        }
+        cb(new Error(msg));
         return;
       }
-      var file = fs.createWriteStream(dest);
+      var tmpDest = dest + ".tmp";
+      var file = fs.createWriteStream(tmpDest);
       res.pipe(file);
       file.on("finish", function () {
-        file.close(cb);
+        file.close(function () {
+          // Atomic rename — prevents partial binaries
+          try {
+            fs.renameSync(tmpDest, dest);
+          } catch (err) {
+            cb(err);
+            return;
+          }
+          cb(null);
+        });
       });
       file.on("error", function (err) {
-        fs.unlink(dest, function () {});
+        fs.unlink(tmpDest, function () {});
         cb(err);
       });
+    })
+    .on("timeout", function () {
+      req.destroy();
+      cb(new Error("Request timed out after " + (REQUEST_TIMEOUT / 1000) + "s"));
     })
     .on("error", function (err) {
       cb(err);
@@ -89,7 +122,6 @@ function main() {
   try {
     fs.mkdirSync(binDir, { recursive: true });
   } catch (e) {
-    // Node 8 compat: recursive may not be supported
     if (e.code !== "EEXIST") {
       try {
         fs.mkdirSync(binDir);
@@ -105,9 +137,9 @@ function main() {
     if (err) {
       console.error("[same] Download failed: " + err.message);
       console.error("[same] The binary will be downloaded on first run.");
-      // Clean up partial download
+      // Clean up partial temp file
       try {
-        fs.unlinkSync(dest);
+        fs.unlinkSync(dest + ".tmp");
       } catch (e) {}
       // Exit 0 so npm install succeeds — shim will retry on first run
       process.exit(0);

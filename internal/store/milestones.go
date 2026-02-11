@@ -24,6 +24,9 @@ func (db *DB) MilestoneShown(key string) bool {
 
 // RecordMilestone marks a milestone as shown.
 func (db *DB) RecordMilestone(key string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	_, err := db.conn.Exec(
 		`INSERT OR REPLACE INTO milestones (key, shown_at) VALUES (?, ?)`,
 		key, time.Now().Unix(),
