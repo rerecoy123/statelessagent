@@ -13,6 +13,7 @@ import (
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
+	"github.com/sgx-labs/statelessagent/internal/ollama"
 	"github.com/sgx-labs/statelessagent/internal/setup"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
@@ -213,6 +214,14 @@ func runStatus(jsonOut bool) error {
 			resp.Body.Close()
 			fmt.Printf("  Ollama:  %srunning%s (%s)\n",
 				cli.Green, cli.Reset, config.EmbeddingModel)
+			// Check for chat models to hint about 'same ask'
+			llm, llmErr := ollama.NewClient()
+			if llmErr == nil {
+				if chatModel, _ := llm.PickBestModel(); chatModel != "" {
+					fmt.Printf("  Ask:     %s'same ask \"question\"' available (%s)%s\n",
+						cli.Dim, chatModel, cli.Reset)
+				}
+			}
 		}
 	}
 
@@ -225,14 +234,19 @@ func runStatus(jsonOut bool) error {
 		"handoff-generator",
 		"staleness-check",
 	}
+	activeHooks := 0
 	for _, name := range hookNames {
 		if hookStatus[name] {
 			fmt.Printf("  %-24s %s✓ active%s\n",
 				name, cli.Green, cli.Reset)
+			activeHooks++
 		} else {
 			fmt.Printf("  %-24s %s- not configured%s\n",
 				name, cli.Dim, cli.Reset)
 		}
+	}
+	if activeHooks > 0 {
+		fmt.Printf("\n  %sView recent activity: same log%s\n", cli.Dim, cli.Reset)
 	}
 
 	// MCP
