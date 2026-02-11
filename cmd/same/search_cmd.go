@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,17 +16,28 @@ import (
 
 func searchCmd() *cobra.Command {
 	var (
-		topK     int
-		domain   string
-		jsonOut  bool
-		verbose  bool
+		topK      int
+		domain    string
+		jsonOut   bool
+		verbose   bool
+		allVaults bool
+		vaults    string
 	)
 	cmd := &cobra.Command{
 		Use:   "search [query]",
 		Short: "Search the vault from the command line",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Search the current vault, or search across multiple vaults.
+
+Examples:
+  same search "authentication approach"
+  same search --all "JWT patterns"
+  same search --vaults dev,marketing "launch timeline"`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := strings.Join(args, " ")
+			if allVaults || vaults != "" {
+				return runFederatedSearch(query, topK, domain, jsonOut, verbose, allVaults, vaults)
+			}
 			return runSearch(query, topK, domain, jsonOut, verbose)
 		},
 	}
@@ -32,6 +45,8 @@ func searchCmd() *cobra.Command {
 	cmd.Flags().StringVar(&domain, "domain", "", "Filter by domain")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show raw scores for debugging")
+	cmd.Flags().BoolVar(&allVaults, "all", false, "Search across all registered vaults")
+	cmd.Flags().StringVar(&vaults, "vaults", "", "Comma-separated vault aliases to search")
 	return cmd
 }
 
@@ -132,6 +147,109 @@ func runSearch(query string, topK int, domain string, jsonOut bool, verbose bool
 	fmt.Println()
 
 	return nil
+}
+
+func runFederatedSearch(query string, topK int, domain string, jsonOut bool, verbose bool, allVaults bool, vaultsFlag string) error {
+	if strings.TrimSpace(query) == "" {
+		return userError("Empty search query", "Provide a search term: same search --all \"your query\"")
+	}
+
+	// Resolve which vaults to search
+	reg := config.LoadRegistry()
+	vaultDBPaths := make(map[string]string)
+
+	if allVaults {
+		for alias, vaultPath := range reg.Vaults {
+			dbPath := vaultDBPath(vaultPath)
+			if _, err := os.Stat(dbPath); err == nil {
+				vaultDBPaths[alias] = dbPath
+			}
+		}
+	} else {
+		for _, alias := range strings.Split(vaultsFlag, ",") {
+			alias = strings.TrimSpace(alias)
+			if alias == "" {
+				continue
+			}
+			resolved := reg.ResolveVault(alias)
+			if resolved == "" {
+				fmt.Fprintf(os.Stderr, "Warning: vault %q not found, skipping\n", alias)
+				continue
+			}
+			dbPath := vaultDBPath(resolved)
+			if _, err := os.Stat(dbPath); err == nil {
+				vaultDBPaths[alias] = dbPath
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: no database for vault %q, skipping\n", alias)
+			}
+		}
+	}
+
+	if len(vaultDBPaths) == 0 {
+		return userError("No searchable vaults found",
+			"Register vaults with 'same vault add <name> <path>' and ensure they have been indexed.")
+	}
+
+	// Try to get query embedding for vector search
+	var queryVec []float32
+	client, err := newEmbedProvider()
+	if err == nil {
+		queryVec, _ = client.GetQueryEmbedding(query)
+	}
+
+	results, err := store.FederatedSearch(vaultDBPaths, queryVec, query, store.SearchOptions{
+		TopK:   topK,
+		Domain: domain,
+	})
+	if err != nil {
+		return fmt.Errorf("federated search: %w", err)
+	}
+
+	if jsonOut {
+		data, _ := json.MarshalIndent(results, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}
+
+	if len(results) == 0 {
+		fmt.Printf("No results found across %d vault(s).\n", len(vaultDBPaths))
+		return nil
+	}
+
+	if queryVec == nil {
+		fmt.Printf("  %s(keyword search — install Ollama for semantic search)%s\n", cli.Dim, cli.Reset)
+	}
+
+	for i, r := range results {
+		typeTag := ""
+		if r.ContentType != "" && r.ContentType != "note" {
+			typeTag = fmt.Sprintf(" [%s]", r.ContentType)
+		}
+
+		fmt.Printf("\n%d. %s%s  %s[%s]%s\n", i+1, r.Title, typeTag, cli.Dim, r.Vault, cli.Reset)
+		fmt.Printf("   %s\n", r.Path)
+		if verbose {
+			fmt.Printf("   Score: %.3f  Distance: %.1f  Confidence: %.3f\n", r.Score, r.Distance, r.Confidence)
+		} else {
+			fmt.Printf("   Match: %s\n", formatRelevance(r.Score))
+		}
+
+		snippet := r.Snippet
+		if len(snippet) > 150 {
+			snippet = snippet[:150] + "..."
+		}
+		snippet = strings.ReplaceAll(snippet, "\n", " ")
+		snippet = strings.ReplaceAll(snippet, "\r", "")
+		fmt.Printf("   %s\n", snippet)
+	}
+	fmt.Println()
+
+	return nil
+}
+
+// vaultDBPath returns the database file path for a given vault root directory.
+func vaultDBPath(vaultRoot string) string {
+	return filepath.Join(vaultRoot, ".same", "data", "vault.db")
 }
 
 func relatedCmd() *cobra.Command {

@@ -143,6 +143,12 @@ func registerTools(server *mcp.Server) {
 		Name:        "get_session_context",
 		Description: "Get orientation context for a new session. Returns pinned notes, the latest handoff, and recent decisions — everything you need to pick up where the last session left off.\n\nReturns structured session context.",
 	}, handleGetSessionContext)
+
+	// search_across_vaults (federated read-side)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_across_vaults",
+		Description: "Search across multiple registered vaults at once. Use this when you need context from other projects or want a cross-project view.\n\nArgs:\n  query: Natural language search query\n  top_k: Number of results (default 10, max 100)\n  vaults: Comma-separated vault aliases to search (default: all registered vaults)\n\nReturns ranked results annotated with their source vault.",
+	}, handleSearchAcrossVaults)
 }
 
 // Tool input types
@@ -193,6 +199,12 @@ type createHandoffInput struct {
 
 type recentInput struct {
 	Limit int `json:"limit" jsonschema:"Number of recent notes (default 10, max 50)"`
+}
+
+type searchAcrossVaultsInput struct {
+	Query  string `json:"query" jsonschema:"Natural language search query"`
+	TopK   int    `json:"top_k" jsonschema:"Number of results (default 10, max 100)"`
+	Vaults string `json:"vaults,omitempty" jsonschema:"Comma-separated vault aliases (default: all)"`
 }
 
 type emptyInput struct{}
@@ -594,6 +606,65 @@ func handleGetSessionContext(ctx context.Context, req *mcp.CallToolRequest, inpu
 	result["stats"] = stats
 
 	data, _ := json.MarshalIndent(result, "", "  ")
+	return textResult(string(data)), nil, nil
+}
+
+func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, input searchAcrossVaultsInput) (*mcp.CallToolResult, any, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return textResult("Error: query is required."), nil, nil
+	}
+
+	topK := clampTopK(input.TopK, 10)
+
+	// Resolve vault DB paths
+	reg := config.LoadRegistry()
+	vaultDBPaths := make(map[string]string)
+
+	if input.Vaults == "" {
+		// Search all registered vaults
+		for alias, vaultPath := range reg.Vaults {
+			dbPath := filepath.Join(vaultPath, ".same", "data", "vault.db")
+			if _, err := os.Stat(dbPath); err == nil {
+				vaultDBPaths[alias] = dbPath
+			}
+		}
+	} else {
+		for _, alias := range strings.Split(input.Vaults, ",") {
+			alias = strings.TrimSpace(alias)
+			if alias == "" {
+				continue
+			}
+			resolved := reg.ResolveVault(alias)
+			if resolved == "" {
+				continue
+			}
+			dbPath := filepath.Join(resolved, ".same", "data", "vault.db")
+			if _, err := os.Stat(dbPath); err == nil {
+				vaultDBPaths[alias] = dbPath
+			}
+		}
+	}
+
+	if len(vaultDBPaths) == 0 {
+		return textResult("No searchable vaults found. Register vaults with 'same vault add <name> <path>'."), nil, nil
+	}
+
+	// Try to get query embedding
+	var queryVec []float32
+	if embedClient != nil {
+		queryVec, _ = embedClient.GetQueryEmbedding(input.Query)
+	}
+
+	results, err := store.FederatedSearch(vaultDBPaths, queryVec, input.Query, store.SearchOptions{TopK: topK})
+	if err != nil {
+		return textResult("Federated search error."), nil, nil
+	}
+
+	if len(results) == 0 {
+		return textResult(fmt.Sprintf("No results found across %d vault(s).", len(vaultDBPaths))), nil, nil
+	}
+
+	data, _ := json.MarshalIndent(results, "", "  ")
 	return textResult(string(data)), nil, nil
 }
 

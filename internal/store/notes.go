@@ -394,6 +394,22 @@ func (db *DB) RecentNotes(limit int) ([]NoteRecord, error) {
 	return scanNotes(rows)
 }
 
+// AllNotes returns all notes (chunk_id=0 only, one per path).
+// SECURITY: Excludes _PRIVATE/ content from results.
+func (db *DB) AllNotes() ([]NoteRecord, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, path, title, tags, domain, workstream, chunk_id, chunk_heading,
+			text, modified, content_hash, content_type, review_by, confidence, access_count
+		FROM vault_notes
+		WHERE chunk_id = 0 AND path NOT LIKE '_PRIVATE/%'
+		ORDER BY modified DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanNotes(rows)
+}
+
 // AdjustConfidence sets the confidence for all chunks of a note at the given path.
 func (db *DB) AdjustConfidence(path string, newConfidence float64) error {
 	db.mu.Lock()

@@ -1,6 +1,10 @@
 package store
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -364,6 +368,361 @@ func TestHybridSearch(t *testing.T) {
 		}
 		if r.Title == "" {
 			t.Error("result has empty Title")
+		}
+	}
+}
+
+// createTestVaultDB creates a temporary vault DB with notes for testing.
+// Returns the DB path and a cleanup function.
+func createTestVaultDB(t *testing.T, alias string, notes []NoteRecord) string {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, alias+".db")
+
+	db, err := OpenPath(dbPath)
+	if err != nil {
+		t.Fatalf("OpenPath(%s): %v", dbPath, err)
+	}
+
+	vec := make([]float32, 768)
+	for i := range notes {
+		if err := db.InsertNote(&notes[i], vec); err != nil {
+			t.Fatalf("InsertNote %d for %s: %v", i, alias, err)
+		}
+	}
+	db.Close()
+	return dbPath
+}
+
+func TestFederatedSearch_MultipleVaults(t *testing.T) {
+	// Create two vault DBs with different notes
+	devDBPath := createTestVaultDB(t, "dev", []NoteRecord{
+		{
+			Path: "notes/auth-design.md", Title: "Authentication Design",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "JWT-based authentication with refresh tokens.",
+			Modified: 1700000000, ContentHash: "d1", ContentType: "note", Confidence: 0.5,
+		},
+		{
+			Path: "notes/database-schema.md", Title: "Database Schema",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "PostgreSQL schema with user and session tables.",
+			Modified: 1700000001, ContentHash: "d2", ContentType: "note", Confidence: 0.5,
+		},
+	})
+
+	mktDBPath := createTestVaultDB(t, "marketing", []NoteRecord{
+		{
+			Path: "notes/launch-plan.md", Title: "Launch Plan",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "Product launch timeline and marketing strategy.",
+			Modified: 1700000000, ContentHash: "m1", ContentType: "note", Confidence: 0.5,
+		},
+		{
+			Path: "notes/auth-messaging.md", Title: "Authentication Messaging",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "How to communicate our authentication security story.",
+			Modified: 1700000001, ContentHash: "m2", ContentType: "note", Confidence: 0.5,
+		},
+	})
+
+	vaultDBPaths := map[string]string{
+		"dev":       devDBPath,
+		"marketing": mktDBPath,
+	}
+
+	// Search without vectors (FTS5 fallback)
+	results, err := FederatedSearch(vaultDBPaths, nil, "authentication", SearchOptions{TopK: 10})
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+
+	// Should find results from both vaults
+	foundDev := false
+	foundMkt := false
+	for _, r := range results {
+		if r.Vault == "dev" {
+			foundDev = true
+		}
+		if r.Vault == "marketing" {
+			foundMkt = true
+		}
+		if r.Vault == "" {
+			t.Error("result has empty Vault field")
+		}
+	}
+	if !foundDev {
+		t.Error("expected results from dev vault")
+	}
+	if !foundMkt {
+		t.Error("expected results from marketing vault")
+	}
+}
+
+func TestFederatedSearch_EmptyVaults(t *testing.T) {
+	results, err := FederatedSearch(nil, nil, "test", SearchOptions{TopK: 5})
+	if err != nil {
+		t.Fatalf("FederatedSearch with nil map: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for nil map, got %d", len(results))
+	}
+
+	results, err = FederatedSearch(map[string]string{}, nil, "test", SearchOptions{TopK: 5})
+	if err != nil {
+		t.Fatalf("FederatedSearch with empty map: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty map, got %d", len(results))
+	}
+}
+
+func TestFederatedSearch_InvalidDBPath(t *testing.T) {
+	vaultDBPaths := map[string]string{
+		"nonexistent": "/tmp/nonexistent-vault-db-that-does-not-exist-12345/vault.db",
+	}
+	// Should not error out, just skip the bad vault
+	results, err := FederatedSearch(vaultDBPaths, nil, "test", SearchOptions{TopK: 5})
+	if err != nil {
+		t.Fatalf("FederatedSearch with bad path: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for nonexistent DB, got %d", len(results))
+	}
+}
+
+func TestFederatedSearch_TopKLimit(t *testing.T) {
+	// Create a vault with many notes
+	var notes []NoteRecord
+	for i := 0; i < 20; i++ {
+		notes = append(notes, NoteRecord{
+			Path: "notes/note-" + string(rune('a'+i)) + ".md", Title: "Note " + string(rune('A'+i)),
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "Content about authentication and security patterns.",
+			Modified: float64(1700000000 + i), ContentHash: "h" + string(rune('a'+i)),
+			ContentType: "note", Confidence: 0.5,
+		})
+	}
+	dbPath := createTestVaultDB(t, "big", notes)
+
+	vaultDBPaths := map[string]string{"big": dbPath}
+
+	results, err := FederatedSearch(vaultDBPaths, nil, "authentication security", SearchOptions{TopK: 3})
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	if len(results) > 3 {
+		t.Errorf("expected at most 3 results, got %d", len(results))
+	}
+}
+
+func TestFederatedSearch_VaultAnnotation(t *testing.T) {
+	dbPath := createTestVaultDB(t, "test-vault", []NoteRecord{
+		{
+			Path: "notes/test.md", Title: "Test Note",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "This is a test note about architecture decisions.",
+			Modified: 1700000000, ContentHash: "t1", ContentType: "note", Confidence: 0.5,
+		},
+	})
+
+	results, err := FederatedSearch(
+		map[string]string{"test-vault": dbPath},
+		nil, "architecture", SearchOptions{TopK: 5},
+	)
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected results")
+	}
+	if results[0].Vault != "test-vault" {
+		t.Errorf("expected vault 'test-vault', got %q", results[0].Vault)
+	}
+}
+
+func TestAllNotes(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	vec := make([]float32, 768)
+
+	notes := []NoteRecord{
+		{
+			Path: "notes/public.md", Title: "Public Note",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "Public content.", Modified: 1700000000,
+			ContentHash: "p1", ContentType: "note", Confidence: 0.5,
+		},
+		{
+			Path: "_PRIVATE/secret.md", Title: "Secret Note",
+			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
+			Text: "Private content.", Modified: 1700000001,
+			ContentHash: "s1", ContentType: "note", Confidence: 0.5,
+		},
+		{
+			Path: "notes/public.md", Title: "Public Note",
+			Tags: "[]", ChunkID: 1, ChunkHeading: "Section 2",
+			Text: "Second chunk.", Modified: 1700000000,
+			ContentHash: "p1c1", ContentType: "note", Confidence: 0.5,
+		},
+	}
+
+	for i := range notes {
+		if err := db.InsertNote(&notes[i], vec); err != nil {
+			t.Fatalf("InsertNote %d: %v", i, err)
+		}
+	}
+
+	allNotes, err := db.AllNotes()
+	if err != nil {
+		t.Fatalf("AllNotes: %v", err)
+	}
+
+	// Should return only 1 note: the public one at chunk_id=0
+	// _PRIVATE should be excluded, and chunk_id=1 should be excluded
+	if len(allNotes) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(allNotes))
+	}
+	if allNotes[0].Path != "notes/public.md" {
+		t.Errorf("expected notes/public.md, got %s", allNotes[0].Path)
+	}
+}
+
+func TestFederatedSearch_NoFTSNoVectors(t *testing.T) {
+	// Create a DB but don't insert any notes — it won't have FTS or vectors
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "empty.db")
+	db, err := OpenPath(dbPath)
+	if err != nil {
+		t.Fatalf("OpenPath: %v", err)
+	}
+	db.Close()
+
+	// Delete any FTS tables that might have been created
+	_ = os.Remove(dbPath)
+
+	results, err := FederatedSearch(
+		map[string]string{"empty": dbPath},
+		nil, "test", SearchOptions{TopK: 5},
+	)
+	// Should gracefully skip the vault that can't be searched
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	// Results should be empty since the DB was removed
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestFederatedSearch_EmptyQuery(t *testing.T) {
+	dbPath := createTestVaultDB(t, "q", []NoteRecord{
+		{
+			Path: "notes/test.md", Title: "Test", Tags: "[]",
+			ChunkID: 0, ChunkHeading: "(full)", Text: "content",
+			Modified: 1700000000, ContentHash: "t1", ContentType: "note", Confidence: 0.5,
+		},
+	})
+	results, err := FederatedSearch(
+		map[string]string{"q": dbPath},
+		nil, "", SearchOptions{TopK: 5},
+	)
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty query, got %d", len(results))
+	}
+
+	// Whitespace-only query
+	results, err = FederatedSearch(
+		map[string]string{"q": dbPath},
+		nil, "   ", SearchOptions{TopK: 5},
+	)
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for whitespace query, got %d", len(results))
+	}
+}
+
+func TestFederatedSearch_TooManyVaults(t *testing.T) {
+	vaults := make(map[string]string)
+	for i := 0; i < MaxFederatedVaults+1; i++ {
+		vaults[fmt.Sprintf("vault%d", i)] = "/nonexistent"
+	}
+	_, err := FederatedSearch(vaults, nil, "test", SearchOptions{TopK: 5})
+	if err == nil {
+		t.Fatal("expected error for too many vaults")
+	}
+	if !strings.Contains(err.Error(), "too many vaults") {
+		t.Errorf("expected 'too many vaults' error, got: %v", err)
+	}
+}
+
+func TestFederatedSearch_PrivateNotesExcluded(t *testing.T) {
+	// Notes with _PRIVATE paths should already be excluded by AllNotes/search
+	// but verify they don't leak through federated search
+	dbPath := createTestVaultDB(t, "priv", []NoteRecord{
+		{
+			Path: "notes/public.md", Title: "Public Note", Tags: "[]",
+			ChunkID: 0, ChunkHeading: "(full)", Text: "public authentication content",
+			Modified: 1700000000, ContentHash: "p1", ContentType: "note", Confidence: 0.5,
+		},
+		{
+			Path: "_PRIVATE/secret.md", Title: "Secret Auth Details", Tags: "[]",
+			ChunkID: 0, ChunkHeading: "(full)", Text: "secret authentication keys",
+			Modified: 1700000001, ContentHash: "s1", ContentType: "note", Confidence: 0.5,
+		},
+	})
+
+	results, err := FederatedSearch(
+		map[string]string{"priv": dbPath},
+		nil, "authentication", SearchOptions{TopK: 10},
+	)
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+
+	for _, r := range results {
+		upper := strings.ToUpper(r.Path)
+		if strings.HasPrefix(upper, "_PRIVATE/") {
+			t.Errorf("private note leaked through federated search: %s", r.Path)
+		}
+	}
+}
+
+func TestFederatedSearch_MixedVaultHealth(t *testing.T) {
+	// One healthy vault + one broken vault = results from healthy one only
+	goodPath := createTestVaultDB(t, "good", []NoteRecord{
+		{
+			Path: "notes/good.md", Title: "Good Note", Tags: "[]",
+			ChunkID: 0, ChunkHeading: "(full)", Text: "healthy vault content test",
+			Modified: 1700000000, ContentHash: "g1", ContentType: "note", Confidence: 0.5,
+		},
+	})
+
+	results, err := FederatedSearch(
+		map[string]string{
+			"good":   goodPath,
+			"broken": "/nonexistent/path/vault.db",
+		},
+		nil, "content test", SearchOptions{TopK: 10},
+	)
+	if err != nil {
+		t.Fatalf("FederatedSearch: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected results from the healthy vault")
+	}
+	for _, r := range results {
+		if r.Vault != "good" {
+			t.Errorf("expected results only from 'good' vault, got %q", r.Vault)
 		}
 	}
 }

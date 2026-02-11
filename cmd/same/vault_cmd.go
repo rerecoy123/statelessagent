@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
+	"github.com/sgx-labs/statelessagent/internal/guard"
 	"github.com/sgx-labs/statelessagent/internal/store"
 	"github.com/sgx-labs/statelessagent/internal/watcher"
 )
@@ -31,7 +33,7 @@ func watchCmd() *cobra.Command {
 func vaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vault",
-		Short: "Manage vault registrations",
+		Short: "Manage vault registrations and cross-vault operations",
 	}
 
 	cmd.AddCommand(&cobra.Command{
@@ -129,5 +131,259 @@ func vaultCmd() *cobra.Command {
 		},
 	})
 
+	var dryRun bool
+	feedCmd := &cobra.Command{
+		Use:   "feed [source] [target]",
+		Short: "Copy notes from one vault to another with PII guard",
+		Long: `One-way note propagation between vaults. Reads notes from the source
+vault and copies them to the target vault. Each note is scanned by the PII
+guard before copying — notes with detected PII violations are blocked.
+
+Source and target must be registered vault aliases. Notes are copied into a
+'fed/<source-alias>/' subdirectory in the target vault to avoid collisions.
+
+Private notes (_PRIVATE/), hidden files, and symlinks are never copied.
+
+Example:
+  same vault feed dev marketing
+  same vault feed dev marketing --dry-run`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runVaultFeed(args[0], args[1], dryRun)
+		},
+	}
+	feedCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be copied without copying")
+	cmd.AddCommand(feedCmd)
+
 	return cmd
+}
+
+// maxFeedFileSize is the maximum size of a single file that vault feed will copy.
+// Prevents memory exhaustion from huge files.
+const maxFeedFileSize = 10 * 1024 * 1024 // 10MB
+
+// sanitizeAlias strips path separators and traversal characters from a vault alias
+// so it is safe to use as a filesystem directory name.
+func sanitizeAlias(alias string) string {
+	// Replace any path-dangerous characters with underscores
+	clean := strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', '.', '\x00':
+			return '_'
+		default:
+			return r
+		}
+	}, alias)
+	// Strip leading dots/underscores to prevent hidden directories
+	clean = strings.TrimLeft(clean, "_.")
+	if clean == "" {
+		clean = "unnamed"
+	}
+	return clean
+}
+
+// safeFeedPath validates that a note path is safe to use for file operations.
+// Returns the cleaned path or empty string if the path is dangerous.
+func safeFeedPath(notePath string) string {
+	// SECURITY: reject null bytes
+	if strings.ContainsRune(notePath, 0) {
+		return ""
+	}
+	// Clean the path to resolve any ../
+	clean := filepath.Clean(filepath.FromSlash(notePath))
+	// Convert back to forward slashes for consistency
+	cleanSlash := filepath.ToSlash(clean)
+	// Reject absolute paths
+	if filepath.IsAbs(clean) {
+		return ""
+	}
+	// Reject paths that escape via ..
+	if strings.HasPrefix(cleanSlash, "..") || strings.Contains(cleanSlash, "/../") {
+		return ""
+	}
+	// Reject _PRIVATE (case-insensitive)
+	upper := strings.ToUpper(cleanSlash)
+	if strings.HasPrefix(upper, "_PRIVATE/") || upper == "_PRIVATE" {
+		return ""
+	}
+	// Reject dot-prefixed files/dirs (hidden files, .same/, .git/, etc.)
+	if strings.HasPrefix(cleanSlash, ".") {
+		return ""
+	}
+	// Reject paths containing dot-directory components
+	for _, part := range strings.Split(cleanSlash, "/") {
+		if strings.HasPrefix(part, ".") {
+			return ""
+		}
+	}
+	return clean
+}
+
+func runVaultFeed(sourceAlias, targetAlias string, dryRun bool) error {
+	reg := config.LoadRegistry()
+
+	// SECURITY: Prevent self-feed (would create recursive copies)
+	sourcePath := reg.ResolveVault(sourceAlias)
+	if sourcePath == "" {
+		return fmt.Errorf("source vault %q not found in registry", sourceAlias)
+	}
+	targetPath := reg.ResolveVault(targetAlias)
+	if targetPath == "" {
+		return fmt.Errorf("target vault %q not found in registry", targetAlias)
+	}
+
+	absSource, _ := filepath.Abs(sourcePath)
+	absTarget, _ := filepath.Abs(targetPath)
+	if absSource == absTarget {
+		return fmt.Errorf("source and target cannot be the same vault")
+	}
+
+	sourceDB, err := store.OpenPath(filepath.Join(sourcePath, ".same", "data", "vault.db"))
+	if err != nil {
+		return fmt.Errorf("open source vault database: %w", err)
+	}
+	defer sourceDB.Close()
+
+	// Get all notes from source (chunk_id=0 only, i.e. one per note)
+	notes, err := sourceDB.AllNotes()
+	if err != nil {
+		return fmt.Errorf("read source notes: %w", err)
+	}
+
+	if len(notes) == 0 {
+		fmt.Println("Source vault has no notes to feed.")
+		return nil
+	}
+
+	// Set up PII guard scanner for the target vault
+	scanner, err := guard.NewScanner(targetPath)
+	if err != nil {
+		// Guard not configured — continue without PII checks but warn
+		fmt.Fprintf(os.Stderr, "Warning: PII guard not available, proceeding without PII checks\n")
+		scanner = nil
+	}
+
+	// SECURITY: Sanitize alias before using in filesystem path
+	safeDirName := sanitizeAlias(sourceAlias)
+	destDir := filepath.Join(targetPath, "fed", safeDirName)
+
+	// SECURITY: Verify destDir is within targetPath
+	absDestDir, err := filepath.Abs(destDir)
+	if err != nil || !strings.HasPrefix(absDestDir, absTarget+string(filepath.Separator)) {
+		return fmt.Errorf("invalid feed destination")
+	}
+
+	if !dryRun {
+		if err := os.MkdirAll(destDir, 0o755); err != nil {
+			return fmt.Errorf("create feed directory: %w", err)
+		}
+	}
+
+	var copied, skipped, blocked int
+	for _, note := range notes {
+		// SECURITY: Validate note path for traversal attacks
+		cleanPath := safeFeedPath(note.Path)
+		if cleanPath == "" {
+			skipped++
+			continue
+		}
+
+		// SECURITY: Build source file path and verify it stays within source vault
+		srcFile := filepath.Join(sourcePath, cleanPath)
+		absSrc, err := filepath.Abs(srcFile)
+		if err != nil || !strings.HasPrefix(absSrc, absSource+string(filepath.Separator)) {
+			skipped++
+			continue
+		}
+
+		// SECURITY: Reject symlinks in source (could point outside vault)
+		srcInfo, err := os.Lstat(srcFile)
+		if err != nil {
+			skipped++
+			continue
+		}
+		if srcInfo.Mode()&os.ModeSymlink != 0 {
+			skipped++
+			continue
+		}
+
+		// SECURITY: Enforce file size limit
+		if srcInfo.Size() > maxFeedFileSize {
+			fmt.Fprintf(os.Stderr, "  SKIPPED (too large): %s (%d bytes, max %d)\n",
+				cleanPath, srcInfo.Size(), maxFeedFileSize)
+			skipped++
+			continue
+		}
+
+		content, err := os.ReadFile(srcFile)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		// Run PII guard on content
+		if scanner != nil {
+			// Create a new content reader closure for each file to avoid race
+			fileContent := content
+			contentReader := func(file string) ([]byte, error) {
+				return fileContent, nil
+			}
+			scanner.ContentReader = contentReader
+			result, scanErr := scanner.ScanFiles([]string{cleanPath})
+			if scanErr == nil && result.HasBlocking() {
+				blocked++
+				fmt.Fprintf(os.Stderr, "  BLOCKED: %s (%d PII violation(s))\n",
+					cleanPath, len(result.Violations))
+				continue
+			}
+		}
+
+		// SECURITY: Build dest file path and verify it stays within destDir
+		destFile := filepath.Join(destDir, cleanPath)
+		absDest, err := filepath.Abs(destFile)
+		if err != nil || !strings.HasPrefix(absDest, absDestDir+string(filepath.Separator)) {
+			skipped++
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("  would copy: %s\n", cleanPath)
+			copied++
+			continue
+		}
+
+		// Ensure parent directory exists
+		if err := os.MkdirAll(filepath.Dir(destFile), 0o755); err != nil {
+			skipped++
+			continue
+		}
+
+		// Only copy if destination doesn't exist or source is newer
+		if destInfo, err := os.Stat(destFile); err == nil {
+			if !srcInfo.ModTime().After(destInfo.ModTime()) {
+				skipped++
+				continue
+			}
+		}
+
+		if err := os.WriteFile(destFile, content, 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "  ERROR writing %s\n", cleanPath)
+			skipped++
+			continue
+		}
+		copied++
+	}
+
+	if dryRun {
+		fmt.Printf("\nDry run: %d note(s) would be copied, %d skipped, %d blocked by PII guard\n",
+			copied, skipped, blocked)
+	} else {
+		fmt.Printf("\nFed %d note(s) from %q to %q (skipped %d, blocked %d)\n",
+			copied, sourceAlias, targetAlias, skipped, blocked)
+		if copied > 0 {
+			fmt.Println("Run 'same reindex' in the target vault to index the new notes.")
+		}
+	}
+
+	return nil
 }

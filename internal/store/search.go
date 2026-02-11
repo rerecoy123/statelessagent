@@ -931,6 +931,134 @@ func (db *DB) FTS5Search(query string, opts SearchOptions) ([]SearchResult, erro
 	return results, rows.Err()
 }
 
+// FederatedResult extends SearchResult with the source vault name.
+type FederatedResult struct {
+	SearchResult
+	Vault string `json:"vault"`
+}
+
+// MaxFederatedVaults is the maximum number of vaults that can be searched in
+// a single federated search call. Prevents resource exhaustion.
+const MaxFederatedVaults = 50
+
+// FederatedSearch searches across multiple vault databases and merges results.
+// Each entry in vaultDBPaths maps a vault alias to its database file path.
+// Uses vector search (HybridSearch) if queryVec is non-nil and the vault has
+// vectors; falls back to FTS5 or keyword search otherwise.
+// SECURITY: DB paths should be pre-validated by the caller (derived from the
+// vault registry, not from user input). Error messages use vault aliases only,
+// never raw filesystem paths.
+func FederatedSearch(vaultDBPaths map[string]string, queryVec []float32, queryText string, opts SearchOptions) ([]FederatedResult, error) {
+	if len(vaultDBPaths) == 0 {
+		return nil, nil
+	}
+	if len(vaultDBPaths) > MaxFederatedVaults {
+		return nil, fmt.Errorf("too many vaults (%d), maximum is %d", len(vaultDBPaths), MaxFederatedVaults)
+	}
+
+	queryText = strings.TrimSpace(queryText)
+	if queryText == "" {
+		return nil, nil
+	}
+
+	perVaultK := opts.TopK
+	if perVaultK <= 0 {
+		perVaultK = 10
+	}
+
+	var allResults []FederatedResult
+	var searchErrors []string
+
+	for alias, dbPath := range vaultDBPaths {
+		vaultDB, err := OpenPath(dbPath)
+		if err != nil {
+			// SECURITY: Use alias in error, not the raw filesystem path
+			searchErrors = append(searchErrors, fmt.Sprintf("vault %q: unavailable", alias))
+			continue
+		}
+
+		var results []SearchResult
+		vaultOpts := SearchOptions{
+			TopK:   perVaultK,
+			Domain: opts.Domain,
+		}
+
+		if queryVec != nil && vaultDB.HasVectors() {
+			results, err = vaultDB.HybridSearch(queryVec, queryText, vaultOpts)
+		} else if vaultDB.FTSAvailable() {
+			results, err = vaultDB.FTS5Search(queryText, vaultOpts)
+		} else {
+			// Final fallback: keyword search on title/text
+			terms := ExtractSearchTerms(queryText)
+			if len(terms) > 0 {
+				raw, kwErr := vaultDB.KeywordSearch(terms, vaultOpts.TopK)
+				if kwErr == nil {
+					for _, r := range raw {
+						snippet := r.Text
+						if len(snippet) > 500 {
+							snippet = snippet[:500]
+						}
+						results = append(results, SearchResult{
+							Path:         r.Path,
+							Title:        r.Title,
+							ChunkHeading: r.Heading,
+							Score:        0.5,
+							Snippet:      snippet,
+							Domain:       r.Domain,
+							Workstream:   r.Workstream,
+							Tags:         r.Tags,
+							ContentType:  r.ContentType,
+							Confidence:   round3(r.Confidence),
+						})
+					}
+				}
+			}
+			if len(results) == 0 {
+				vaultDB.Close()
+				continue
+			}
+		}
+		vaultDB.Close()
+
+		if err != nil {
+			// SECURITY: Use alias in error, not raw DB error which may contain paths
+			searchErrors = append(searchErrors, fmt.Sprintf("vault %q: search failed", alias))
+			continue
+		}
+
+		for _, r := range results {
+			allResults = append(allResults, FederatedResult{
+				SearchResult: r,
+				Vault:        alias,
+			})
+		}
+	}
+
+	// Sort by score descending, then deduplicate by path+vault
+	sort.Slice(allResults, func(i, j int) bool {
+		return allResults[i].Score > allResults[j].Score
+	})
+
+	// Deduplicate: same path in same vault (shouldn't happen but defensive)
+	seen := make(map[string]bool)
+	var deduped []FederatedResult
+	for _, r := range allResults {
+		key := r.Vault + ":" + r.Path
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		deduped = append(deduped, r)
+	}
+
+	// Trim to requested TopK
+	if opts.TopK > 0 && len(deduped) > opts.TopK {
+		deduped = deduped[:opts.TopK]
+	}
+
+	return deduped, nil
+}
+
 func round3(f float64) float64 {
 	return float64(int(f*1000+0.5)) / 1000
 }
