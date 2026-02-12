@@ -4,13 +4,22 @@
 
 set -e
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks (npx creates symlinks from temp cache)
+SOURCE="$0"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  # Handle relative symlinks
+  case "$SOURCE" in /*) ;; *) SOURCE="$DIR/$SOURCE" ;; esac
+done
+DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
 BINARY="$DIR/same-binary"
 
-if [ \! -x "$BINARY" ]; then
+if [ ! -x "$BINARY" ]; then
   echo "[same] Binary not found, downloading..." >&2
   node "$DIR/../lib/install.js"
-  if [ \! -x "$BINARY" ]; then
+  if [ ! -x "$BINARY" ]; then
     echo "[same] Failed to download binary. Please check your network connection." >&2
     echo "[same] You can also install manually: https://github.com/sgx-labs/statelessagent/releases" >&2
     exit 1
