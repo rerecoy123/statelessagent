@@ -502,7 +502,7 @@ Answer:`, ctx.String(), question)
 
 	// Ollama not available
 	fmt.Printf("  %sOllama not running — 'same ask' requires a local LLM.%s\n", cli.Dim, cli.Reset)
-	fmt.Printf("  Install Ollama (https://ollama.ai) and a chat model:\n")
+	fmt.Printf("  Install Ollama (https://ollama.com) and a chat model:\n")
 	fmt.Printf("    %s$%s ollama pull llama3.2\n", cli.Dim, cli.Reset)
 	fmt.Printf("  Then try: %ssame ask \"how do we deploy?\"%s\n", cli.Cyan, cli.Reset)
 	return nil

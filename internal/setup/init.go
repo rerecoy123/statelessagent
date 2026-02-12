@@ -56,17 +56,11 @@ func checkDependencies() {
 
 	// ── Runtime dependencies ──────────────────────────────
 
-	// Check Node.js
+	// Check Node.js (only needed for npx-based MCP client installs, not for SAME itself)
+	showHeader()
 	if _, err := exec.LookPath("node"); err != nil {
-		showHeader()
-		fmt.Printf("  %s!%s Node.js not found\n", cli.Yellow, cli.Reset)
-		fmt.Println("    Some AI tool integrations (MCP server) require Node.js.")
-		fmt.Println("    SAME will work without it, but MCP features won't be available.")
-		fmt.Println()
-		fmt.Println("    Install from: https://nodejs.org")
-		fmt.Println()
+		fmt.Printf("  %s·%s Node.js not found %s(optional — only needed for npx installs)%s\n", cli.Dim, cli.Reset, cli.Dim, cli.Reset)
 	} else {
-		showHeader()
 		fmt.Printf("  %s✓%s Node.js installed\n", cli.Green, cli.Reset)
 	}
 
@@ -76,7 +70,7 @@ func checkDependencies() {
 		fmt.Printf("  %s!%s Ollama not found\n", cli.Yellow, cli.Reset)
 		fmt.Println("    SAME needs Ollama to generate embeddings for your notes.")
 		fmt.Println()
-		fmt.Println("    Install from: https://ollama.ai")
+		fmt.Println("    Install from: https://ollama.com")
 		fmt.Println()
 	} else {
 		showHeader()
@@ -217,7 +211,7 @@ func RunInit(opts InitOptions) error {
 		fmt.Printf("    %sSearch will use keywords instead of AI-powered semantic matching.%s\n", cli.Dim, cli.Reset)
 		fmt.Printf("    %sInstall Ollama later and run 'same reindex' to upgrade.%s\n\n", cli.Dim, cli.Reset)
 		if !opts.Yes && !confirm("  Continue without Ollama?", true) {
-			return fmt.Errorf("setup cancelled — install Ollama from https://ollama.ai and try again")
+			return fmt.Errorf("setup cancelled — install Ollama from https://ollama.com and try again")
 		}
 		ollamaOK = false
 	}
@@ -375,7 +369,7 @@ func checkOllama() error {
 		fmt.Println("  To fix this:")
 		fmt.Println()
 		fmt.Println("  If you haven't installed Ollama yet:")
-		fmt.Println("    1. Go to https://ollama.ai")
+		fmt.Println("    1. Go to https://ollama.com")
 		fmt.Println("    2. Download and install it (like any other app)")
 		fmt.Println("    3. Open Ollama - you'll see a llama icon appear")
 		fmt.Println()

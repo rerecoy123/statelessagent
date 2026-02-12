@@ -292,7 +292,7 @@ if ($ollamaFound) {
 } else {
     $MissingOllama = $true
     Write-Host "  ${Yellow}!!${Reset} Ollama not installed"
-    Write-Host "    1. Open: https://ollama.ai"
+    Write-Host "    1. Open: https://ollama.com"
     Write-Host "       ${Dim}(Ctrl+click the link to open in browser)${Reset}"
     Write-Host "    2. Click 'Download for Windows' and run the installer"
     Write-Host "    3. Look for the llama icon in your system tray"
@@ -329,7 +329,7 @@ if (-not $MissingOllama -and -not $MissingNode) {
 } elseif ($MissingOllama -and $MissingNode) {
     Write-Host "  SAME is installed! Before running 'same init', you'll need:"
     Write-Host ""
-    Write-Host "    - Ollama  - https://ollama.ai"
+    Write-Host "    - Ollama  - https://ollama.com"
     Write-Host "    - Node.js - https://nodejs.org"
     Write-Host ""
     Write-Host "  Install those, then run:"
@@ -337,7 +337,7 @@ if (-not $MissingOllama -and -not $MissingNode) {
     Write-Host "    ${Bold}same init${Reset}"
 } elseif ($MissingOllama) {
     Write-Host "  Almost there! Install Ollama first:"
-    Write-Host "    https://ollama.ai"
+    Write-Host "    https://ollama.com"
     Write-Host ""
     Write-Host "  Then run:"
     Write-Host ""

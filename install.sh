@@ -451,7 +451,7 @@ else
   else
     MISSING_OLLAMA=true
     echo -e "  ${YELLOW}✗${RESET} Ollama not installed"
-    echo "    Download from: https://ollama.ai"
+    echo "    Download from: https://ollama.com"
   fi
 fi
 
@@ -512,7 +512,7 @@ elif [ "$MISSING_OLLAMA" = true ] && [ "$MISSING_NODE" = true ]; then
   # Missing both
   echo "  SAME is installed! Before running 'same init', you'll need:"
   echo ""
-  echo "    • Ollama  — https://ollama.ai"
+  echo "    • Ollama  — https://ollama.com"
   echo "    • Node.js — https://nodejs.org"
   echo ""
   echo "  Install those, then run:"
@@ -521,7 +521,7 @@ elif [ "$MISSING_OLLAMA" = true ] && [ "$MISSING_NODE" = true ]; then
 elif [ "$MISSING_OLLAMA" = true ]; then
   # Missing only Ollama
   echo "  Almost there! Install Ollama first:"
-  echo "    https://ollama.ai"
+  echo "    https://ollama.com"
   echo ""
   echo "  Then run:"
   echo ""

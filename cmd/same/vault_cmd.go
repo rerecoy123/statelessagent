@@ -77,7 +77,7 @@ func vaultCmd() *cobra.Command {
 				return fmt.Errorf("resolve path: %w", err)
 			}
 			if info, err := os.Stat(absPath); err != nil || !info.IsDir() {
-				return fmt.Errorf("path does not exist or is not a directory: %s", absPath)
+				return fmt.Errorf("path does not exist or is not a directory: %s", cli.ShortenHome(absPath))
 			}
 			reg := config.LoadRegistry()
 			reg.Vaults[name] = absPath

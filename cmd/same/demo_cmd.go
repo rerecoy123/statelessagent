@@ -233,8 +233,7 @@ func runDemo(clean bool) error {
 	if err != nil {
 		// Embedding provider failed — fall back to lite mode
 		ollamaAvailable = false
-		fmt.Fprintf(os.Stderr, "\n  %s[DEBUG] Reindex error: %v%s\n", cli.Dim, err, cli.Reset)
-		fmt.Printf("  Indexing (keyword mode)...")
+		fmt.Printf(" (keyword mode)...")
 		stats, err = indexer.ReindexLite(db, true, nil)
 		if err != nil {
 			fmt.Println()

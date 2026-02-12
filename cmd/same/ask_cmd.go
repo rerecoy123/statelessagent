@@ -95,7 +95,7 @@ func runAsk(question, model string, topK int) error {
 	if err != nil {
 		return userError(
 			"Ollama is not running",
-			"same ask requires Ollama for answers. Start Ollama and try again, or install with: https://ollama.ai",
+			"same ask requires Ollama for answers. Start Ollama and try again, or install from: https://ollama.com",
 		)
 	}
 

@@ -573,8 +573,26 @@ func TestHandleSearchNotes_EmbedError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	text := resultText(t, result)
-	if !strings.Contains(text, "Error embedding query") {
-		t.Errorf("expected embedding error message, got %q", text)
+	// With graceful fallback, embedding failure falls through to keyword search
+	// which returns "No results" on an empty index (not an embedding error)
+	if !strings.Contains(text, "No results") {
+		t.Errorf("expected 'No results' fallback, got %q", text)
+	}
+}
+
+func TestHandleSearchNotes_NilEmbedClient(t *testing.T) {
+	setupHandlerTest(t)
+	embedClient = nil
+
+	result, _, err := handleSearchNotes(context.Background(), nil, searchInput{
+		Query: "test query",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := resultText(t, result)
+	if !strings.Contains(text, "No results") {
+		t.Errorf("expected 'No results' fallback with nil embedClient, got %q", text)
 	}
 }
 
@@ -607,8 +625,9 @@ func TestHandleSearchNotesFiltered_EmbedError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	text := resultText(t, result)
-	if !strings.Contains(text, "Error embedding query") {
-		t.Errorf("expected embedding error message, got %q", text)
+	// With graceful fallback, embedding failure falls through to keyword search
+	if !strings.Contains(text, "No results") {
+		t.Errorf("expected 'No results' fallback, got %q", text)
 	}
 }
 

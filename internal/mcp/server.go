@@ -85,16 +85,14 @@ func Serve() error {
 	}
 	// Only pass the Ollama URL to the Ollama provider
 	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
-		ollamaURL, err := config.OllamaURL()
-		if err != nil {
-			return fmt.Errorf("ollama URL: %w", err)
+		ollamaURL, urlErr := config.OllamaURL()
+		if urlErr == nil {
+			provCfg.BaseURL = ollamaURL
 		}
-		provCfg.BaseURL = ollamaURL
 	}
-	embedClient, err = embedding.NewProvider(provCfg)
-	if err != nil {
-		return fmt.Errorf("embedding provider: %w", err)
-	}
+	embedClient, _ = embedding.NewProvider(provCfg)
+	// embedClient may be nil if Ollama is not running — search handlers
+	// fall back to FTS5/keyword search gracefully.
 	vaultRoot, _ = filepath.Abs(config.VaultPath())
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -264,13 +262,9 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
 	}
 	topK := clampTopK(input.TopK, 10)
+	opts := store.SearchOptions{TopK: topK}
 
-	queryVec, err := embedClient.GetQueryEmbedding(input.Query)
-	if err != nil {
-		return textResult("Error embedding query. Is Ollama running?"), nil, nil
-	}
-
-	results, err := db.HybridSearch(queryVec, input.Query, store.SearchOptions{TopK: topK})
+	results, err := searchWithFallback(input.Query, opts)
 	if err != nil {
 		return textResult("Search error. Try running reindex() first."), nil, nil
 	}
@@ -290,11 +284,6 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 	}
 	topK := clampTopK(input.TopK, 10)
 
-	queryVec, err := embedClient.GetQueryEmbedding(input.Query)
-	if err != nil {
-		return textResult("Error embedding query. Is Ollama running?"), nil, nil
-	}
-
 	var tags []string
 	if input.Tags != "" {
 		for _, t := range strings.Split(input.Tags, ",") {
@@ -305,12 +294,14 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 		}
 	}
 
-	results, err := db.HybridSearch(queryVec, input.Query, store.SearchOptions{
+	opts := store.SearchOptions{
 		TopK:       topK,
 		Domain:     input.Domain,
 		Workstream: input.Workstream,
 		Tags:       tags,
-	})
+	}
+
+	results, err := searchWithFallback(input.Query, opts)
 	if err != nil {
 		return textResult("Search error. Try running reindex() first."), nil, nil
 	}
@@ -799,6 +790,55 @@ func sanitizeResultSnippets(results []store.SearchResult) []store.SearchResult {
 		results[i].Snippet = neutralizeTags(results[i].Snippet)
 	}
 	return results
+}
+
+// searchWithFallback tries HybridSearch (vector+keyword), then FTS5, then
+// pure keyword search. This mirrors the graceful degradation in FederatedSearch
+// and ensures MCP search works even when Ollama is unavailable.
+func searchWithFallback(query string, opts store.SearchOptions) ([]store.SearchResult, error) {
+	// Try vector+keyword hybrid search first
+	var queryVec []float32
+	if embedClient != nil {
+		queryVec, _ = embedClient.GetQueryEmbedding(query)
+	}
+	if queryVec != nil && db.HasVectors() {
+		return db.HybridSearch(queryVec, query, opts)
+	}
+
+	// Fall back to FTS5 full-text search
+	if db.FTSAvailable() {
+		return db.FTS5Search(query, opts)
+	}
+
+	// Final fallback: keyword search on title/text
+	terms := store.ExtractSearchTerms(query)
+	if len(terms) == 0 {
+		return nil, nil
+	}
+	raw, err := db.KeywordSearch(terms, opts.TopK)
+	if err != nil {
+		return nil, err
+	}
+	var results []store.SearchResult
+	for _, r := range raw {
+		snippet := r.Text
+		if len(snippet) > 500 {
+			snippet = snippet[:500]
+		}
+		results = append(results, store.SearchResult{
+			Path:         r.Path,
+			Title:        r.Title,
+			ChunkHeading: r.Heading,
+			Score:        0.5,
+			Snippet:      snippet,
+			Domain:       r.Domain,
+			Workstream:   r.Workstream,
+			Tags:         r.Tags,
+			ContentType:  r.ContentType,
+			Confidence:   r.Confidence,
+		})
+	}
+	return results, nil
 }
 
 func sanitizeFederatedSnippets(results []store.FederatedResult) []store.FederatedResult {
