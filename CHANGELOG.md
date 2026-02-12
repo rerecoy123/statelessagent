@@ -27,6 +27,11 @@ Search across all your vaults from one place. Manage multiple vaults from the CL
 
 ### Security
 
+- **MCP server hardening (15 fixes)** — query length limits (10K chars), file size guard on `get_note` (1MB), write rate limiting (30 ops/min sliding window), snippet sanitization neutralizes 12 prompt-injection tag patterns before returning results to AI clients. `save_decision` and `create_handoff` use `IndexSingleFile` instead of full reindex to prevent DoS. Decision titles sanitized. Append-mode provenance tracking. Federated search resolves aliases from registry map directly.
+- **MCP tool annotations** — all 12 tools declare `readOnlyHint`, `destructiveHint`, and `idempotentHint` per the MCP 2025-06-18 spec. Helps MCP clients enforce least-privilege.
+- **Defense-in-depth `_PRIVATE/` filtering** — case-insensitive `UPPER(path) NOT LIKE` added to `VectorSearch`, `VectorSearchRaw`, and `ContentTermSearch` SQL queries. Pinned notes skip `_PRIVATE/` paths. Hooks use case-insensitive `isPrivatePath()`.
+- **SQL LIKE injection prevention** — `escapeLIKE()` helper escapes `%`, `_`, and `\` in user-supplied search terms across `KeywordSearch` and `ContentTermSearch`.
+- **Expanded tag sanitization** — context injection now neutralizes 12 tag types (added `system-reminder`, `system`, `instructions`, `tool_result`, `tool_use`, `IMPORTANT`) to block stored prompt injection.
 - **Vault feed hardening** — `sanitizeAlias()` strips path separators, traversal characters, and null bytes. `safeFeedPath()` blocks absolute paths, traversal, private/hidden directories, and null bytes. Federated search error messages use aliases only (no raw filesystem paths).
 
 ---
