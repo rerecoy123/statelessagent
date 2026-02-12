@@ -83,7 +83,7 @@ var hookEventMap = map[string]string{
 func Run(hookName string) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "same hook %s: panic: %v\n", hookName, r)
+			fmt.Fprintf(os.Stderr, "same: unexpected error in %s hook — run 'same doctor' if this persists\n", hookName)
 		}
 	}()
 
@@ -104,8 +104,7 @@ func Run(hookName string) {
 
 	db, err := store.Open()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "same hook %s: cannot open database: %v\n", hookName, err)
-		fmt.Fprintf(os.Stderr, "  Hint: run 'same init' or 'same doctor' to diagnose\n")
+		fmt.Fprintf(os.Stderr, "same: can't find your vault database — run 'same init' to set up, or 'same doctor' to diagnose\n")
 		// Return diagnostic output so the AI knows what happened.
 		// hookSpecificOutput is only valid for PreToolUse, UserPromptSubmit,
 		// PostToolUse. For other events, use systemMessage.
@@ -166,7 +165,7 @@ func Run(hookName string) {
 		case "session-bootstrap":
 			out = runSessionBootstrap(db, input)
 		default:
-			fmt.Fprintf(os.Stderr, "same hook: unknown hook %q\n", hookName)
+			fmt.Fprintf(os.Stderr, "same: unknown hook %q — your hooks config may need updating\n", hookName)
 		}
 
 		// Run plugins matching this hook's event
@@ -193,7 +192,7 @@ func Run(hookName string) {
 	case result := <-ch:
 		output = result.output
 	case <-time.After(hookTimeout):
-		fmt.Fprintf(os.Stderr, "same hook %s: timed out after %s — Ollama may be slow or starting up\n", hookName, hookTimeout)
+		fmt.Fprintf(os.Stderr, "same: timed out waiting for Ollama — it may be starting up. If this persists, run 'same doctor'\n")
 		eventName := hookEventMap[hookName]
 		if eventName == "" {
 			eventName = "UserPromptSubmit"

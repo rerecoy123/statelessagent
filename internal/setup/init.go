@@ -975,7 +975,7 @@ func confirm(question string, defaultYes bool) bool {
 	if line == "" {
 		return defaultYes
 	}
-	return line == "y" || line == "yes"
+	return line == "y" || line == "yes" || line == "1"
 }
 
 // askExperienceLevel asks the user about their experience level.

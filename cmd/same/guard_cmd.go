@@ -19,7 +19,7 @@ import (
 func guardCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "guard",
-		Short: "Pre-commit PII and content scanner",
+		Short: "Scan notes for sensitive info before sharing",
 		Long: `SAME Guard scans staged files for PII, blocklisted terms, and
 unauthorized file paths before they reach git.
 

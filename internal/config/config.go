@@ -148,7 +148,7 @@ func DefaultConfig() *Config {
 		},
 		Embedding: EmbeddingConfig{
 			Provider: "ollama",
-			Model:    "", // uses provider-specific default
+			Model:    EmbeddingModel,
 		},
 		Memory: MemoryConfig{
 			MaxTokenBudget:     1600,
@@ -232,6 +232,40 @@ func LoadConfig() (*Config, error) {
 	// Previously parsed but never applied — this fixes the bug.
 	if len(cfg.Vault.SkipDirs) > 0 {
 		RebuildSkipDirs(cfg.Vault.SkipDirs)
+	}
+
+	return cfg, nil
+}
+
+// LoadConfigFrom loads configuration from a specific file path, merging with
+// defaults and env vars. Use this instead of LoadConfig() when you know exactly
+// which config file to load (e.g., after writing a config during init).
+func LoadConfigFrom(configPath string) (*Config, error) {
+	cfg := DefaultConfig()
+
+	if configPath != "" {
+		if _, err := os.Stat(configPath); err == nil {
+			if _, err := toml.DecodeFile(configPath, cfg); err != nil {
+				return nil, fmt.Errorf("parse config %s: %w", configPath, err)
+			}
+		}
+	}
+
+	// Environment variables override TOML values (same as LoadConfig)
+	if v := os.Getenv("VAULT_PATH"); v != "" {
+		cfg.Vault.Path = v
+	}
+	if v := os.Getenv("OLLAMA_URL"); v != "" {
+		cfg.Ollama.URL = v
+	}
+	if v := os.Getenv("SAME_EMBED_PROVIDER"); v != "" {
+		cfg.Embedding.Provider = v
+	}
+	if v := os.Getenv("SAME_EMBED_MODEL"); v != "" {
+		cfg.Embedding.Model = v
+	}
+	if v := os.Getenv("SAME_EMBED_API_KEY"); v != "" {
+		cfg.Embedding.APIKey = v
 	}
 
 	return cfg, nil
@@ -961,8 +995,9 @@ func SetProfile(vaultPath, profileName string) error {
 
 	cfgPath := ConfigFilePath(vaultPath)
 
-	// Load existing config or create default
-	cfg, err := LoadConfig()
+	// Load from the target vault's config file to avoid clobbering
+	// settings when CWD != vaultPath (e.g., during init).
+	cfg, err := LoadConfigFrom(cfgPath)
 	if err != nil {
 		cfg = DefaultConfig()
 	}
@@ -990,8 +1025,9 @@ func SetProfile(vaultPath, profileName string) error {
 func SetDisplayMode(vaultPath, mode string) error {
 	cfgPath := ConfigFilePath(vaultPath)
 
-	// Load existing config or create default
-	cfg, err := LoadConfig()
+	// Load from the target vault's config file to avoid clobbering
+	// settings when CWD != vaultPath (e.g., during init).
+	cfg, err := LoadConfigFrom(cfgPath)
 	if err != nil {
 		cfg = DefaultConfig()
 	}

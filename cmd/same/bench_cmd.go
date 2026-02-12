@@ -15,7 +15,7 @@ import (
 func benchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "bench",
-		Short: "Run search performance benchmarks",
+		Short: "Test how fast search is on your vault",
 		Long:  "Measure cold-start, search, embedding, and database performance.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBench()

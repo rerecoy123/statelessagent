@@ -14,7 +14,7 @@ import (
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage SAME configuration",
+		Short: "View or change your settings",
 	}
 
 	cmd.AddCommand(&cobra.Command{

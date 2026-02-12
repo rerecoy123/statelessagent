@@ -21,7 +21,7 @@ func newEmbedProvider() (embedding.Provider, error) {
 	if cfg.Provider == "ollama" || cfg.Provider == "" {
 		ollamaURL, err := config.OllamaURL()
 		if err != nil {
-			return nil, fmt.Errorf("ollama URL: %w", err)
+			return nil, fmt.Errorf("can't connect to Ollama: %w", err)
 		}
 		cfg.BaseURL = ollamaURL
 	}

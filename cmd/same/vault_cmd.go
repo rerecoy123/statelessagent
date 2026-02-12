@@ -19,7 +19,7 @@ import (
 func watchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "watch",
-		Short: "Watch vault for changes and auto-reindex",
+		Short: "Auto-update the index when notes change",
 		Long:  "Monitor the vault filesystem for markdown file changes. Automatically reindexes modified, created, or deleted notes with a 2-second debounce.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db, err := store.Open()
@@ -35,7 +35,7 @@ func watchCmd() *cobra.Command {
 func vaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vault",
-		Short: "Manage vault registrations and cross-vault operations",
+		Short: "Manage multiple note collections",
 	}
 
 	cmd.AddCommand(&cobra.Command{

@@ -147,7 +147,7 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 	// Embed the prompt
 	embedProvider, err := newEmbedProvider()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "same: can't connect to embedding provider — is Ollama running? (%v)\n", err)
+		fmt.Fprintf(os.Stderr, "same: can't connect to Ollama — is it running? Look for the llama icon in your menu bar\n")
 		return &HookOutput{
 			HookSpecificOutput: &HookSpecific{
 				HookEventName:     "UserPromptSubmit",
@@ -158,7 +158,7 @@ func runContextSurfacing(db *store.DB, input *HookInput) *HookOutput {
 
 	// Check for embedding model/dimension mismatch before searching
 	if mismatchErr := db.CheckEmbeddingMeta(embedProvider.Name(), embedProvider.Model(), embedProvider.Dimensions()); mismatchErr != nil {
-		fmt.Fprintf(os.Stderr, "same: %v\n", mismatchErr)
+		fmt.Fprintf(os.Stderr, "same: embedding model changed — run 'same reindex --force' to rebuild\n")
 		return &HookOutput{
 			HookSpecificOutput: &HookSpecific{
 				HookEventName: "UserPromptSubmit",
@@ -175,7 +175,7 @@ Suggested actions for the user:
 	embeddingFailed := err != nil
 
 	if embeddingFailed {
-		fmt.Fprintf(os.Stderr, "same: embed query failed, falling back to keyword search: %v\n", err)
+		fmt.Fprintf(os.Stderr, "same: Ollama didn't respond, falling back to keyword search\n")
 		writeVerboseLog(fmt.Sprintf("Embedding failed: %v — using FTS5 keyword fallback\n", err))
 	}
 
