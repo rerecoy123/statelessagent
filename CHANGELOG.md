@@ -18,7 +18,7 @@ Search across all your vaults from one place. Manage multiple vaults from the CL
 
 - **Vault registry Save() merge bug** — `same vault remove` silently failed because Save() re-read the registry from disk and merged back deleted entries. Removed merge logic so removes take effect immediately.
 - **MCP works without Ollama** — MCP server now starts and serves search results even when Ollama is unavailable. Search falls back gracefully: HybridSearch → FTS5 → keyword. Previously, `npx @sgx-labs/same mcp` refused to start without Ollama, breaking MCP client setups.
-- **MCP create_handoff overwrite** — multiple handoffs on the same day no longer overwrite each other; sequential suffix added.
+- **MCP create_handoff overwrite** — multiple handoffs on the same day no longer overwrite each other; uses minute-level timestamps for uniqueness.
 - **MCP registry manifests** — `server.json` updated to official MCP registry schema (`$schema`, `isRequired`, `registryBaseUrl`). `smithery.yaml` uses `npx -y` instead of bare `same`. npm `package.json` adds `mcpName` for registry auto-discovery.
 - **Hook output format** — Stop and SessionStart events now use `systemMessage` for correct Claude Code rendering.
 - **URL corrections** — all references to ollama.ai updated to ollama.com across install scripts, CLI, and tutorial. Discord invite links synced across all files.

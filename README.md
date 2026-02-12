@@ -12,7 +12,7 @@
 
 Every time you start a new session with Claude Code, Cursor, or any AI coding tool, your agent starts from zero. Decisions you made yesterday? Gone. Context from last week? Gone. That architectural choice you spent 30 minutes discussing? You'll explain it again.
 
-SAME gives your AI persistent memory from your existing markdown notes. No cloud. No API keys. One binary.
+SAME gives your AI persistent memory from your existing markdown notes (any folder of `.md` files — no Obsidian required). No cloud. No API keys. One binary.
 
 ## See it in 60 seconds
 
@@ -58,20 +58,20 @@ SAME installs 6 Claude Code hooks automatically. Context surfaces on every sessi
 
 ### Claude Code / Cursor / Windsurf (MCP only)
 
-Add to your MCP settings (`.claude/settings.json`, Cursor MCP config, etc.):
+Or add manually to your MCP config (`.mcp.json`, `.claude/settings.json`, Cursor MCP settings):
 
 ```json
 {
   "mcpServers": {
     "same": {
       "command": "npx",
-      "args": ["-y", "@sgx-labs/same", "mcp", "--vault", "/path/to/your/notes"]
+      "args": ["-y", "@sgx-labs/same", "mcp", "--vault", "/absolute/path/to/your/notes"]
     }
   }
 }
 ```
 
-12 tools available instantly. Works without Ollama (keyword fallback).
+Replace `/absolute/path/to/your/notes` with the actual path to your project or notes directory. 12 tools available instantly. Works without Ollama (keyword fallback).
 
 ---
 
@@ -84,6 +84,7 @@ Add to your MCP settings (`.claude/settings.json`, Cursor MCP config, etc.):
 | Switch between projects | Manually copy context | Each project has its own memory |
 | Close terminal accidentally | All context lost | Next session recovers via handoff |
 | Ask about your own notes | Copy-paste into chat | `same ask` with source citations |
+| Context compacted mid-task | AI restarts from scratch | Pinned notes + handoffs survive compaction |
 
 ## The Numbers
 
