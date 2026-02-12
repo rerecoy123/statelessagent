@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
 )
@@ -239,7 +241,11 @@ func isSAMEHook(command string) bool {
 }
 
 func containsSAMEHook(command, hookName string) bool {
-	return contains(command, "same "+hookName) || contains(command, "same hook "+hookName)
+	// Handle both quoted and unquoted paths (e.g., "C:\...\same.exe" hook ...)
+	return contains(command, "same "+hookName) ||
+		contains(command, "same hook "+hookName) ||
+		contains(command, `same" `+hookName) ||
+		contains(command, `same.exe" `+hookName)
 }
 
 func contains(s, substr string) bool {
@@ -261,7 +267,7 @@ func findSubstring(s, substr string) bool {
 func detectBinaryPath() string {
 	// Check if 'same' is in PATH
 	if p, err := exec.LookPath("same"); err == nil {
-		return p
+		return quotePath(p)
 	}
 
 	// Check common install locations
@@ -274,12 +280,20 @@ func detectBinaryPath() string {
 
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
-			return p
+			return quotePath(p)
 		}
 	}
 
 	// Fall back to just "same" and hope it's in PATH at runtime
 	return "same"
+}
+
+// quotePath wraps a path in double quotes if it contains spaces (Windows paths).
+func quotePath(p string) string {
+	if runtime.GOOS == "windows" && strings.Contains(p, " ") {
+		return `"` + p + `"`
+	}
+	return p
 }
 
 // setupHooksInteractive prompts and sets up hooks.

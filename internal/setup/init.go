@@ -616,6 +616,13 @@ func detectVault(autoAccept bool) (string, error) {
 		}
 	} else if len(projectDocs) == 0 {
 		fmt.Println("  No vault markers or markdown files found.")
+		fmt.Println()
+		fmt.Printf("  %sYou can use this directory as a fresh vault.%s\n", cli.Dim, cli.Reset)
+		fmt.Printf("  %sSAME will create starter notes and directories for you.%s\n", cli.Dim, cli.Reset)
+		fmt.Println()
+		if confirm("  Set up SAME in this directory?", true) {
+			return cwd, nil
+		}
 	}
 
 	// Check common locations
@@ -806,6 +813,10 @@ func handleGitignore(vaultPath string, autoAccept bool) {
 	content, err := os.ReadFile(gitignorePath)
 	if err != nil {
 		// No .gitignore exists — create one with the full template
+		fmt.Println()
+		fmt.Printf("  %sA .gitignore tells git which files to keep private.%s\n", cli.Dim, cli.Reset)
+		fmt.Printf("  %sThis protects your database, API keys, and private notes%s\n", cli.Dim, cli.Reset)
+		fmt.Printf("  %sfrom accidentally being shared if you use git.%s\n", cli.Dim, cli.Reset)
 		if autoAccept || confirm("\n  Create .gitignore with privacy rules?", true) {
 			if err := os.WriteFile(gitignorePath, []byte(sameGitignoreTemplate), 0o644); err != nil {
 				fmt.Printf("  %s!%s Could not create .gitignore: %v\n",
@@ -828,7 +839,8 @@ func handleGitignore(vaultPath string, autoAccept bool) {
 		}
 	}
 
-	if autoAccept || confirm("\n  Add SAME privacy rules to .gitignore?", true) {
+	fmt.Printf("\n  %sThis keeps SAME's database and private notes out of git.%s\n", cli.Dim, cli.Reset)
+	if autoAccept || confirm("  Add SAME privacy rules to .gitignore?", true) {
 		f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			fmt.Printf("  %s!%s Could not update .gitignore: %v\n",

@@ -78,7 +78,12 @@ func Banner(version string) {
 		color := blueGradient[i%len(blueGradient)]
 		fmt.Printf("%s%s%s\n", color, line, Reset)
 	}
-	fmt.Printf("    %sStateless Agent Memory Engine v%s%s\n", Dim, version, Reset)
+	// version may already have "v" prefix from ldflags
+	v := version
+	if len(v) > 0 && v[0] != 'v' {
+		v = "v" + v
+	}
+	fmt.Printf("    %sStateless Agent Memory Engine %s%s\n", Dim, v, Reset)
 	fmt.Println()
 	fmt.Printf("  %sEvery AI session starts from zero.%s %s%sNot anymore.%s\n",
 		Dim, Reset, Bold, Red, Reset)

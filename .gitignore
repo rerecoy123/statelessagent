@@ -78,3 +78,10 @@ IMPLEMENTATION_PLAN.md
 # Session handoffs and local decisions (may contain PII, org names, strategy)
 sessions/
 decisions.md
+
+# MCP registry tokens (from mcp-publisher login)
+.mcpregistry_*
+
+# Forked repos (local clones for PRs)
+awesome-mcp-servers/
+awesome-mcp-servers-1/

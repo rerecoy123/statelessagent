@@ -333,11 +333,12 @@ Write-Host "  ${Bold}WHAT'S NEXT?${Reset}"
 Write-Host ""
 
 if (-not $MissingOllama -and -not $MissingNode) {
-    Write-Host "  Everything's ready! Run:"
+    Write-Host "  Everything's ready! Type this command and press Enter:"
     Write-Host ""
-    Write-Host "    ${Bold}same init${Reset}"
+    Write-Host "    ${Green}>${Reset} ${Bold}same init${Reset}"
     Write-Host ""
     Write-Host "  This walks you through setup step by step."
+    Write-Host "  ${Dim}(Just type 'same init' at the prompt below and hit Enter)${Reset}"
 } elseif ($MissingOllama -and $MissingNode) {
     Write-Host "  SAME is installed! Before running 'same init', you'll need:"
     Write-Host ""

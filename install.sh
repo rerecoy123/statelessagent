@@ -499,11 +499,12 @@ echo ""
 
 if [ "$MISSING_OLLAMA" = false ] && [ "$MISSING_NODE" = false ]; then
   # Everything's ready
-  echo "  Everything's ready! Run:"
+  echo "  Everything's ready! Type this command and press Enter:"
   echo ""
-  echo "    same init"
+  echo "    ${Green}>${Reset} ${Bold}same init${Reset}"
   echo ""
   echo "  This walks you through setup step by step."
+  echo "  ${Dim}(Just type 'same init' at the prompt below and hit Enter)${Reset}"
 elif [ "$MISSING_OLLAMA" = true ] && [ "$MISSING_NODE" = true ]; then
   # Missing both
   echo "  SAME is installed! Before running 'same init', you'll need:"
