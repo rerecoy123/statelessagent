@@ -232,7 +232,9 @@ func runStatus(jsonOut bool) error {
 		"context-surfacing",
 		"decision-extractor",
 		"handoff-generator",
+		"feedback-loop",
 		"staleness-check",
+		"session-bootstrap",
 	}
 	activeHooks := 0
 	for _, name := range hookNames {

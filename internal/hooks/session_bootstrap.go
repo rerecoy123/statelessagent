@@ -17,6 +17,7 @@ import (
 const (
 	bootstrapMaxChars    = 8000 // ~2000 tokens total
 	handoffMaxChars      = 4000 // ~1000 tokens — highest priority
+	pinnedMaxChars       = 2000 // ~500 tokens — always included
 	decisionsMaxChars    = 3000 // ~750 tokens
 	staleNotesMaxChars   = 1000 // ~250 tokens
 	decisionLookbackDays = 7
@@ -61,6 +62,15 @@ func runSessionBootstrap(db *store.DB, input *HookInput) *HookOutput {
 	// Priority 0b: Active instances (other Claude Code sessions)
 	if instances := findActiveInstances(sessionID); instances != "" {
 		sections = append(sections, instances)
+	}
+
+	// Priority 1: Pinned notes (always included — user's most important context)
+	if pinned := findPinnedNotesSection(db); pinned != "" {
+		sections = append(sections, pinned)
+		if !quiet {
+			n := strings.Count(pinned, "\n- ") + 1
+			fmt.Fprintf(os.Stderr, "same: 📌 %d pinned note(s) loaded\n", n)
+		}
 	}
 
 	// Priority 2: Active decisions (last 7 days)
@@ -410,6 +420,37 @@ func tryParseDate(s string) time.Time {
 	}
 
 	return time.Time{}
+}
+
+// findPinnedNotesSection returns pinned notes formatted for session bootstrap.
+// Pinned notes are the user's most important context — always included.
+func findPinnedNotesSection(db *store.DB) string {
+	pinned, err := db.GetPinnedNotes()
+	if err != nil || len(pinned) == 0 {
+		return ""
+	}
+
+	var parts []string
+	totalChars := 0
+	for _, rec := range pinned {
+		text := rec.Text
+		// Cap each note to keep total budget manageable
+		if len(text) > 500 {
+			text = text[:500] + "..."
+		}
+		entry := fmt.Sprintf("### %s\n%s", rec.Title, text)
+		if totalChars+len(entry) > pinnedMaxChars {
+			break
+		}
+		parts = append(parts, entry)
+		totalChars += len(entry)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return "## Pinned Notes\n" + strings.Join(parts, "\n\n")
 }
 
 // findStaleNotesSection reuses the existing staleness check logic.

@@ -74,3 +74,7 @@ npm/node_modules/
 # Ralph Loop (local dev tooling, contains machine-specific paths)
 ralph/
 IMPLEMENTATION_PLAN.md
+
+# Session handoffs and local decisions (may contain PII, org names, strategy)
+sessions/
+decisions.md

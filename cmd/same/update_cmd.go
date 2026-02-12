@@ -75,8 +75,9 @@ func runVersionCheck() error {
 
 	// C3: Use semver comparison instead of string comparison
 	if compareSemver(latestVer, currentVer) > 0 {
-		// Output as hook-compatible JSON for SessionStart hook
-		fmt.Printf(`{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"\n\n**SAME update available:** %s → %s\nRun: same update\n\n"}}`, currentVer, latestVer)
+		// Output as systemMessage for SessionStart hook
+		// (hookSpecificOutput is only valid for UserPromptSubmit/PostToolUse)
+		fmt.Printf(`{"systemMessage":"\n**SAME update available:** %s → %s\nRun: same update\n"}`, currentVer, latestVer)
 		fmt.Println()
 	}
 
