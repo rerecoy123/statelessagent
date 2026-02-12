@@ -280,15 +280,11 @@ func quotePath(p string) string {
 	return p
 }
 
-// setupHooksInteractive prompts and sets up hooks.
+// setupHooksInteractive installs hooks automatically — they're core to SAME working.
 func setupHooksInteractive(vaultPath string, autoAccept bool) {
-	// Use friendlier prompt text for non-developers
-	if autoAccept || confirm("  Connect to Claude Code? (recommended)", true) {
-		if err := SetupHooks(vaultPath); err != nil {
-			fmt.Printf("  %s!%s Could not set up connection: %v\n",
-				cli.Yellow, cli.Reset, err)
-		}
-	} else {
-		fmt.Println("  Skipped. Run 'same setup hooks' later if needed.")
+	if err := SetupHooks(vaultPath); err != nil {
+		fmt.Printf("  %s!%s Could not set up hooks: %v\n",
+			cli.Yellow, cli.Reset, err)
+		fmt.Printf("    Run %ssame setup hooks%s to try again.\n", cli.Bold, cli.Reset)
 	}
 }

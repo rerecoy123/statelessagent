@@ -205,15 +205,37 @@ func RunInit(opts InitOptions) error {
 	cli.Section("Ollama")
 	ollamaOK := true
 	if err := checkOllama(); err != nil {
-		// Offer lite mode instead of failing
-		fmt.Println()
-		fmt.Printf("  %s→%s You can still use SAME without Ollama (keyword search mode).\n", cli.Cyan, cli.Reset)
-		fmt.Printf("    %sSearch will use keywords instead of AI-powered semantic matching.%s\n", cli.Dim, cli.Reset)
-		fmt.Printf("    %sInstall Ollama later and run 'same reindex' to upgrade.%s\n\n", cli.Dim, cli.Reset)
-		if !opts.Yes && !confirm("  Continue without Ollama?", true) {
-			return fmt.Errorf("setup cancelled — install Ollama from https://ollama.com and try again")
+		if opts.Yes {
+			// Non-interactive (piped install) — silently fall back to lite mode
+			ollamaOK = false
+		} else {
+			// Interactive — make them really want to skip this
+			fmt.Println()
+			fmt.Printf("  %sOllama is what makes SAME powerful.%s Without it:\n\n", cli.Bold, cli.Reset)
+			fmt.Printf("    %sWith Ollama%s              %sWithout%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
+			fmt.Printf("    Semantic search           Keyword matching only\n")
+			fmt.Printf("    \"auth flow\" finds          \"auth flow\" misses\n")
+			fmt.Printf("    \"login system\"             \"login system\"\n")
+			fmt.Printf("    Understands %smeaning%s        Exact words only\n\n", cli.Bold, cli.Reset)
+			fmt.Printf("  %sStart Ollama and run 'same init' again for the full experience.%s\n\n", cli.Dim, cli.Reset)
+
+			if !confirm("  Skip Ollama and use keyword-only mode?", false) {
+				return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+			}
+
+			// They said yes — push back one more time
+			fmt.Println()
+			fmt.Printf("  %sSemantic search is SAME's core feature — it's the difference\n", cli.Dim)
+			fmt.Printf("  between your AI finding the right context and missing it entirely.%s\n\n", cli.Reset)
+			fmt.Printf("  Install Ollama anytime: %shttps://ollama.com%s\n", cli.Bold, cli.Reset)
+			fmt.Printf("  Then run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
+
+			if !confirm("  Are you sure you want keyword-only mode?", false) {
+				return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+			}
+
+			ollamaOK = false
 		}
-		ollamaOK = false
 	}
 
 	// Finding notes

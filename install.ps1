@@ -333,7 +333,7 @@ if (-not $MissingOllama -and -not $MissingNode) {
     Write-Host ""
     Write-Host "  ${Bold}Starting setup wizard...${Reset}"
     Write-Host ""
-    & same init
+    & same init --yes
 } else {
     Write-Host "-----------------------------------------------------------"
     Write-Host ""

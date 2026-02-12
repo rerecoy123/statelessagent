@@ -498,7 +498,7 @@ if [ "$MISSING_OLLAMA" = false ] && [ "$MISSING_NODE" = false ]; then
   echo ""
   echo -e "  ${BOLD}Starting setup wizard...${RESET}"
   echo ""
-  same init
+  same init --yes
 else
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
