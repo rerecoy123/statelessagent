@@ -1,4 +1,5 @@
 {
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.sgx-labs/same",
   "title": "SAME - Stateless Agent Memory Engine",
   "description": "Persistent memory for AI coding agents. Local-first, SQLite + vector search.",
@@ -10,28 +11,8 @@
   },
   "packages": [
     {
-      "registryType": "github-release",
-      "identifier": "sgx-labs/statelessagent",
-      "version": "0.7.0",
-      "transport": {
-        "type": "stdio"
-      },
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "mcp"
-        }
-      ],
-      "environmentVariables": [
-        {
-          "name": "VAULT_PATH",
-          "description": "Path to your markdown notes directory",
-          "required": true
-        }
-      ]
-    },
-    {
       "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@sgx-labs/same",
       "version": "0.7.0",
       "transport": {
@@ -47,7 +28,7 @@
         {
           "name": "VAULT_PATH",
           "description": "Path to your markdown notes directory",
-          "required": true
+          "isRequired": true
         }
       ]
     }

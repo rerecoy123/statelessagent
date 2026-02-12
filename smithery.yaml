@@ -15,8 +15,8 @@ configSchema:
 commandFunction:
   |-
   (config) => ({
-    command: 'same',
-    args: ['mcp', '--vault', config.vaultPath]
+    command: 'npx',
+    args: ['-y', '@sgx-labs/same', 'mcp', '--vault', config.vaultPath]
   })
 
 exampleConfig:
