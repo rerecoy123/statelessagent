@@ -11,6 +11,10 @@ $ErrorActionPreference = "Stop"
 
 # Colors - use [char]27 for PowerShell 5.1 compatibility
 $ESC = [char]27
+$B1 = "$ESC[38;5;117m"
+$B2 = "$ESC[38;5;75m"
+$B3 = "$ESC[38;5;69m"
+$B4 = "$ESC[38;5;33m"
 $Blue = "$ESC[38;5;75m"
 $Red = "$ESC[91m"
 $DarkRed = "$ESC[31m"
@@ -23,13 +27,18 @@ $Reset = "$ESC[0m"
 # Detect if terminal supports ANSI (Windows Terminal, PS7, etc)
 $supportsANSI = $env:WT_SESSION -or $PSVersionTable.PSVersion.Major -ge 7 -or $env:TERM_PROGRAM
 if (-not $supportsANSI) {
-    $Blue = ""; $Red = ""; $DarkRed = ""; $Green = ""; $Yellow = ""; $Dim = ""; $Bold = ""; $Reset = ""
+    $B1 = ""; $B2 = ""; $B3 = ""; $B4 = ""; $Blue = ""; $Red = ""; $DarkRed = ""; $Green = ""; $Yellow = ""; $Dim = ""; $Bold = ""; $Reset = ""
 }
 
 # Banner
 Write-Host ""
-Write-Host "${Blue}  SAME${Reset}"
-Write-Host "  ${Dim}Stateless Agent Memory Engine${Reset}"
+Write-Host "${B1}  ███████╗ █████╗ ███╗   ███╗███████╗${Reset}"
+Write-Host "${B2}  ██╔════╝██╔══██╗████╗ ████║██╔════╝${Reset}"
+Write-Host "${B2}  ███████╗███████║██╔████╔██║█████╗  ${Reset}"
+Write-Host "${B3}  ╚════██║██╔══██║██║╚██╔╝██║██╔══╝  ${Reset}"
+Write-Host "${B4}  ███████║██║  ██║██║ ╚═╝ ██║███████╗${Reset}"
+Write-Host "${B4}  ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝${Reset}"
+Write-Host "    ${Dim}Stateless Agent Memory Engine${Reset}"
 Write-Host ""
 Write-Host "${Dim}  Every AI session starts from zero.${Reset} ${Bold}${Red}Not anymore.${Reset}"
 Write-Host ""
