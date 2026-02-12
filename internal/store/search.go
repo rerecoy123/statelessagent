@@ -412,14 +412,14 @@ func (db *DB) KeywordSearchTitleMatch(terms []string, minMatches int, limit int,
 	var matchExprs []string
 	var args []interface{}
 	for _, term := range terms {
-		pattern := "%" + term + "%"
+		pattern := "%" + escapeLIKE(term) + "%"
 		if onlyTitle {
 			matchExprs = append(matchExprs,
-				"(CASE WHEN LOWER(n.title) LIKE LOWER(?) THEN 1 ELSE 0 END)")
+				`(CASE WHEN LOWER(n.title) LIKE LOWER(?) ESCAPE '\' THEN 1 ELSE 0 END)`)
 			args = append(args, pattern)
 		} else {
 			matchExprs = append(matchExprs,
-				"(CASE WHEN LOWER(n.title) LIKE LOWER(?) OR LOWER(n.path) LIKE LOWER(?) THEN 1 ELSE 0 END)")
+				`(CASE WHEN LOWER(n.title) LIKE LOWER(?) ESCAPE '\' OR LOWER(n.path) LIKE LOWER(?) ESCAPE '\' THEN 1 ELSE 0 END)`)
 			args = append(args, pattern, pattern)
 		}
 	}

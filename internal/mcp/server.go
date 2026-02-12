@@ -826,9 +826,16 @@ func neutralizeTags(text string) string {
 			closeTag := "</" + tag + ">"
 			openTag := "<" + tag + ">"
 			openTagAttr := "<" + tag + " " // tag with attributes
+			selfClose := "<" + tag + "/>"
 			if i+len(closeTag) <= len(text) && strings.ToLower(text[i:i+len(closeTag)]) == closeTag {
 				result.WriteString("[/" + tag + "]")
 				i += len(closeTag)
+				matched = true
+				break
+			}
+			if i+len(selfClose) <= len(text) && strings.ToLower(text[i:i+len(selfClose)]) == selfClose {
+				result.WriteString("[" + tag + "/]")
+				i += len(selfClose)
 				matched = true
 				break
 			}

@@ -93,6 +93,10 @@ func runSessionBootstrap(db *store.DB, input *HookInput) *HookOutput {
 
 	context := strings.Join(sections, "\n\n")
 
+	// SECURITY: Sanitize XML tags that could break the session-bootstrap wrapper
+	// or enable stored prompt injection via crafted handoff/decision content.
+	context = sanitizeContextTags(context)
+
 	// Enforce total budget
 	if len(context) > bootstrapMaxChars {
 		context = context[:bootstrapMaxChars]

@@ -217,7 +217,7 @@ func sanitizeContextTags(text string) string {
 	}
 
 	// Case-insensitive replacement: scan character-by-character and replace
-	// any matching XML open/close tag with bracket-escaped equivalents.
+	// any matching XML open/close/self-closing tag with bracket-escaped equivalents.
 	lower := strings.ToLower(text)
 	var result strings.Builder
 	result.Grow(len(text))
@@ -227,15 +227,29 @@ func sanitizeContextTags(text string) string {
 		for _, tag := range tagNames {
 			closeTag := "</" + tag + ">"
 			openTag := "<" + tag + ">"
+			openTagAttr := "<" + tag + " " // tag with attributes
+			selfClose := "<" + tag + "/>"
 			if i+len(closeTag) <= len(text) && lower[i:i+len(closeTag)] == closeTag {
 				result.WriteString("[/" + tag + "]")
 				i += len(closeTag)
 				matched = true
 				break
 			}
+			if i+len(selfClose) <= len(text) && lower[i:i+len(selfClose)] == selfClose {
+				result.WriteString("[" + tag + "/]")
+				i += len(selfClose)
+				matched = true
+				break
+			}
 			if i+len(openTag) <= len(text) && lower[i:i+len(openTag)] == openTag {
 				result.WriteString("[" + tag + "]")
 				i += len(openTag)
+				matched = true
+				break
+			}
+			if i+len(openTagAttr) <= len(text) && lower[i:i+len(openTagAttr)] == openTagAttr {
+				result.WriteString("[" + tag + " ")
+				i += len(openTagAttr)
 				matched = true
 				break
 			}
