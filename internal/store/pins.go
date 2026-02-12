@@ -1,6 +1,9 @@
 package store
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // PinNote pins a note path so it always appears in context surfacing.
 func (db *DB) PinNote(path string) error {
@@ -81,6 +84,10 @@ func (db *DB) GetPinnedNotes() ([]NoteRecord, error) {
 
 	var records []NoteRecord
 	for _, path := range pinnedPaths {
+		// F08: Skip _PRIVATE/ paths even if manually pinned
+		if upper := strings.ToUpper(path); strings.HasPrefix(upper, "_PRIVATE/") || strings.HasPrefix(upper, "_PRIVATE\\") {
+			continue
+		}
 		row := db.conn.QueryRow(
 			`SELECT id, path, title, tags, domain, workstream, chunk_id, chunk_heading,
 			        text, modified, content_hash, content_type, review_by, confidence, access_count

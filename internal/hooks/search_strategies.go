@@ -684,9 +684,11 @@ func makeScored(r store.RawSearchResult, comp, sem float64) scored {
 }
 
 // isPrivatePath returns true if the path is under the _PRIVATE/ directory.
+// Case-insensitive to match safeVaultPath() and filterPrivatePaths() behavior.
 func isPrivatePath(path string) bool {
-	return strings.HasPrefix(path, privateDirPrefix) ||
-		strings.HasPrefix(path, "_PRIVATE\\")
+	upper := strings.ToUpper(path)
+	return strings.HasPrefix(upper, "_PRIVATE/") ||
+		strings.HasPrefix(upper, "_PRIVATE\\")
 }
 
 // isNoisyPath returns true if the path matches a user-configured noise prefix.

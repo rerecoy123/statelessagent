@@ -207,6 +207,13 @@ func sanitizeContextTags(text string) string {
 		"vault-handoff",
 		"vault-decisions",
 		"same-diagnostic",
+		// F16: Additional tags used by AI systems that could enable prompt injection
+		"system-reminder",
+		"system",
+		"instructions",
+		"tool_result",
+		"tool_use",
+		"IMPORTANT",
 	}
 
 	// Case-insensitive replacement: scan character-by-character and replace

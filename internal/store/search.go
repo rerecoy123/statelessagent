@@ -57,6 +57,7 @@ func (db *DB) VectorSearch(queryVec []float32, opts SearchOptions) ([]SearchResu
 		FROM vault_notes_vec v
 		JOIN vault_notes n ON n.id = v.note_id
 		WHERE v.embedding MATCH ? AND k = ?
+			AND UPPER(n.path) NOT LIKE '_PRIVATE/%%'
 		ORDER BY v.distance`,
 		vecData, fetchK,
 	)
@@ -213,6 +214,7 @@ func (db *DB) VectorSearchRaw(queryVec []float32, fetchK int) ([]RawSearchResult
 		FROM vault_notes_vec v
 		JOIN vault_notes n ON n.id = v.note_id
 		WHERE v.embedding MATCH ? AND k = ?
+			AND UPPER(n.path) NOT LIKE '_PRIVATE/%%'
 		ORDER BY v.distance`,
 		vecData, fetchK,
 	)
@@ -264,17 +266,17 @@ func (db *DB) KeywordSearch(terms []string, limit int) ([]RawSearchResult, error
 	var matchExprs []string
 	var args []interface{}
 	for _, term := range terms {
-		pattern := "%" + term + "%"
+		pattern := "%" + escapeLIKE(term) + "%"
 		matchExprs = append(matchExprs,
-			"(CASE WHEN LOWER(n.title) LIKE LOWER(?) OR LOWER(n.text) LIKE LOWER(?) THEN 1 ELSE 0 END)")
+			`(CASE WHEN LOWER(n.title) LIKE LOWER(?) ESCAPE '\' OR LOWER(n.text) LIKE LOWER(?) ESCAPE '\' THEN 1 ELSE 0 END)`)
 		args = append(args, pattern, pattern)
 	}
 
 	// Build OR conditions: at least one term must match
 	var conditions []string
 	for _, term := range terms {
-		pattern := "%" + term + "%"
-		conditions = append(conditions, "(LOWER(n.title) LIKE LOWER(?) OR LOWER(n.text) LIKE LOWER(?))")
+		pattern := "%" + escapeLIKE(term) + "%"
+		conditions = append(conditions, `(LOWER(n.title) LIKE LOWER(?) ESCAPE '\' OR LOWER(n.text) LIKE LOWER(?) ESCAPE '\')`)
 		args = append(args, pattern, pattern)
 	}
 
@@ -340,12 +342,12 @@ func (db *DB) ContentTermSearch(terms []string, minTerms int, limit int) ([]RawS
 	var covArgs []interface{}
 	var freqArgs []interface{}
 	for _, term := range terms {
-		pattern := "%" + term + "%"
+		pattern := "%" + escapeLIKE(term) + "%"
 		coverageExprs = append(coverageExprs,
-			"(CASE WHEN SUM(CASE WHEN LOWER(n2.title) LIKE LOWER(?) OR LOWER(n2.text) LIKE LOWER(?) THEN 1 ELSE 0 END) > 0 THEN 1 ELSE 0 END)")
+			`(CASE WHEN SUM(CASE WHEN LOWER(n2.title) LIKE LOWER(?) ESCAPE '\' OR LOWER(n2.text) LIKE LOWER(?) ESCAPE '\' THEN 1 ELSE 0 END) > 0 THEN 1 ELSE 0 END)`)
 		covArgs = append(covArgs, pattern, pattern)
 		freqExprs = append(freqExprs,
-			"SUM(CASE WHEN LOWER(n2.text) LIKE LOWER(?) THEN 1 ELSE 0 END)")
+			`SUM(CASE WHEN LOWER(n2.text) LIKE LOWER(?) ESCAPE '\' THEN 1 ELSE 0 END)`)
 		freqArgs = append(freqArgs, pattern)
 	}
 	coverageExpr := strings.Join(coverageExprs, " + ")
@@ -368,7 +370,7 @@ func (db *DB) ContentTermSearch(terms []string, minTerms int, limit int) ([]RawS
 			n.domain, n.workstream, n.tags, n.content_type, n.confidence, n.modified
 		FROM vault_notes n
 		JOIN note_coverage nc ON n.path = nc.path
-		WHERE n.chunk_id = 0 AND nc.cov >= ?
+		WHERE n.chunk_id = 0 AND UPPER(n.path) NOT LIKE '_PRIVATE/%%' AND nc.cov >= ?
 		ORDER BY nc.cov DESC,
 			CAST(nc.chunk_freq * nc.chunk_freq AS REAL) / nc.chunk_count DESC,
 			n.modified DESC
@@ -838,6 +840,14 @@ func ExtractSearchTerms(query string) []string {
 
 // sanitizeFTS5Term strips FTS5 special operators from a search term to prevent
 // injection of FTS5 query syntax.
+// escapeLIKE escapes SQL LIKE wildcard characters (% and _) in a term
+// so they are matched literally. Use with ESCAPE '\' in the LIKE clause.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func escapeLIKE(term string) string {
+	return likeEscaper.Replace(term)
+}
+
 func sanitizeFTS5Term(term string) string {
 	return strings.Map(func(r rune) rune {
 		switch r {

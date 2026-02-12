@@ -19,7 +19,9 @@ import (
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
-const maxNoteSize = 100 * 1024 // 100KB max note content via MCP
+const maxNoteSize = 100 * 1024  // 100KB max note content via MCP
+const maxQueryLen = 10_000      // 10K chars max for search queries
+const maxReadSize = 1024 * 1024 // 1MB max for get_note reads
 
 var (
 	db              *store.DB
@@ -30,6 +32,34 @@ var (
 )
 
 const reindexCooldown = 60 * time.Second
+const writeRateLimit = 30               // max write operations per minute
+const writeRateWindow = 60 * time.Second // rate limit window
+
+// Write rate limiter — prevents rapid write abuse via prompt injection.
+var (
+	writeTimes []time.Time
+	writeMu    sync.Mutex
+)
+
+func checkWriteRateLimit() bool {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-writeRateWindow)
+	// Prune old entries
+	valid := writeTimes[:0]
+	for _, t := range writeTimes {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	writeTimes = valid
+	if len(writeTimes) >= writeRateLimit {
+		return false
+	}
+	writeTimes = append(writeTimes, now)
+	return true
+}
 
 // Version is set by the caller (main) before calling Serve.
 var Version = "dev"
@@ -78,76 +108,94 @@ func Serve() error {
 }
 
 func registerTools(server *mcp.Server) {
+	// Tool annotation helpers
+	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true}
+	boolPtr := func(b bool) *bool { return &b }
+	writeNonDestructive := &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true}
+	writeDestructive := &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}
+
 	// search_notes
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_notes",
 		Description: "Search the user's knowledge base for relevant notes, decisions, and context. Use this when you need background on a topic, want to find prior decisions, or need to understand project architecture.\n\nArgs:\n  query: Natural language search query (e.g. 'authentication approach', 'database schema decisions')\n  top_k: Number of results (default 10, max 100)\n\nReturns ranked list of matching notes with titles, paths, and text snippets.",
+		Annotations: readOnly,
 	}, handleSearchNotes)
 
 	// search_notes_filtered
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_notes_filtered",
 		Description: "Search the user's knowledge base with metadata filters. Use this when you want to narrow results by domain (e.g. 'engineering'), workstream (e.g. 'api-redesign'), or tags.\n\nArgs:\n  query: Natural language search query\n  top_k: Number of results (default 10, max 100)\n  domain: Filter by domain (e.g. 'engineering', 'product')\n  workstream: Filter by workstream/project name\n  tags: Comma-separated tags to filter by\n\nReturns filtered ranked list.",
+		Annotations: readOnly,
 	}, handleSearchNotesFiltered)
 
 	// get_note
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_note",
 		Description: "Read the full content of a note. Use this after search_notes returns a relevant result and you need the complete text. Paths are relative to the vault root.\n\nArgs:\n  path: Relative path from vault root (as returned by search_notes)\n\nReturns full markdown text content.",
+		Annotations: readOnly,
 	}, handleGetNote)
 
 	// find_similar_notes
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "find_similar_notes",
 		Description: "Find notes that cover similar topics to a given note. Use this to discover related context, find notes that might conflict, or build a broader picture of a topic.\n\nArgs:\n  path: Relative path of the source note\n  top_k: Number of similar notes (default 5, max 100)\n\nReturns list of related notes ranked by similarity.",
+		Annotations: readOnly,
 	}, handleFindSimilar)
 
 	// reindex
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "reindex",
 		Description: "Re-scan and re-index all markdown notes. Use this if the user has added or changed notes and search results seem stale. Incremental by default (only re-embeds changed files).\n\nArgs:\n  force: Re-embed all files regardless of changes (default false)\n\nReturns indexing statistics.",
+		Annotations: writeDestructive,
 	}, handleReindex)
 
 	// index_stats
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "index_stats",
 		Description: "Check the health and size of the note index. Use this to verify the index is up to date or to report stats to the user.\n\nReturns note count, chunk count, last indexed timestamp, embedding model info, and database size.",
+		Annotations: readOnly,
 	}, handleIndexStats)
 
 	// save_note (write-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_note",
 		Description: "Create or update a markdown note in the vault. The note is written to disk and indexed automatically.\n\nArgs:\n  path: Relative path within the vault (e.g. 'decisions/auth-approach.md')\n  content: Markdown content to write\n  append: If true, append to existing file instead of overwriting (default false)\n\nReturns confirmation with the saved path.",
+		Annotations: writeDestructive,
 	}, handleSaveNote)
 
 	// save_decision (write-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_decision",
 		Description: "Log a project decision. Appends to the decision log so future sessions can find it.\n\nArgs:\n  title: Short decision title (e.g. 'Use JWT for auth')\n  body: Full decision details — what was decided, why, alternatives considered\n  status: Decision status — 'accepted', 'proposed', or 'superseded' (default 'accepted')\n\nReturns confirmation.",
+		Annotations: writeNonDestructive,
 	}, handleSaveDecision)
 
 	// create_handoff (write-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_handoff",
 		Description: "Create a session handoff note so the next session picks up where this one left off. Write what you worked on, what's pending, and any blockers.\n\nArgs:\n  summary: What was accomplished this session\n  pending: What's left to do (optional)\n  blockers: Any blockers or open questions (optional)\n\nReturns path to the handoff note.",
+		Annotations: writeNonDestructive,
 	}, handleCreateHandoff)
 
 	// recent_activity (read-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "recent_activity",
 		Description: "Get recently modified notes. Use this to see what's changed recently or to orient yourself at the start of a session.\n\nArgs:\n  limit: Number of recent notes (default 10, max 50)\n\nReturns list of recently modified notes with titles and paths.",
+		Annotations: readOnly,
 	}, handleRecentActivity)
 
 	// get_session_context (read-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_session_context",
 		Description: "Get orientation context for a new session. Returns pinned notes, the latest handoff, and recent decisions — everything you need to pick up where the last session left off.\n\nReturns structured session context.",
+		Annotations: readOnly,
 	}, handleGetSessionContext)
 
 	// search_across_vaults (federated read-side)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_across_vaults",
-		Description: "Search across multiple registered vaults at once. Use this when you need context from other projects or want a cross-project view.\n\nArgs:\n  query: Natural language search query\n  top_k: Number of results (default 10, max 100)\n  vaults: Comma-separated vault aliases to search (default: all registered vaults)\n\nReturns ranked results annotated with their source vault.",
+		Description: "Search across multiple registered vaults at once. Use this instead of search_notes when you need context from other projects or want a cross-project view. Vaults must be registered first via the CLI (`same vault add <name> <path>`).\n\nArgs:\n  query: Natural language search query\n  top_k: Number of results (default 10, max 100)\n  vaults: Comma-separated vault aliases to search. Omit to search all registered vaults. Unknown aliases are silently skipped.\n\nReturns ranked results with titles, paths, snippets, and source vault name.",
+		Annotations: readOnly,
 	}, handleSearchAcrossVaults)
 }
 
@@ -212,6 +260,9 @@ type emptyInput struct{}
 // Tool handlers
 
 func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input searchInput) (*mcp.CallToolResult, any, error) {
+	if len(input.Query) > maxQueryLen {
+		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+	}
 	topK := clampTopK(input.TopK, 10)
 
 	queryVec, err := embedClient.GetQueryEmbedding(input.Query)
@@ -224,6 +275,7 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 		return textResult("Search error. Try running reindex() first."), nil, nil
 	}
 	results = filterPrivatePaths(results)
+	results = sanitizeResultSnippets(results)
 	if len(results) == 0 {
 		return textResult("No results found. The index may be empty — try running reindex() first."), nil, nil
 	}
@@ -233,6 +285,9 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 }
 
 func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, input searchFilteredInput) (*mcp.CallToolResult, any, error) {
+	if len(input.Query) > maxQueryLen {
+		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+	}
 	topK := clampTopK(input.TopK, 10)
 
 	queryVec, err := embedClient.GetQueryEmbedding(input.Query)
@@ -260,6 +315,7 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 		return textResult("Search error. Try running reindex() first."), nil, nil
 	}
 	results = filterPrivatePaths(results)
+	results = sanitizeResultSnippets(results)
 	if len(results) == 0 {
 		return textResult("No results found matching the filters."), nil, nil
 	}
@@ -274,11 +330,20 @@ func handleGetNote(ctx context.Context, req *mcp.CallToolRequest, input getInput
 		return textResult("Error: path must be a relative path within the vault."), nil, nil
 	}
 
-	content, err := os.ReadFile(safePath)
+	// F04: Check file size before reading to prevent OOM on very large files
+	info, err := os.Stat(safePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return textResult("File not found."), nil, nil
 		}
+		return textResult("Error reading file."), nil, nil
+	}
+	if info.Size() > maxReadSize {
+		return textResult(fmt.Sprintf("Error: file too large (%dKB). Maximum is %dKB.", info.Size()/1024, maxReadSize/1024)), nil, nil
+	}
+
+	content, err := os.ReadFile(safePath)
+	if err != nil {
 		return textResult("Error reading file."), nil, nil
 	}
 
@@ -354,6 +419,9 @@ func handleIndexStats(ctx context.Context, req *mcp.CallToolRequest, input empty
 // Write-side handlers
 
 func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNoteInput) (*mcp.CallToolResult, any, error) {
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+	}
 	if strings.TrimSpace(input.Path) == "" {
 		return textResult("Error: path is required."), nil, nil
 	}
@@ -390,7 +458,8 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 		if err != nil {
 			return textResult("Error: could not open file for appending."), nil, nil
 		}
-		_, err = f.WriteString(input.Content)
+		// F14: Add provenance marker for appended MCP content
+		_, err = f.WriteString("\n<!-- Appended via SAME MCP tool -->\n" + input.Content)
 		f.Close()
 		if err != nil {
 			return textResult("Error: could not write to file."), nil, nil
@@ -414,6 +483,9 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 }
 
 func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input saveDecisionInput) (*mcp.CallToolResult, any, error) {
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+	}
 	if strings.TrimSpace(input.Title) == "" {
 		return textResult("Error: title is required."), nil, nil
 	}
@@ -435,8 +507,12 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 	// Build decision entry
 	now := time.Now().Format("2006-01-02")
 	displayStatus := strings.ToUpper(status[:1]) + status[1:]
+	// F10: Sanitize title to prevent markdown/newline injection
+	safeTitle := strings.ReplaceAll(input.Title, "\n", " ")
+	safeTitle = strings.ReplaceAll(safeTitle, "\r", " ")
+
 	entry := fmt.Sprintf("\n## Decision: %s\n**Date:** %s\n**Status:** %s\n\n%s\n",
-		input.Title, now, displayStatus, input.Body)
+		safeTitle, now, displayStatus, input.Body)
 
 	// Get decision log path from config
 	cfg, _ := config.LoadConfig()
@@ -461,12 +537,20 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 		return textResult("Error: could not write to decision log."), nil, nil
 	}
 
-	indexer.Reindex(db, false)
+	// Index only the decision log file instead of a full vault reindex.
+	// This avoids O(n) work per call, preventing DoS on large vaults.
+	relPath := filepath.ToSlash(logName)
+	if err := indexer.IndexSingleFile(db, safePath, relPath, vaultRoot, embedClient); err != nil {
+		// Non-fatal: the decision was saved, just not indexed yet
+	}
 
 	return textResult(fmt.Sprintf("Decision logged: %s (%s)", input.Title, status)), nil, nil
 }
 
 func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input createHandoffInput) (*mcp.CallToolResult, any, error) {
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+	}
 	if strings.TrimSpace(input.Summary) == "" {
 		return textResult("Error: summary is required."), nil, nil
 	}
@@ -516,7 +600,10 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 		return textResult("Error: could not write handoff note."), nil, nil
 	}
 
-	indexer.Reindex(db, false)
+	// Index only the handoff file instead of a full vault reindex.
+	if err := indexer.IndexSingleFile(db, safePath, filepath.ToSlash(relPath), vaultRoot, embedClient); err != nil {
+		// Non-fatal: the handoff was saved, just not indexed yet
+	}
 
 	return textResult(fmt.Sprintf("Handoff saved: %s", relPath)), nil, nil
 }
@@ -613,6 +700,9 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 	if strings.TrimSpace(input.Query) == "" {
 		return textResult("Error: query is required."), nil, nil
 	}
+	if len(input.Query) > maxQueryLen {
+		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+	}
 
 	topK := clampTopK(input.TopK, 10)
 
@@ -634,8 +724,11 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 			if alias == "" {
 				continue
 			}
-			resolved := reg.ResolveVault(alias)
-			if resolved == "" {
+			// F13: Only resolve via registry map, not filesystem probing.
+			// ResolveVault falls through to os.Stat which would allow
+			// searching arbitrary paths not in the vault registry.
+			resolved, ok := reg.Vaults[alias]
+			if !ok || resolved == "" {
 				continue
 			}
 			dbPath := filepath.Join(resolved, ".same", "data", "vault.db")
@@ -671,6 +764,8 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 	}
 	results = filtered
 
+	results = sanitizeFederatedSnippets(results)
+
 	if len(results) == 0 {
 		return textResult(fmt.Sprintf("No results found across %d vault(s).", len(vaultDBPaths))), nil, nil
 	}
@@ -694,6 +789,69 @@ func textResult(text string) *mcp.CallToolResult {
 			&mcp.TextContent{Text: text},
 		},
 	}
+}
+
+// sanitizeResultSnippets neutralizes XML-like tags in search result snippets
+// that could enable prompt injection when returned to an AI agent via MCP.
+// This mirrors the tag list in hooks/text_processing.go sanitizeContextTags().
+func sanitizeResultSnippets(results []store.SearchResult) []store.SearchResult {
+	for i := range results {
+		results[i].Snippet = neutralizeTags(results[i].Snippet)
+	}
+	return results
+}
+
+func sanitizeFederatedSnippets(results []store.FederatedResult) []store.FederatedResult {
+	for i := range results {
+		results[i].Snippet = neutralizeTags(results[i].Snippet)
+	}
+	return results
+}
+
+// neutralizeTags replaces potentially dangerous XML tags with bracket equivalents.
+func neutralizeTags(text string) string {
+	tags := []string{
+		"vault-context", "plugin-context", "session-bootstrap",
+		"vault-handoff", "vault-decisions", "same-diagnostic",
+		"system-reminder", "system", "instructions",
+		"tool_result", "tool_use", "IMPORTANT",
+	}
+	lower := strings.ToLower(text)
+	var result strings.Builder
+	result.Grow(len(text))
+	i := 0
+	for i < len(text) {
+		matched := false
+		for _, tag := range tags {
+			closeTag := "</" + tag + ">"
+			openTag := "<" + tag + ">"
+			openTagAttr := "<" + tag + " " // tag with attributes
+			if i+len(closeTag) <= len(text) && strings.ToLower(text[i:i+len(closeTag)]) == closeTag {
+				result.WriteString("[/" + tag + "]")
+				i += len(closeTag)
+				matched = true
+				break
+			}
+			if i+len(openTag) <= len(text) && strings.ToLower(text[i:i+len(openTag)]) == openTag {
+				result.WriteString("[" + tag + "]")
+				i += len(openTag)
+				matched = true
+				break
+			}
+			if i+len(openTagAttr) <= len(text) && strings.ToLower(text[i:i+len(openTagAttr)]) == openTagAttr {
+				result.WriteString("[" + tag + " ")
+				i += len(openTagAttr)
+				matched = true
+				break
+			}
+		}
+		_ = lower // used above via strings.ToLower for case-insensitive match
+		if !matched {
+			result.WriteByte(text[i])
+			i++
+		}
+	}
+	return result.String()
 }
 
 func clampTopK(topK, defaultVal int) int {

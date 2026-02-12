@@ -39,39 +39,72 @@ git commit -m "Refactor: extract searchCmd to search_cmd.go"
 
 ```
 cmd/same/
-  main.go              # CLI entry point + commands (being decomposed)
-  guard_cmd.go         # Extracted: guard command (894 lines) — PATTERN TO FOLLOW
-  ci_cmd.go            # Extracted: ci command (336 lines) — PATTERN TO FOLLOW
+  main.go              # CLI entry point, command registration, shared helpers
+  ask_cmd.go           # RAG question-answering
+  bench_cmd.go         # Search performance benchmarks
+  ci_cmd.go            # CI workflow generation
+  config_cmd.go        # Config show/edit
+  demo_cmd.go          # Interactive demo
+  display_cmd.go       # Display mode switching
+  doctor_cmd.go        # 16 diagnostic checks
+  feedback_cmd.go      # Note relevance feedback
+  guard_cmd.go         # Push protection
+  hooks_cmd.go         # Hook status listing
+  index_cmd.go         # Reindex, stats, watch, migrate
+  init_cmd.go          # First-run setup
+  log_cmd.go           # Activity log
+  mcp_cmd.go           # MCP server launch + budget report
+  pin_cmd.go           # Pin/unpin notes
+  plugin_cmd.go        # Plugin management
+  repair_cmd.go        # Database recovery
+  search_cmd.go        # Search + federated search + related notes
+  status_cmd.go        # Vault status overview
+  tutorial_cmd.go      # Interactive tutorial
+  update_cmd.go        # Self-update
+  vault_cmd.go         # Multi-vault management + feed
 
 internal/
-  hooks/               # Claude Code hook handlers
-    context_surfacing.go  # 2150 lines (being decomposed)
-    session_recovery.go   # Crash recovery cascade
+  hooks/               # Claude Code hook handlers (20 files)
     runner.go             # Hook execution engine
+    context_surfacing.go  # UserPromptSubmit: surface relevant notes
+    session_bootstrap.go  # SessionStart: orient with handoff + decisions
+    session_recovery.go   # SessionStart: crash recovery cascade
+    staleness_check.go    # SessionStart: flag outdated notes
+    decision_extractor.go # Stop: extract decisions from transcript
+    handoff_generator.go  # Stop: generate session handoff
+    feedback.go           # Stop: track which notes were used
+    search_strategies.go  # Search dispatch (hybrid, FTS5, keyword)
+    term_extraction.go    # Query term extraction
+    text_processing.go    # Snippet/text utilities
+    injection.go          # Context injection formatting
+    embed.go              # Embedding helpers for hooks
     plugins.go            # Plugin system
+    instance_registry.go  # Multi-instance tracking
+    session_continuity.go # Session state persistence
+    conversation_mode.go  # Conversation mode detection
+    topic_change.go       # Topic change detection
+    graduation.go         # Feature discovery hints
+    verbose_logging.go    # Debug logging
   store/               # SQLite + sqlite-vec DB layer
-    db.go, notes.go, search.go, pins.go, ranking.go
-  config/              # Configuration, paths, vault override
-  embedding/           # Multi-provider embedding client
-  indexer/             # Vault file indexer
-  mcp/                 # MCP server implementation
-  memory/              # Decision/handoff extraction
-  setup/               # Init flow
-  ollama/              # Ollama HTTP client
-  guard/               # PII scanner
-  cli/                 # CLI utilities
-  watcher/             # File watcher
+    db.go                 # DB open/close, schema migration, helpers
+    notes.go              # Note CRUD operations
+    search.go             # Vector, hybrid, FTS5, federated search
+    pins.go               # Pinned notes
+    ranking.go            # Composite scoring (DO NOT CHANGE constants)
+    milestones.go         # Feature discovery milestones
+    sessions.go           # Session recovery data
+    usage.go              # Usage tracking and pruning
+  config/              # Configuration, paths, vault registry
+  embedding/           # Multi-provider embedding client (Ollama, OpenAI)
+  indexer/             # Vault file indexer + chunker + frontmatter parser
+  mcp/                 # MCP server — 12 tools (search, write, session mgmt)
+  memory/              # Decision/handoff extraction, budget reports
+  setup/               # Init flow, hook installation
+  ollama/              # Ollama HTTP client (generate)
+  guard/               # PII scanner, push protection
+  cli/                 # CLI formatting utilities (colors, box, header/footer)
+  watcher/             # File watcher for auto-reindex
 ```
-
-## Command Extraction Pattern
-
-When extracting a command from main.go to its own file:
-
-1. New file: `cmd/same/{name}_cmd.go`
-2. Package: `package main`
-3. Move: the `func xxxCmd() *cobra.Command` + helpers called ONLY by that command
-4. Keep in main.go: shared helpers used by multiple commands (e.g., `newEmbedProvider`, `compareSemver`, `openStoreForCmd`)
-5. Imports: only what the moved code needs
 
 ## Known Issues
 
