@@ -101,6 +101,9 @@ jobs:
   npm-publish:
     needs: release
     runs-on: ubuntu-latest
+    # npm requires 2FA (passkey) for publishing. CI token may not have bypass-2FA.
+    # If this job fails, publish locally: cd npm && npm publish --access public --auth-type=web
+    continue-on-error: true
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
