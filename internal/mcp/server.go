@@ -567,7 +567,7 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 	}
 
 	now := time.Now()
-	filename := fmt.Sprintf("%s-handoff.md", now.Format("2006-01-02"))
+	filename := fmt.Sprintf("%s-handoff.md", now.Format("2006-01-02T15-04"))
 	relPath := filepath.Join(handoffDir, filename)
 
 	safePath := safeVaultPath(relPath)
