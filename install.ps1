@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 
 # Colors - use [char]27 for PowerShell 5.1 compatibility
 $ESC = [char]27
+$Blue = "$ESC[38;5;75m"
 $Red = "$ESC[91m"
 $DarkRed = "$ESC[31m"
 $Green = "$ESC[32m"
@@ -22,12 +23,14 @@ $Reset = "$ESC[0m"
 # Detect if terminal supports ANSI (Windows Terminal, PS7, etc)
 $supportsANSI = $env:WT_SESSION -or $PSVersionTable.PSVersion.Major -ge 7 -or $env:TERM_PROGRAM
 if (-not $supportsANSI) {
-    $Red = ""; $DarkRed = ""; $Green = ""; $Yellow = ""; $Dim = ""; $Bold = ""; $Reset = ""
+    $Blue = ""; $Red = ""; $DarkRed = ""; $Green = ""; $Yellow = ""; $Dim = ""; $Bold = ""; $Reset = ""
 }
 
 # Banner
 Write-Host ""
-Write-Host "${Red}  STATELESS AGENT${Reset}"
+Write-Host "${Blue}  SAME${Reset}"
+Write-Host "  ${Dim}Stateless Agent Memory Engine${Reset}"
+Write-Host ""
 Write-Host "${Dim}  Every AI session starts from zero.${Reset} ${Bold}${Red}Not anymore.${Reset}"
 Write-Host ""
 

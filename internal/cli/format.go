@@ -25,20 +25,17 @@ const boxWidth = 40
 // Margin is the left indent for all branded output.
 const margin = "  "
 
-// ANSI 256-color red gradient — bright to dark, one per logo line.
-var redGradient = []string{
-	"\033[38;5;196m", // #ff1a1a bright red
-	"\033[38;5;196m", // #f01515
-	"\033[38;5;160m", // #e01010
-	"\033[38;5;160m", // #d00c0c
-	"\033[38;5;124m", // #bf0808
-	"\033[38;5;124m", // #af0505
-	"\033[38;5;124m", // #9e0404
-	"\033[38;5;88m",  // #8e0303
-	"\033[38;5;88m",  // #7d0202
-	"\033[38;5;88m",  // #6d0202
-	"\033[38;5;52m",  // #5c0101
-	"\033[38;5;52m",  // #4c0101
+// Blue constant for logo.
+const Blue = "\033[38;5;75m"
+
+// ANSI 256-color blue gradient — bright to deep, one per logo line.
+var blueGradient = []string{
+	"\033[38;5;117m", // bright sky blue
+	"\033[38;5;75m",  // sky blue
+	"\033[38;5;75m",  // sky blue
+	"\033[38;5;69m",  // medium blue
+	"\033[38;5;33m",  // blue
+	"\033[38;5;33m",  // blue
 }
 
 // ShortenHome replaces $HOME prefix with ~.
@@ -64,35 +61,27 @@ func FormatNumber(n int) string {
 	return FormatNumber(n/1000) + "," + fmt.Sprintf("%03d", n%1000)
 }
 
-// Banner prints the large STATELESS AGENT ASCII art logo with red gradient
+// Banner prints the SAME ASCII art logo with blue gradient
 // and tagline. Used by `same init`.
 func Banner(version string) {
 	logo := []string{
-		"  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557",
-		"  \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2588\u2588\u2554\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u255a\u2550\u2550\u2588\u2588\u2554\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d",
-		"  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551     \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557",
-		"  \u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551",
-		"  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2551  \u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551",
-		"  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d   \u255a\u2550\u255d   \u255a\u2550\u255d  \u255a\u2550\u255d   \u255a\u2550\u255d   \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d",
-		"           \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557",
-		"          \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u255a\u2550\u2550\u2588\u2588\u2554\u2550\u2550\u255d",
-		"          \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551   \u2588\u2588\u2551",
-		"          \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u255a\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551",
-		"          \u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551",
-		"          \u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u2550\u2550\u255d   \u255a\u2550\u255d",
+		"  ███████╗ █████╗ ███╗   ███╗███████╗",
+		"  ██╔════╝██╔══██╗████╗ ████║██╔════╝",
+		"  ███████╗███████║██╔████╔██║█████╗  ",
+		"  ╚════██║██╔══██║██║╚██╔╝██║██╔══╝  ",
+		"  ███████║██║  ██║██║ ╚═╝ ██║███████╗",
+		"  ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝",
 	}
 
 	fmt.Println()
 	for i, line := range logo {
-		color := redGradient[i%len(redGradient)]
+		color := blueGradient[i%len(blueGradient)]
 		fmt.Printf("%s%s%s\n", color, line, Reset)
 	}
+	fmt.Printf("    %sStateless Agent Memory Engine v%s%s\n", Dim, version, Reset)
 	fmt.Println()
 	fmt.Printf("  %sEvery AI session starts from zero.%s %s%sNot anymore.%s\n",
 		Dim, Reset, Bold, Red, Reset)
-	fmt.Println()
-	fmt.Printf("  %sSAME%s %s\u2014 Stateless Agent Memory Engine v%s%s\n",
-		Bold, Reset, Dim, version, Reset)
 }
 
 // Header prints a small heavy-border box with a title. Used by `same status` and `same doctor`.
