@@ -8,6 +8,10 @@
 [![MCP Tools](https://img.shields.io/badge/MCP_Tools-12-8A2BE2.svg)](#mcp-tools)
 [![Discord](https://img.shields.io/discord/1468523556076785757?color=5865F2&label=Discord&logo=discord&logoColor=white)](https://discord.gg/9KfTkcGs7g)
 
+<a href="https://glama.ai/mcp/servers/@sgx-labs/statelessagent">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@sgx-labs/statelessagent/badge" />
+</a>
+
 > **Your AI forgets everything between sessions. Not anymore.**
 
 Every time you start a new session with Claude Code, Cursor, or any AI coding tool, your agent starts from zero. Decisions you made yesterday? Gone. Context from last week? Gone. That architectural choice you spent 30 minutes discussing? You'll explain it again.
