@@ -30,7 +30,7 @@ func budgetCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "budget",
-		Short: "Show context utilization budget report",
+		Short: "See how much injected context your AI actually used",
 		Long:  "Analyze how much injected context Claude actually used. Tracks injection events and reference detection.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBudget(sessionID, lastN, jsonOut)

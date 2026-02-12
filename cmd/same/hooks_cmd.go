@@ -40,7 +40,7 @@ func hookSubCmd(name, short string) *cobra.Command {
 func hooksCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "hooks",
-		Short: "List available hooks and their installation status",
+		Short: "See which hooks are active",
 		Long: `Shows all available SAME hooks, what they do, and whether they are installed
 in your .claude/settings.json file.
 

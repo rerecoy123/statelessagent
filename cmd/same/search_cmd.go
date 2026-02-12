@@ -25,7 +25,7 @@ func searchCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "search [query]",
-		Short: "Search the vault from the command line",
+		Short: "Search your notes by meaning or keyword",
 		Long: `Search the current vault, or search across multiple vaults.
 
 Examples:

@@ -12,6 +12,11 @@ Search across all your vaults from one place. Manage multiple vaults from the CL
 - **`same vault feed`** — one-way note propagation between vaults. Copy notes from a source vault into the current vault's `fed/<alias>/` directory. Includes PII guard (scans for email/phone/SSN patterns), symlink rejection, 10MB file size limit, self-feed prevention, and `--dry-run` mode.
 - **`store.AllNotes()`** — returns all chunk_id=0 notes excluding `_PRIVATE/`, ordered by modified date.
 - **20 new tests** — `sanitizeAlias` (14 cases), `safeFeedPath` (19 cases), `FederatedSearch` (empty query, too many vaults, private note exclusion, mixed vault health, graceful skip).
+- **Progressive feature discovery** — CLI teaches new capabilities at the moment they become relevant. `vault add` hints about `--all` when 2+ vaults registered. `search` hints about `same related`. `reindex` hints about `same watch`. `status` shows available vaults and `same ask` when a chat model is detected. `doctor` validates vault registry health (16 checks total).
+
+### Fixed
+
+- **Vault registry Save() merge bug** — `same vault remove` silently failed because Save() re-read the registry from disk and merged back deleted entries. Removed merge logic so removes take effect immediately.
 
 ### Codebase
 
