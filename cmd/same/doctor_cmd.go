@@ -33,7 +33,7 @@ func doctorCmd() *cobra.Command {
 // DoctorResult represents a single health check result
 type DoctorResult struct {
 	Name    string `json:"name"`
-	Status  string `json:"status"` // "pass", "warn", "fail"
+	Status  string `json:"status"` // "pass", "skip", "fail"
 	Message string `json:"message,omitempty"`
 	Hint    string `json:"hint,omitempty"`
 }
@@ -44,7 +44,7 @@ type DoctorReport struct {
 	Summary struct {
 		Total   int `json:"total"`
 		Passed  int `json:"passed"`
-		Warned  int `json:"warned"`
+		Skipped int `json:"skipped"`
 		Failed  int `json:"failed"`
 	} `json:"summary"`
 }
@@ -68,7 +68,16 @@ func sanitizeErrorForJSON(err error) string {
 func runDoctor(jsonOut bool) error {
 	passed := 0
 	failed := 0
+	skipped := 0
 	var results []DoctorResult
+
+	// Probe Ollama once up front so embedding-dependent checks can skip gracefully.
+	ollamaAvailable := false
+	if embedClient, err := newEmbedProvider(); err == nil {
+		if _, err := embedClient.GetQueryEmbedding("test"); err == nil {
+			ollamaAvailable = true
+		}
+	}
 
 	check := func(name string, hint string, fn func() (string, error)) {
 		detail, err := fn()
@@ -106,6 +115,21 @@ func runDoctor(jsonOut bool) error {
 			}
 			passed++
 		}
+	}
+
+	// skip marks a check as skipped (lite mode) instead of failed.
+	skip := func(name string, reason string) {
+		if jsonOut {
+			results = append(results, DoctorResult{
+				Name:    name,
+				Status:  "skip",
+				Message: reason,
+			})
+		} else {
+			fmt.Printf("  %s-%s %s: %s\n",
+				cli.Dim, cli.Reset, name, reason)
+		}
+		skipped++
 	}
 
 	if !jsonOut {
@@ -169,72 +193,91 @@ func runDoctor(jsonOut bool) error {
 		return "empty", nil
 	})
 
-	// 3. Embedding provider
-	check("Ollama connection", "make sure Ollama is running (look for llama icon), or use keyword-only mode", func() (string, error) {
-		embedClient, err := newEmbedProvider()
-		if err != nil {
-			return "", fmt.Errorf("not connected (keyword search still works)")
-		}
-		_, err = embedClient.GetQueryEmbedding("test")
-		if err != nil {
-			return "", fmt.Errorf("Ollama not responding - is it running?")
-		}
-		return fmt.Sprintf("connected via %s", embedClient.Name()), nil
-	})
+	// 3. Embedding provider — skip gracefully in lite mode
+	if ollamaAvailable {
+		check("Ollama connection", "make sure Ollama is running (look for llama icon), or use keyword-only mode", func() (string, error) {
+			embedClient, err := newEmbedProvider()
+			if err != nil {
+				return "", fmt.Errorf("not connected (keyword search still works)")
+			}
+			return fmt.Sprintf("connected via %s", embedClient.Name()), nil
+		})
+	} else {
+		skip("Ollama connection", "skipped (lite mode — keyword search active)")
+	}
 
-	// 4. Vector search
-	check("Search working", "run 'same reindex' to rebuild", func() (string, error) {
-		db, err := store.Open()
-		if err != nil {
-			return "", err
-		}
-		defer db.Close()
+	// 4. Vector search — skip gracefully in lite mode
+	if ollamaAvailable {
+		check("Search working", "run 'same reindex' to rebuild", func() (string, error) {
+			db, err := store.Open()
+			if err != nil {
+				return "", err
+			}
+			defer db.Close()
 
-		embedClient, err := newEmbedProvider()
-		if err != nil {
-			return "", fmt.Errorf("provider error")
-		}
-		vec, err := embedClient.GetQueryEmbedding("test query")
-		if err != nil {
-			return "", fmt.Errorf("embedding failed")
-		}
+			embedClient, err := newEmbedProvider()
+			if err != nil {
+				return "", fmt.Errorf("provider error")
+			}
+			vec, err := embedClient.GetQueryEmbedding("test query")
+			if err != nil {
+				return "", fmt.Errorf("embedding failed")
+			}
 
-		results, err := db.VectorSearch(vec, store.SearchOptions{TopK: 1})
-		if err != nil {
-			return "", fmt.Errorf("search failed")
-		}
-		if len(results) == 0 {
-			return "", fmt.Errorf("no results")
-		}
-		return "", nil
-	})
+			results, err := db.VectorSearch(vec, store.SearchOptions{TopK: 1})
+			if err != nil {
+				return "", fmt.Errorf("search failed")
+			}
+			if len(results) == 0 {
+				return "", fmt.Errorf("no results")
+			}
+			return "", nil
+		})
+	} else {
+		skip("Search working", "skipped (lite mode — needs Ollama for vector search)")
+	}
 
-	// 5. Context surfacing
-	check("Finding relevant notes", "try 'same search <query>' to test", func() (string, error) {
-		db, err := store.Open()
-		if err != nil {
-			return "", err
-		}
-		defer db.Close()
+	// 5. Context surfacing — fall back to keyword test in lite mode
+	if ollamaAvailable {
+		check("Finding relevant notes", "try 'same search <query>' to test", func() (string, error) {
+			db, err := store.Open()
+			if err != nil {
+				return "", err
+			}
+			defer db.Close()
 
-		embedClient, err := newEmbedProvider()
-		if err != nil {
-			return "", fmt.Errorf("provider error")
-		}
-		vec, err := embedClient.GetQueryEmbedding("what notes are in this vault")
-		if err != nil {
-			return "", fmt.Errorf("embedding failed")
-		}
+			embedClient, err := newEmbedProvider()
+			if err != nil {
+				return "", fmt.Errorf("provider error")
+			}
+			vec, err := embedClient.GetQueryEmbedding("what notes are in this vault")
+			if err != nil {
+				return "", fmt.Errorf("embedding failed")
+			}
 
-		raw, err := db.VectorSearchRaw(vec, 3)
-		if err != nil {
-			return "", fmt.Errorf("raw search failed")
-		}
-		if len(raw) == 0 {
-			return "", fmt.Errorf("no results")
-		}
-		return "", nil
-	})
+			raw, err := db.VectorSearchRaw(vec, 3)
+			if err != nil {
+				return "", fmt.Errorf("raw search failed")
+			}
+			if len(raw) == 0 {
+				return "", fmt.Errorf("no results")
+			}
+			return "", nil
+		})
+	} else {
+		check("Finding relevant notes", "try 'same search <query>' to test", func() (string, error) {
+			db, err := store.Open()
+			if err != nil {
+				return "", err
+			}
+			defer db.Close()
+			noteCount, _ := db.NoteCount()
+			if noteCount == 0 {
+				return "", fmt.Errorf("no notes indexed")
+			}
+			return fmt.Sprintf("keyword search (%s notes)", cli.FormatNumber(noteCount)), nil
+		})
+	}
 
 	// 6. Private content excluded
 	check("Private folders hidden", "'same reindex --force' to refresh", func() (string, error) {
@@ -445,7 +488,7 @@ func runDoctor(jsonOut bool) error {
 		}
 		report.Summary.Total = len(results)
 		report.Summary.Passed = passed
-		report.Summary.Warned = 0 // Currently no warnings, only pass/fail
+		report.Summary.Skipped = skipped
 		report.Summary.Failed = failed
 
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -460,9 +503,15 @@ func runDoctor(jsonOut bool) error {
 		return nil
 	}
 
-	cli.Box([]string{
-		fmt.Sprintf("%d passed, %d failed", passed, failed),
-	})
+	summary := fmt.Sprintf("%d passed, %d failed", passed, failed)
+	if skipped > 0 {
+		summary += fmt.Sprintf(", %d skipped", skipped)
+	}
+	lines := []string{summary}
+	if !ollamaAvailable {
+		lines = append(lines, "SAME is running in lite mode (keyword search). Install Ollama for semantic search.")
+	}
+	cli.Box(lines)
 
 	cli.Footer()
 

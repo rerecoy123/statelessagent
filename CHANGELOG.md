@@ -2,8 +2,16 @@
 
 ## v0.7.4 — Quality Pass
 
+### Added
+
+- **CLI help grouping** — `same --help` now organizes commands into 6 logical groups: Getting Started, Search & Discovery, Knowledge Management, Diagnostics, Configuration, and Advanced. Makes it easy to find what you need.
+- **Doctor lite mode** — `same doctor` no longer fails when Ollama isn't running. Embedding-dependent checks show "skipped (lite mode)" instead of red failures, and the summary shows "SAME is running in lite mode (keyword search). Install Ollama for semantic search."
+- **Readable search scores** — search results show human labels ("Excellent match", "Strong match", "Good match", "Weak match") instead of raw percentages.
+- **MCP tool list on setup** — `same init` and `same setup mcp` now print all 12 available MCP tools with descriptions after registering the server.
+
 ### Fixed
 
+- **Token budget starvation** — context surfacing now continues scanning past oversized notes instead of stopping. If a large note doesn't fit in the remaining token budget, smaller high-relevance notes behind it can still be included.
 - **Config clobber during init** — `SetDisplayMode()` and `SetProfile()` now load from the target vault's config file instead of auto-detecting. Previously, when CWD != vaultPath, they would fall back to `DefaultConfig()` and overwrite the just-written config with empty/default values.
 - **DefaultConfig embedding model** — `DefaultConfig().Embedding.Model` now returns `"nomic-embed-text"` instead of empty string, preventing broken config files when the default is serialized.
 - **Onboarding "1" input** — `confirm()` now accepts `"1"` as yes, matching the mental model users have after the numbered experience-level prompt (1/2).

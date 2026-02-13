@@ -128,38 +128,74 @@ Need help? https://discord.gg/9KfTkcGs7g`,
 		},
 	}
 
-	root.AddCommand(initCmd())
+	// Command groups for organized --help output
+	root.AddGroup(
+		&cobra.Group{ID: "start", Title: "Getting Started:"},
+		&cobra.Group{ID: "search", Title: "Search & Discovery:"},
+		&cobra.Group{ID: "knowledge", Title: "Knowledge Management:"},
+		&cobra.Group{ID: "diagnostics", Title: "Diagnostics:"},
+		&cobra.Group{ID: "config", Title: "Configuration:"},
+		&cobra.Group{ID: "advanced", Title: "Advanced:"},
+	)
+
+	addGrouped := func(group string, cmds ...*cobra.Command) {
+		for _, c := range cmds {
+			c.GroupID = group
+			root.AddCommand(c)
+		}
+	}
+
+	addGrouped("start",
+		initCmd(),
+		demoCmd(),
+		tutorialCmd(),
+	)
+
+	addGrouped("search",
+		searchCmd(),
+		askCmd(),
+		relatedCmd(),
+	)
+
+	addGrouped("knowledge",
+		pinCmd(),
+		feedbackCmd(),
+		vaultCmd(),
+	)
+
+	addGrouped("diagnostics",
+		statusCmd(),
+		doctorCmd(),
+		logCmd(),
+		hooksCmd(),
+	)
+
+	addGrouped("config",
+		configCmd(),
+		displayCmd(),
+		profileCmd(),
+		setupSubCmd(),
+		reindexCmd(),
+	)
+
+	addGrouped("advanced",
+		mcpCmd(),
+		guardCmd(),
+		watchCmd(),
+		benchCmd(),
+		ciCmd(),
+	)
+
+	// Ungrouped (hidden or internal)
 	root.AddCommand(versionCmd())
 	root.AddCommand(updateCmd())
-	root.AddCommand(reindexCmd())
 	root.AddCommand(statsCmd())
 	root.AddCommand(migrateCmd())
 	root.AddCommand(hookCmd())
-	root.AddCommand(hooksCmd())
-	root.AddCommand(mcpCmd())
-	root.AddCommand(benchCmd())
-	root.AddCommand(searchCmd())
-	root.AddCommand(relatedCmd())
-	root.AddCommand(doctorCmd())
 	root.AddCommand(budgetCmd())
-	root.AddCommand(vaultCmd())
-	root.AddCommand(watchCmd())
 	root.AddCommand(pluginCmd())
-	root.AddCommand(statusCmd())
-	root.AddCommand(logCmd())
-	root.AddCommand(configCmd())
-	root.AddCommand(setupSubCmd())
-	root.AddCommand(displayCmd())
-	root.AddCommand(profileCmd())
-	root.AddCommand(guardCmd())
 	root.AddCommand(pushAllowCmd())
-	root.AddCommand(ciCmd())
 	root.AddCommand(repairCmd())
-	root.AddCommand(feedbackCmd())
-	root.AddCommand(pinCmd())
-	root.AddCommand(askCmd())
-	root.AddCommand(demoCmd())
-	root.AddCommand(tutorialCmd())
 
 	// Global --vault flag
 	root.PersistentFlags().StringVar(&config.VaultOverride, "vault", "", "Vault name or path (overrides auto-detect)")
@@ -195,7 +231,6 @@ func formatDuration(d time.Duration) string {
 
 func formatRelevance(score float64) string {
 	// score is 0-1, higher is better
-	pct := int(score * 100)
 	stars := int(score * 5)
 	if stars > 5 {
 		stars = 5
@@ -205,7 +240,20 @@ func formatRelevance(score float64) string {
 	}
 	filled := strings.Repeat("★", stars)
 	empty := strings.Repeat("☆", 5-stars)
-	return fmt.Sprintf("%s%s %d%%", filled, empty, pct)
+
+	var label string
+	switch {
+	case score >= 0.90:
+		label = "Excellent match"
+	case score >= 0.70:
+		label = "Strong match"
+	case score >= 0.50:
+		label = "Good match"
+	default:
+		label = "Weak match"
+	}
+
+	return fmt.Sprintf("%s%s %s", filled, empty, label)
 }
 
 // ---------- error helpers ----------

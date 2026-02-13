@@ -50,7 +50,26 @@ func SetupMCP(vaultPath string) error {
 		return fmt.Errorf("write .mcp.json: %w", err)
 	}
 
-	fmt.Println("  → .mcp.json (MCP server)")
+	fmt.Println("  → .mcp.json (MCP server registered with 12 tools)")
+	fmt.Println()
+	fmt.Println("  Available tools:")
+	tools := []struct{ name, desc string }{
+		{"search_notes", "Search your knowledge base"},
+		{"search_notes_filtered", "Search with domain/tag filters"},
+		{"get_note", "Read full note content"},
+		{"find_similar_notes", "Find related notes by topic"},
+		{"save_note", "Create or update a note"},
+		{"save_decision", "Log a project decision"},
+		{"create_handoff", "Write a session handoff"},
+		{"get_session_context", "Get orientation for a new session"},
+		{"recent_activity", "See recently modified notes"},
+		{"reindex", "Rebuild the search index"},
+		{"index_stats", "Check index health and size"},
+		{"search_across_vaults", "Search across all vaults"},
+	}
+	for _, t := range tools {
+		fmt.Printf("    %-24s %s\n", t.name, t.desc)
+	}
 	return nil
 }
 

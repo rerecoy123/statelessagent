@@ -299,8 +299,9 @@ Suggested actions for the user:
 		}
 	}
 
-	// Build context string, capped at token budget
-	// Track which candidates are included vs excluded
+	// Build context string, capped at token budget.
+	// Continue past oversized candidates — a large note that doesn't fit
+	// shouldn't prevent smaller, high-relevance notes behind it from being included.
 	var parts []string
 	var included []scored
 	var excluded []scored
@@ -334,6 +335,7 @@ Suggested actions for the user:
 		candidates[i].matchTerms = findMatchingTerms(promptTerms, candidates[i].title, candidates[i].snippet)
 
 		if totalTokens+entryTokens > maxTokenBudget {
+			// Skip this note but keep scanning — smaller notes may still fit
 			excluded = append(excluded, candidates[i])
 			continue
 		}
