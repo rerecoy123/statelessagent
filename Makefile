@@ -10,7 +10,7 @@ export CGO_ENABLED := 1
 # Also disable zig's ubsan which causes linker errors on cross-compile
 CROSS_CFLAGS := -I$(CURDIR)/cgo-headers -fno-sanitize=undefined
 
-.PHONY: all build clean test darwin-arm64 darwin-amd64 linux-amd64 windows-amd64 cross-all install
+.PHONY: all build clean test precheck darwin-arm64 darwin-amd64 linux-amd64 windows-amd64 cross-all install
 
 all: build
 
@@ -19,6 +19,9 @@ build:
 
 test:
 	go test -race ./... -v -count=1
+
+precheck:
+	@/usr/bin/env bash .scripts/precheck.sh
 
 # Native macOS arm64 build (native CC, no zig needed)
 darwin-arm64:

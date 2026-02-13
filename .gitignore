@@ -62,6 +62,9 @@ website/playbook/
 
 # Local research & strategy notes (never commit — may contain competitive intel, PII)
 .research/
+
+# Development knowledge base (bugs, fixes, checklists — may reference internal details)
+.devlog/
 docs/eval-methodology.md
 docs/security-research.md
 docs/strategy-and-vision.md
