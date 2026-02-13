@@ -28,10 +28,11 @@ var welcomeNotes embed.FS
 
 // InitOptions controls the init wizard behavior.
 type InitOptions struct {
-	Yes     bool   // skip all prompts, accept defaults
-	MCPOnly bool   // skip hooks setup (for Cursor/Windsurf users)
-	Verbose bool   // show detailed progress (each file being processed)
-	Version string
+	Yes       bool   // skip all prompts, accept defaults
+	MCPOnly   bool   // skip hooks setup (for Cursor/Windsurf users)
+	HooksOnly bool   // skip MCP setup (Claude Code only)
+	Verbose   bool   // show detailed progress (each file being processed)
+	Version   string
 }
 
 // ExperienceLevel represents the user's coding experience.
@@ -201,40 +202,57 @@ func RunInit(opts InitOptions) error {
 		experience = askExperienceLevel()
 	}
 
-	// Checking Ollama
-	cli.Section("Ollama")
+	// Checking embedding provider
+	embedProvider := config.EmbeddingProvider()
 	ollamaOK := true
-	if err := checkOllama(); err != nil {
-		if opts.Yes {
-			// Non-interactive (piped install) — silently fall back to lite mode
-			ollamaOK = false
-		} else {
-			// Interactive — make them really want to skip this
-			fmt.Println()
-			fmt.Printf("  %sOllama is what makes SAME powerful.%s Without it:\n\n", cli.Bold, cli.Reset)
-			fmt.Printf("    %sWith Ollama%s              %sWithout%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
-			fmt.Printf("    Semantic search           Keyword matching only\n")
-			fmt.Printf("    \"auth flow\" finds          \"auth flow\" misses\n")
-			fmt.Printf("    \"login system\"             \"login system\"\n")
-			fmt.Printf("    Understands %smeaning%s        Exact words only\n\n", cli.Bold, cli.Reset)
-			fmt.Printf("  %sStart Ollama and run 'same init' again for the full experience.%s\n\n", cli.Dim, cli.Reset)
 
-			if !confirm("  Skip Ollama and use keyword-only mode?", false) {
-				return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+	if embedProvider == "openai" || embedProvider == "openai-compatible" {
+		// User has configured an alternate provider — skip Ollama check
+		cli.Section("Embeddings")
+		fmt.Printf("  %s✓%s Using %s provider\n", cli.Green, cli.Reset, embedProvider)
+		ec := config.EmbeddingProviderConfig()
+		if ec.Model != "" {
+			fmt.Printf("  %s✓%s Model: %s\n", cli.Green, cli.Reset, ec.Model)
+		}
+		if ec.BaseURL != "" && ec.BaseURL != "https://api.openai.com" {
+			fmt.Printf("  %s✓%s Endpoint: %s\n", cli.Green, cli.Reset, ec.BaseURL)
+		}
+	} else {
+		cli.Section("Ollama")
+		if err := checkOllama(); err != nil {
+			if opts.Yes {
+				// Non-interactive (piped install) — silently fall back to lite mode
+				ollamaOK = false
+			} else {
+				// Interactive — make them really want to skip this
+				fmt.Println()
+				fmt.Printf("  %sOllama is what makes SAME powerful.%s Without it:\n\n", cli.Bold, cli.Reset)
+				fmt.Printf("    %sWith Ollama%s              %sWithout%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
+				fmt.Printf("    Semantic search           Keyword matching only\n")
+				fmt.Printf("    \"auth flow\" finds          \"auth flow\" misses\n")
+				fmt.Printf("    \"login system\"             \"login system\"\n")
+				fmt.Printf("    Understands %smeaning%s        Exact words only\n\n", cli.Bold, cli.Reset)
+				fmt.Printf("  %sStart Ollama and run 'same init' again for the full experience.%s\n\n", cli.Dim, cli.Reset)
+				fmt.Printf("  %sAlternative:%s set SAME_EMBED_PROVIDER to 'openai' or 'openai-compatible'\n", cli.Dim, cli.Reset)
+				fmt.Printf("  %sfor llama.cpp, VLLM, LM Studio, or OpenAI API.%s\n\n", cli.Dim, cli.Reset)
+
+				if !confirm("  Skip Ollama and use keyword-only mode?", false) {
+					return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+				}
+
+				// They said yes — push back one more time
+				fmt.Println()
+				fmt.Printf("  %sSemantic search is SAME's core feature — it's the difference\n", cli.Dim)
+				fmt.Printf("  between your AI finding the right context and missing it entirely.%s\n\n", cli.Reset)
+				fmt.Printf("  Install Ollama anytime: %shttps://ollama.com%s\n", cli.Bold, cli.Reset)
+				fmt.Printf("  Then run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
+
+				if !confirm("  Are you sure you want keyword-only mode?", false) {
+					return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+				}
+
+				ollamaOK = false
 			}
-
-			// They said yes — push back one more time
-			fmt.Println()
-			fmt.Printf("  %sSemantic search is SAME's core feature — it's the difference\n", cli.Dim)
-			fmt.Printf("  between your AI finding the right context and missing it entirely.%s\n\n", cli.Reset)
-			fmt.Printf("  Install Ollama anytime: %shttps://ollama.com%s\n", cli.Bold, cli.Reset)
-			fmt.Printf("  Then run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
-
-			if !confirm("  Are you sure you want keyword-only mode?", false) {
-				return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
-			}
-
-			ollamaOK = false
 		}
 	}
 
@@ -256,9 +274,10 @@ func RunInit(opts InitOptions) error {
 	// Create seed directories
 	createSeedStructure(vaultPath)
 
-	// Indexing
+	// Indexing — use full mode if any embedding provider is available
+	useEmbeddings := ollamaOK || embedProvider == "openai" || embedProvider == "openai-compatible"
 	cli.Section("Indexing")
-	stats, err := runIndex(vaultPath, opts.Verbose, ollamaOK)
+	stats, err := runIndex(vaultPath, opts.Verbose, useEmbeddings)
 	if err != nil {
 		return err
 	}
@@ -280,7 +299,9 @@ func RunInit(opts InitOptions) error {
 	if !opts.MCPOnly {
 		setupHooksInteractive(vaultPath, opts.Yes)
 	}
-	setupMCPInteractive(vaultPath, opts.Yes)
+	if !opts.HooksOnly {
+		setupMCPInteractive(vaultPath, opts.Yes)
+	}
 	setupGuardInteractive(vaultPath, opts.Yes)
 
 	// Setup complete + summary box
@@ -1056,10 +1077,11 @@ func runTestSearch(vaultPath string) string {
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
+		BaseURL:    ec.BaseURL,
 		Dimensions: ec.Dimensions,
 	}
-	// Only pass the Ollama URL to the Ollama provider
-	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
+	// For ollama provider, use the legacy [ollama] URL if no base_url is set
+	if (provCfg.Provider == "ollama" || provCfg.Provider == "") && provCfg.BaseURL == "" {
 		ollamaURL, err := config.OllamaURL()
 		if err != nil {
 			return ""

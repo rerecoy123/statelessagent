@@ -60,6 +60,16 @@ func EmbeddingDim() int {
 			return 384
 		case "snowflake-arctic-embed":
 			return 1024
+		case "snowflake-arctic-embed2":
+			return 768
+		case "embeddinggemma":
+			return 768
+		case "qwen3-embedding":
+			return 1024
+		case "nomic-embed-text-v2-moe":
+			return 768
+		case "bge-m3":
+			return 1024
 		default:
 			return 768
 		}

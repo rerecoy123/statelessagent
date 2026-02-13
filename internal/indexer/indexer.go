@@ -57,10 +57,11 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
+		BaseURL:    ec.BaseURL,
 		Dimensions: ec.Dimensions,
 	}
-	// Only pass the Ollama URL to the Ollama provider
-	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
+	// For ollama provider, use the legacy [ollama] URL if no base_url is set
+	if (provCfg.Provider == "ollama" || provCfg.Provider == "") && provCfg.BaseURL == "" {
 		ollamaURL, err := config.OllamaURL()
 		if err != nil {
 			return nil, fmt.Errorf("ollama URL: %w", err)

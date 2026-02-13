@@ -344,7 +344,7 @@ url = "http://localhost:11434"
 
 [embedding]
 provider = "ollama"           # "ollama" (default) or "openai"
-model = "nomic-embed-text"    # or "text-embedding-3-small" for openai
+model = "nomic-embed-text"    # see supported models below
 # api_key = ""                # required for openai, or set SAME_EMBED_API_KEY
 
 [memory]
@@ -360,6 +360,23 @@ handoff_generator = true
 feedback_loop = true
 staleness_check = true
 ```
+
+Supported embedding models (auto-detected dimensions):
+
+| Model | Dims | Notes |
+|-------|------|-------|
+| `nomic-embed-text` | 768 | Default. Great balance of quality and speed |
+| `snowflake-arctic-embed2` | 768 | Recommended upgrade. Best retrieval in its size class |
+| `mxbai-embed-large` | 1024 | Highest overall MTEB average |
+| `all-minilm` | 384 | Lightweight (~90MB). Good for constrained hardware |
+| `snowflake-arctic-embed` | 1024 | v1 large model |
+| `embeddinggemma` | 768 | Google's Gemma-based embeddings |
+| `qwen3-embedding` | 1024 | Qwen3 with 32K context |
+| `nomic-embed-text-v2-moe` | 768 | MoE upgrade from nomic |
+| `bge-m3` | 1024 | Multilingual (BAAI) |
+| `text-embedding-3-small` | 1536 | OpenAI cloud API |
+
+Any model not listed works too — set dimensions explicitly with `SAME_EMBED_DIMS`.
 
 Configuration priority (highest wins):
 

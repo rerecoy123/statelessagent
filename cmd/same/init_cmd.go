@@ -8,9 +8,10 @@ import (
 
 func initCmd() *cobra.Command {
 	var (
-		yes     bool
-		mcpOnly bool
-		verbose bool
+		yes       bool
+		mcpOnly   bool
+		hooksOnly bool
+		verbose   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -26,15 +27,17 @@ What it does:
 Run this command from inside your project folder.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setup.RunInit(setup.InitOptions{
-				Yes:     yes,
-				MCPOnly: mcpOnly,
-				Verbose: verbose,
-				Version: Version,
+				Yes:       yes,
+				MCPOnly:   mcpOnly,
+				HooksOnly: hooksOnly,
+				Verbose:   verbose,
+				Version:   Version,
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "Accept all defaults without prompting")
 	cmd.Flags().BoolVar(&mcpOnly, "mcp-only", false, "Skip hooks setup (for Cursor/Windsurf users)")
+	cmd.Flags().BoolVar(&hooksOnly, "hooks-only", false, "Skip MCP setup (Claude Code only)")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show each file being processed")
 	return cmd
 }

@@ -54,12 +54,17 @@ type tagsResponse struct {
 
 // embedModels are known embedding-only models that can't do generation.
 var embedModels = map[string]bool{
-	"nomic-embed-text": true,
-	"mxbai-embed-large": true,
-	"all-minilm": true,
-	"snowflake-arctic-embed": true,
-	"bge-base-en": true,
-	"bge-large-en": true,
+	"nomic-embed-text":       true,
+	"nomic-embed-text-v2-moe": true,
+	"mxbai-embed-large":      true,
+	"all-minilm":             true,
+	"snowflake-arctic-embed":  true,
+	"snowflake-arctic-embed2": true,
+	"embeddinggemma":          true,
+	"qwen3-embedding":         true,
+	"bge-base-en":             true,
+	"bge-large-en":            true,
+	"bge-m3":                  true,
 }
 
 // ListChatModels returns available chat/instruct models (excludes embedding models).

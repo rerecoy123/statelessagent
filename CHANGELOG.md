@@ -6,6 +6,16 @@
 
 - **OpenAI-compatible embedding provider** — SAME now supports any server that exposes the OpenAI-compatible `/v1/embeddings` endpoint. Use `provider = "openai-compatible"` with llama.cpp, VLLM, LM Studio, or any other compatible inference engine. API key is optional for local servers. Configure via `[embedding]` in config or `SAME_EMBED_PROVIDER` / `SAME_EMBED_BASE_URL` / `SAME_EMBED_MODEL` environment variables.
 - **Non-localhost security warning** — when using an OpenAI-compatible provider with a remote base URL, SAME prints a warning that embedding requests will leave your machine. Local servers (localhost, 127.0.0.1, ::1) are silent.
+- **`--hooks-only` flag for init** — `same init --hooks-only` skips MCP setup for Claude Code-only workflows (mirrors existing `--mcp-only` for Cursor/Windsurf).
+- **Expanded embedding model support** — auto-detected dimensions for 5 new models: `snowflake-arctic-embed2` (768), `embeddinggemma` (768), `qwen3-embedding` (1024), `nomic-embed-text-v2-moe` (768), `bge-m3` (1024). All recognized in dimension defaults and embedding-only model filter.
+- **Provider-aware onboarding** — `same init` detects `openai`/`openai-compatible` providers and skips the Ollama connectivity check, showing provider/model/endpoint info instead.
+- **Pre-release verification gate** — `make precheck` runs 9 automated checks (version consistency, build, tests, PII scan, git identity, JSON validation, CLI smoke test).
+
+### Fixed
+
+- **`SAME_EMBED_BASE_URL` missing from `LoadConfig()`** — the env var was handled in `EmbeddingProviderConfig()` but not in the config-file loader, causing inconsistency when both paths were used.
+- **`OPENAI_API_KEY` fallback for `openai-compatible`** — `LoadConfig()` now checks the env var for both `openai` and `openai-compatible` providers.
+- **`BaseURL` not passed to embedding provider** — `indexer.go` and `init.go` now pass the configured `BaseURL` when constructing embedding providers, fixing silent failures when using `openai-compatible` with a custom endpoint.
 
 ## v0.7.4 — Quality Pass
 
