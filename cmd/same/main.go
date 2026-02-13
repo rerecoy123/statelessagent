@@ -86,18 +86,18 @@ func compareSemver(a, b string) int {
 }
 
 // newEmbedProvider creates an embedding provider from config.
-// Only passes the Ollama base URL to the Ollama provider; OpenAI uses its own default.
 func newEmbedProvider() (embedding.Provider, error) {
 	ec := config.EmbeddingProviderConfig()
 	cfg := embedding.ProviderConfig{
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
+		BaseURL:    ec.BaseURL,
 		Dimensions: ec.Dimensions,
 	}
 
-	// Only pass the Ollama URL to the Ollama provider
-	if cfg.Provider == "ollama" || cfg.Provider == "" {
+	// For ollama provider, use the legacy [ollama] URL if no base_url is set
+	if (cfg.Provider == "ollama" || cfg.Provider == "") && cfg.BaseURL == "" {
 		ollamaURL, err := config.OllamaURL()
 		if err != nil {
 			return nil, fmt.Errorf("ollama URL: %w", err)

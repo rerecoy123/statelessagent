@@ -116,9 +116,10 @@ type MemoryConfig struct {
 
 // EmbeddingConfig holds embedding provider settings.
 type EmbeddingConfig struct {
-	Provider   string `toml:"provider"`   // "ollama" (default), "openai"
+	Provider   string `toml:"provider"`   // "ollama" (default), "openai", "openai-compatible"
 	Model      string `toml:"model"`      // model name (provider-specific default if empty)
-	APIKey     string `toml:"api_key"`    // API key for cloud providers
+	APIKey     string `toml:"api_key"`    // API key (required for openai, optional for openai-compatible)
+	BaseURL    string `toml:"base_url"`   // base URL for embedding API (provider-specific default if empty)
 	Dimensions int    `toml:"dimensions"` // vector dimensions (0 = provider default)
 }
 
@@ -498,10 +499,13 @@ func EmbeddingProviderConfig() EmbeddingConfig {
 	if v := os.Getenv("SAME_EMBED_MODEL"); v != "" {
 		ec.Model = v
 	}
+	if v := os.Getenv("SAME_EMBED_BASE_URL"); v != "" {
+		ec.BaseURL = v
+	}
 	if v := os.Getenv("SAME_EMBED_API_KEY"); v != "" {
 		ec.APIKey = v
 	}
-	if ec.APIKey == "" && ec.Provider == "openai" {
+	if ec.APIKey == "" && (ec.Provider == "openai" || ec.Provider == "openai-compatible") {
 		if v := os.Getenv("OPENAI_API_KEY"); v != "" {
 			ec.APIKey = v
 		}

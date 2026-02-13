@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -17,34 +18,59 @@ const (
 	openaiRetryBase  = 2 * time.Second // delays: 0s, 2s, 4s
 )
 
-// OpenAIProvider generates embeddings via the OpenAI API.
+// OpenAIProvider generates embeddings via the OpenAI API or any
+// OpenAI-compatible endpoint (llama.cpp, VLLM, LM Studio, etc.).
 type OpenAIProvider struct {
 	httpClient *http.Client
 	baseURL    string
 	model      string
 	apiKey     string
 	dims       int
+	name       string // "openai" or "openai-compatible"
 }
 
-// newOpenAIProvider creates an OpenAI embedding provider.
+// newOpenAIProvider creates an OpenAI or OpenAI-compatible embedding provider.
+// API key is required for api.openai.com but optional for local/custom endpoints
+// (llama.cpp, VLLM, LM Studio, etc.).
 func newOpenAIProvider(cfg ProviderConfig) (*OpenAIProvider, error) {
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("openai embedding provider requires an API key (set SAME_EMBED_API_KEY or embedding.api_key in config)")
-	}
-
-	model := cfg.Model
-	if model == "" {
-		model = "text-embedding-3-small"
-	}
-
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
 
+	// API key is only required for the real OpenAI API
+	isOpenAI := baseURL == "https://api.openai.com"
+	if isOpenAI && cfg.APIKey == "" {
+		return nil, fmt.Errorf("openai embedding provider requires an API key (set SAME_EMBED_API_KEY or embedding.api_key in config)")
+	}
+
+	model := cfg.Model
+	if model == "" {
+		if isOpenAI {
+			model = "text-embedding-3-small"
+		} else {
+			return nil, fmt.Errorf("openai-compatible provider requires a model name (set SAME_EMBED_MODEL or embedding.model in config)")
+		}
+	}
+
 	dims := cfg.Dimensions
 	if dims == 0 {
-		dims = openaiDefaultDims(model)
+		if isOpenAI {
+			dims = openaiDefaultDims(model)
+		}
+		// For local servers, dims=0 means accept whatever the server returns
+	}
+
+	name := "openai"
+	if !isOpenAI {
+		name = "openai-compatible"
+		// Warn if embedding requests will leave localhost
+		if u, err := url.Parse(baseURL); err == nil {
+			host := u.Hostname()
+			if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+				fmt.Fprintf(os.Stderr, "same: warning: embedding requests will be sent to remote server (%s)\n", u.Host)
+			}
+		}
 	}
 
 	return &OpenAIProvider{
@@ -53,10 +79,11 @@ func newOpenAIProvider(cfg ProviderConfig) (*OpenAIProvider, error) {
 		model:      model,
 		apiKey:     cfg.APIKey,
 		dims:       dims,
+		name:       name,
 	}, nil
 }
 
-func (p *OpenAIProvider) Name() string    { return "openai" }
+func (p *OpenAIProvider) Name() string    { return p.name }
 func (p *OpenAIProvider) Model() string   { return p.model }
 func (p *OpenAIProvider) Dimensions() int { return p.dims }
 
@@ -151,7 +178,9 @@ func (p *OpenAIProvider) doEmbedRequest(body []byte) ([]float32, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {

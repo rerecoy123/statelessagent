@@ -3,6 +3,8 @@
 // Supported providers:
 //   - ollama (default): Local embeddings via Ollama. No API keys, fully private.
 //   - openai: OpenAI text-embedding-3-small/large. Requires OPENAI_API_KEY.
+//   - openai-compatible: Any server that exposes OpenAI-compatible /v1/embeddings
+//     (llama.cpp, VLLM, LM Studio, etc.). API key optional.
 package embedding
 
 import (
@@ -49,10 +51,10 @@ func NewProvider(cfg ProviderConfig) (Provider, error) {
 	switch cfg.Provider {
 	case "", "ollama":
 		return newOllamaProvider(cfg)
-	case "openai":
+	case "openai", "openai-compatible":
 		return newOpenAIProvider(cfg)
 	default:
-		return nil, fmt.Errorf("unknown embedding provider: %q (supported: ollama, openai)", cfg.Provider)
+		return nil, fmt.Errorf("unknown embedding provider: %q (supported: ollama, openai, openai-compatible)", cfg.Provider)
 	}
 }
 
