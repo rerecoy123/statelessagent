@@ -187,9 +187,11 @@ func LoadConfig() (*Config, error) {
 	// Try to load TOML config file
 	configPath := findConfigFile()
 	if configPath != "" {
-		if _, err := toml.DecodeFile(configPath, cfg); err != nil {
+		meta, err := toml.DecodeFile(configPath, cfg)
+		if err != nil {
 			return nil, fmt.Errorf("parse config %s: %w", configPath, err)
 		}
+		warnUnknownKeys(meta, configPath)
 	}
 
 	// Environment variables override TOML values
@@ -259,9 +261,11 @@ func LoadConfigFrom(configPath string) (*Config, error) {
 
 	if configPath != "" {
 		if _, err := os.Stat(configPath); err == nil {
-			if _, err := toml.DecodeFile(configPath, cfg); err != nil {
+			meta, err := toml.DecodeFile(configPath, cfg)
+			if err != nil {
 				return nil, fmt.Errorf("parse config %s: %w", configPath, err)
 			}
+			warnUnknownKeys(meta, configPath)
 		}
 	}
 
@@ -561,6 +565,45 @@ func ConfigWarning() string {
 // FindConfigFile returns the path to the active config file, or empty string if none found.
 func FindConfigFile() string {
 	return findConfigFile()
+}
+
+// configSuggestions maps common wrong keys to the correct TOML key name.
+var configSuggestions = map[string]string{
+	"exclude_paths": "skip_dirs",
+	"exclude_dirs":  "skip_dirs",
+	"skip_paths":    "skip_dirs",
+	"ignored_dirs":  "skip_dirs",
+	"ignore_dirs":   "skip_dirs",
+	"excludes":      "skip_dirs",
+	"noise":         "noise_paths",
+	"apikey":        "api_key",
+	"api-key":       "api_key",
+	"baseurl":       "base_url",
+	"base-url":      "base_url",
+	"token_budget":  "max_token_budget",
+	"budget":        "max_token_budget",
+}
+
+// warnUnknownKeys prints warnings for unrecognized config keys.
+func warnUnknownKeys(meta toml.MetaData, configPath string) {
+	undecoded := meta.Undecoded()
+	if len(undecoded) == 0 {
+		return
+	}
+
+	fname := filepath.Base(configPath)
+	for _, key := range undecoded {
+		keyStr := key.String()
+		lastPart := key[len(key)-1]
+
+		if suggestion, ok := configSuggestions[lastPart]; ok {
+			fmt.Fprintf(os.Stderr, "same: WARNING: unknown key %q in %s — did you mean %q?\n",
+				keyStr, fname, suggestion)
+		} else {
+			fmt.Fprintf(os.Stderr, "same: WARNING: unknown key %q in %s (will be ignored)\n",
+				keyStr, fname)
+		}
+	}
 }
 
 // defaultSkipDirs are directories to skip during vault walks.

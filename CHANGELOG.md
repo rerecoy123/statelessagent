@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- **Unknown config keys now warn** — unrecognized keys in `config.toml` print a warning with suggestions (e.g. `exclude_paths` → `skip_dirs`). Previously unknown keys were silently ignored.
+- **Welcome notes skip existing vaults** — `same init` no longer creates `welcome/` in vaults that already have markdown files. Governed vaults with existing structure are left untouched.
 - **`SAME_EMBED_BASE_URL` missing from `LoadConfig()`** — the env var was handled in `EmbeddingProviderConfig()` but not in the config-file loader, causing inconsistency when both paths were used.
 - **`OPENAI_API_KEY` fallback for `openai-compatible`** — `LoadConfig()` now checks the env var for both `openai` and `openai-compatible` providers.
 - **`BaseURL` not passed to embedding provider** — `indexer.go` and `init.go` now pass the configured `BaseURL` when constructing embedding providers, fixing silent failures when using `openai-compatible` with a custom endpoint.

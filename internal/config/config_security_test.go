@@ -176,6 +176,54 @@ func TestLoadConfig_AllEnvVars(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_UnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, ".same")
+	os.MkdirAll(configDir, 0o755)
+
+	// Config with unknown keys — should not error but should warn
+	os.WriteFile(filepath.Join(configDir, "config.toml"),
+		[]byte(`[vault]
+exclude_paths = ["_Raw", "Scratch"]
+path = "/home/user/notes"
+
+[embedding]
+provider = "ollama"
+`), 0o644)
+
+	t.Setenv("VAULT_PATH", dir)
+	VaultOverride = dir
+	defer func() { VaultOverride = "" }()
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("unknown keys should not cause error: %v", err)
+	}
+	// Valid keys should still be parsed (VAULT_PATH env overrides toml path, so check provider)
+	if cfg.Embedding.Provider != "ollama" {
+		t.Errorf("expected embedding provider to be parsed, got %q", cfg.Embedding.Provider)
+	}
+}
+
+func TestConfigSuggestions(t *testing.T) {
+	// Verify the suggestions map has expected entries
+	tests := []struct {
+		wrong   string
+		correct string
+	}{
+		{"exclude_paths", "skip_dirs"},
+		{"exclude_dirs", "skip_dirs"},
+		{"skip_paths", "skip_dirs"},
+		{"apikey", "api_key"},
+		{"base-url", "base_url"},
+	}
+	for _, tt := range tests {
+		if got, ok := configSuggestions[tt.wrong]; !ok || got != tt.correct {
+			t.Errorf("configSuggestions[%q] = %q, want %q", tt.wrong, got, tt.correct)
+		}
+	}
+}
+
 func TestLoadConfig_NoEnvVars(t *testing.T) {
 	// Unset all SAME-related env vars
 	t.Setenv("VAULT_PATH", "")

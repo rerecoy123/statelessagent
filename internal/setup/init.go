@@ -579,6 +579,12 @@ func copyWelcomeNotes(vaultPath string) {
 		return
 	}
 
+	// Skip welcome notes if the vault already has markdown content.
+	// Governed vaults (with CLAUDE.md, README.md, etc.) don't need starter notes.
+	if vaultHasNotes(vaultPath) {
+		return
+	}
+
 	// Create the directory
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		// Silently skip if we can't create the directory
@@ -615,6 +621,21 @@ func copyWelcomeNotes(vaultPath string) {
 		fmt.Printf("    %sThese get indexed so your first search finds results%s\n",
 			cli.Dim, cli.Reset)
 	}
+}
+
+// vaultHasNotes checks if the vault root already contains markdown files.
+// Used to skip welcome note generation for vaults with existing content.
+func vaultHasNotes(vaultPath string) bool {
+	entries, err := os.ReadDir(vaultPath)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			return true
+		}
+	}
+	return false
 }
 
 // detectVault finds or prompts for the vault path.
