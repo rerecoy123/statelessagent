@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.8.0 — Seed Installer
+
+One-command install of pre-built knowledge vaults. `same seed install claude-code-power-user` downloads, extracts, indexes, and registers a seed vault — ready to search in seconds.
+
+### Added
+
+- **`same seed` command group** — browse and install pre-built knowledge vaults:
+  - `same seed list` — show available seeds with note counts and descriptions. Flags: `--refresh`, `--json`
+  - `same seed install <name>` — download, extract, index, and register a seed vault. Flags: `--path`, `--force`, `--no-index`
+  - `same seed info <name>` — show detailed seed metadata (audience, tags, requirements)
+  - `same seed remove <name>` — uninstall a seed vault. Flags: `--yes`, `--keep-files`
+- **8 official seed vaults** — Claude Code Power User, AI Agent Architecture, Security Audit Framework, DevOps Runbooks, Indie Hacker Playbook, Open Source Launch Kit, Freelancer Business Kit, Personal Productivity OS. Browse at [github.com/sgx-labs/seed-vaults](https://github.com/sgx-labs/seed-vaults)
+- **Seed manifest registry** — `seeds.json` hosted in seed-vaults repo with schema versioning, 1-hour client-side cache, stale-cache fallback on network errors
+- **Automatic lite mode fallback** — seed install falls back to keyword-only indexing when Ollama isn't available
+- **Version compatibility check** — seeds declare `min_same_version`; install rejects incompatible seeds with upgrade guidance
+
+### Security
+
+- **Tarball extraction hardening** — path traversal prevention (null bytes, `../`, absolute paths, hidden files), symlink + hardlink rejection, file extension allowlist (`.md`, `.toml`, `.json`, `.txt`, `.yml`, `.yaml`, `.example`, `.gitkeep`), per-file 10MB size limit, 500 file count limit, 50MB total tarball limit, final containment check after `filepath.Join`
+- **Manifest validation** — `io.LimitReader` on HTTP response (1MB max), schema version check, seed name validation (lowercase alphanumeric + hyphens only)
+- **Install safety** — atomic cleanup on failure (partial install removed), `--force` required to overwrite, `seed remove` only deletes under `~/same-seeds/` (safety boundary), vault registration uses existing lockfile pattern
+- **Seed name validation** — lowercase alphanumeric with hyphens, 64-char max, no leading/trailing hyphens
+
+---
+
 ## v0.7.5 — OpenAI-Compatible Embeddings
 
 ### Added

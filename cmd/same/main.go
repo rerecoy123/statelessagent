@@ -149,6 +149,7 @@ Need help? https://discord.gg/9KfTkcGs7g`,
 		initCmd(),
 		demoCmd(),
 		tutorialCmd(),
+		seedCmd(),
 	)
 
 	addGrouped("search",

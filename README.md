@@ -141,11 +141,32 @@ Your markdown notes are embedded locally via Ollama and stored in a SQLite datab
 | `same tutorial` | 6 hands-on lessons | No |
 | `same doctor` | 16 diagnostic checks | No |
 | Push protection | Safety rails for multi-agent workflows | No |
+| `same seed install` | One-command install of pre-built knowledge vaults | No* |
 | Cross-vault federation | Search across all vaults at once | No* |
 | MCP server (12 tools) | Works with any MCP client | No* |
 | Privacy tiers | `_PRIVATE/` never indexed, `research/` never committed | No |
 
 *Semantic mode requires Ollama; keyword fallback is automatic.
+
+---
+
+## Seed Vaults
+
+Pre-built knowledge vaults that give your AI expert-level context in one command.
+
+```bash
+same seed install claude-code-power-user
+```
+
+| Seed | Notes | What you get |
+|------|:-----:|-------------|
+| `claude-code-power-user` | 50 | Master-level Claude Code patterns, workflows, and tricks |
+| `ai-agent-architecture` | 56 | Agent design patterns, orchestration, memory strategies |
+| `personal-productivity-os` | 118 | GTD, time blocking, habit systems, review frameworks |
+
+8 seeds available. Browse with `same seed list`.
+
+[Browse all seeds](https://github.com/sgx-labs/seed-vaults)
 
 ---
 
@@ -313,6 +334,10 @@ Requires Go 1.25+ and CGO.
 | `same setup hooks` | Install Claude Code hooks |
 | `same setup mcp` | Register MCP server |
 | `same hooks` | Show hook status and descriptions |
+| `same seed list` | Browse available seed vaults |
+| `same seed install <name>` | Download and install a seed vault |
+| `same seed info <name>` | Show seed details |
+| `same seed remove <name>` | Uninstall a seed vault |
 | `same vault list\|add\|remove\|default` | Manage multiple vaults |
 | `same vault feed <source>` | Propagate notes from another vault (with PII guard) |
 | `same guard settings set push-protect on` | Enable push protection |
@@ -506,6 +531,8 @@ All evaluation uses synthetic vault data with known relevance judgments. No user
 **Is my data sent anywhere?** SAME is fully local. Context surfaced to your AI tool is sent to that tool's API as part of your conversation, same as pasting it manually.
 
 **How much disk space?** 5-15MB for a few hundred notes.
+
+**What are seeds?** Pre-built knowledge vaults. Install one and your AI has expert-level context immediately. `same seed list` to browse, `same seed install <name>` to install. All local, all free.
 
 **Can I use multiple vaults?** Yes. `same vault add work ~/work-notes && same vault default work`. Search across all of them with `same search --all "your query"` or via the `search_across_vaults` MCP tool.
 
