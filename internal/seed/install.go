@@ -7,10 +7,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/indexer"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
+
+// PrintLegalNotice prints the standard legal disclaimer for seed content.
+// Call this once after any seed install to avoid duplicating the notice.
+func PrintLegalNotice() {
+	fmt.Printf("\n  %sNote: Seed content is AI-generated and provided as-is.%s\n", cli.Dim, cli.Reset)
+	fmt.Printf("  %sSee LICENSE in the seed directory for details.%s\n", cli.Dim, cli.Reset)
+}
 
 // DefaultSeedDir returns the default parent directory for seed installations.
 func DefaultSeedDir() string {
@@ -62,6 +70,11 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 		}
 	}
 
+	// 3b. Reject seeds with no content (before download)
+	if seed.NoteCount == 0 {
+		return nil, fmt.Errorf("seed %q has no content", seed.Name)
+	}
+
 	// 4. Resolve destination path
 	destDir := opts.Path
 	if destDir == "" {
@@ -70,6 +83,14 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 	absDir, err := filepath.Abs(destDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
+	}
+
+	// 4b. Reject installing into CWD when an explicit path was given
+	if opts.Path != "" {
+		cwd, _ := os.Getwd()
+		if absDir == cwd {
+			return nil, fmt.Errorf("refusing to install into current directory — use ~/same-seeds/<name> or a dedicated path")
+		}
 	}
 
 	// 5. Check if directory exists

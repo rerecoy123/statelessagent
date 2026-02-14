@@ -20,6 +20,7 @@ import (
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/embedding"
 	"github.com/sgx-labs/statelessagent/internal/indexer"
+	"github.com/sgx-labs/statelessagent/internal/seed"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -374,14 +375,11 @@ func RunInit(opts InitOptions) error {
 		fmt.Println()
 		fmt.Printf("  Your AI will remember your decisions, your architecture,\n")
 		fmt.Printf("  your preferences — across every session.\n")
+		fmt.Println()
+		fmt.Printf("  %sTip:%s Explore pre-built knowledge vaults with %ssame seed list%s\n",
+			cli.Bold, cli.Reset, cli.Bold, cli.Reset)
 	} else {
-		fmt.Printf("  %sYour vault is ready but empty.%s\n", cli.Bold, cli.Reset)
-		fmt.Println()
-		fmt.Printf("  Add markdown (.md) files to this directory, then either:\n")
-		fmt.Printf("  %s→%s Run %ssame reindex%s to update manually\n", cli.Cyan, cli.Reset, cli.Bold, cli.Reset)
-		fmt.Printf("  %s→%s Or just start a Claude/Cursor session — SAME picks up new files automatically\n", cli.Cyan, cli.Reset)
-		fmt.Println()
-		fmt.Printf("  Try dropping in a README.md, meeting notes, or architecture docs.\n")
+		offerSeedInstall(opts)
 	}
 	fmt.Println()
 	fmt.Printf("  Run %ssame status%s anytime to check on things.\n", cli.Bold, cli.Reset)
@@ -395,6 +393,131 @@ func RunInit(opts InitOptions) error {
 	cli.Footer()
 
 	return nil
+}
+
+// offerSeedInstall prompts the user to install a seed vault when the vault is empty.
+// The flow is opt-in at every step: Enter always skips.
+// Returns true if a seed was successfully installed.
+func offerSeedInstall(opts InitOptions) bool {
+	if opts.Yes {
+		return false // non-interactive mode, skip
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Printf("  %sYour vault is ready but empty.%s\n", cli.Bold, cli.Reset)
+	fmt.Println()
+	fmt.Printf("  Want to explore seed vaults? Pre-built knowledge bases your AI can search.\n")
+	fmt.Printf("  Browse seeds? [y/N]: ")
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println() // handle EOF/Ctrl+D gracefully
+		return false
+	}
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line != "y" && line != "yes" {
+		// User skipped — show tips
+		fmt.Println()
+		fmt.Printf("  No problem! Add markdown (.md) files to this directory, then either:\n")
+		fmt.Printf("  %s→%s Run %ssame reindex%s to update manually\n", cli.Cyan, cli.Reset, cli.Bold, cli.Reset)
+		fmt.Printf("  %s→%s Or just start a Claude/Cursor session — SAME picks up new files automatically\n", cli.Cyan, cli.Reset)
+		fmt.Println()
+		fmt.Printf("  %sInstall seeds anytime with: same seed list%s\n", cli.Dim, cli.Reset)
+		return false
+	}
+
+	// Fetch manifest — gracefully handle network failure
+	manifest, err := seed.FetchManifest(false)
+	if err != nil {
+		fmt.Printf("\n  %s!%s Could not fetch seed list %s(check your connection)%s\n",
+			cli.Yellow, cli.Reset, cli.Dim, cli.Reset)
+		fmt.Printf("  %sInstall seeds later with: same seed list%s\n\n", cli.Dim, cli.Reset)
+		return false
+	}
+
+	if len(manifest.Seeds) == 0 {
+		fmt.Printf("\n  %s!%s No seeds available\n", cli.Yellow, cli.Reset)
+		return false
+	}
+
+	// Show numbered list with aligned columns
+	fmt.Println()
+	fmt.Printf("  %sAvailable seeds:%s                                              %sNotes%s\n",
+		cli.Bold, cli.Reset, cli.Dim, cli.Reset)
+	fmt.Println()
+	for i, s := range manifest.Seeds {
+		marker := " "
+		if s.Featured {
+			marker = "*"
+		}
+		fmt.Printf("    %s%2d%s)%s %-30s %3d   %s%s%s\n",
+			cli.Cyan, i+1, cli.Reset, marker, s.Name, s.NoteCount, cli.Dim, s.Description, cli.Reset)
+	}
+	fmt.Println()
+
+	fmt.Printf("  Pick a number to install, or Enter to skip: ")
+	line, err = reader.ReadString('\n')
+	if err != nil {
+		fmt.Println() // handle EOF/Ctrl+D
+		return false
+	}
+	line = strings.TrimSpace(line)
+
+	if line == "" {
+		fmt.Printf("\n  No problem! Install seeds anytime with %ssame seed install <name>%s\n", cli.Bold, cli.Reset)
+		return false
+	}
+
+	var choiceIdx int
+	var n int
+	if _, err := fmt.Sscanf(line, "%d", &n); err == nil && n >= 1 && n <= len(manifest.Seeds) {
+		choiceIdx = n - 1
+	} else {
+		fmt.Printf("  %s!%s Invalid choice\n", cli.Yellow, cli.Reset)
+		return false
+	}
+
+	chosen := manifest.Seeds[choiceIdx]
+	destDir := filepath.Join(seed.DefaultSeedDir(), chosen.Name)
+	fmt.Println()
+	fmt.Printf("  Installing %s%s%s to %s...\n\n",
+		cli.Bold, chosen.DisplayName, cli.Reset, cli.ShortenHome(destDir))
+
+	installOpts := seed.InstallOptions{
+		Name:    chosen.Name,
+		Version: opts.Version,
+		OnDownloadStart: func() {
+			fmt.Printf("  Downloading...               ")
+		},
+		OnDownloadDone: func(sizeKB int) {
+			fmt.Printf("done (%d KB)\n", sizeKB)
+		},
+		OnExtractDone: func(fileCount int) {
+			fmt.Printf("  Extracting %d files...       done\n", fileCount)
+		},
+		OnIndexDone: func(chunks int) {
+			if chunks > 0 {
+				fmt.Printf("  Indexing...                  done (%d chunks)\n", chunks)
+			} else {
+				fmt.Printf("  Indexing...                  skipped\n")
+			}
+		},
+	}
+
+	result, err := seed.Install(installOpts)
+	if err != nil {
+		fmt.Printf("  %s!%s Install failed: %v\n", cli.Yellow, cli.Reset, err)
+		fmt.Printf("  %sYou can try again with: same seed install %s%s\n\n", cli.Dim, chosen.Name, cli.Reset)
+		return false
+	}
+
+	fmt.Printf("  Registered as vault %q\n", chosen.Name)
+	seed.PrintLegalNotice()
+	fmt.Printf("\n  Installed to %s\n", cli.ShortenHome(result.DestDir))
+	fmt.Printf("\n  %sSearch it with:%s same search \"your query\" --vault %s\n\n",
+		cli.Bold, cli.Reset, chosen.Name)
+	return true
 }
 
 // checkOllama verifies Ollama is running and has the required model.

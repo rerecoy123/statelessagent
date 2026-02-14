@@ -130,6 +130,7 @@ func seedInstallCmd() *cobra.Command {
 			}
 
 			fmt.Printf("  Registered as vault %q\n", name)
+			seed.PrintLegalNotice()
 			fmt.Printf("\n  Installed to %s\n", cli.ShortenHome(result.DestDir))
 			fmt.Printf("\n  %sNext steps:%s\n", cli.Bold, cli.Reset)
 			fmt.Printf("    same search \"your query\" --vault %s\n", name)

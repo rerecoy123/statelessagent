@@ -61,7 +61,7 @@ func FetchManifest(forceRefresh bool) (*Manifest, error) {
 
 	// Try cache first (unless forced)
 	if !forceRefresh {
-		if m, err := loadCachedManifest(cachePath); err == nil {
+		if m, err := loadCachedManifest(cachePath, false); err == nil {
 			return m, nil
 		}
 	}
@@ -70,8 +70,8 @@ func FetchManifest(forceRefresh bool) (*Manifest, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(ManifestURL)
 	if err != nil {
-		// If network fails, try stale cache
-		if m, err := loadCachedManifest(cachePath); err == nil {
+		// If network fails, accept stale cache
+		if m, cacheErr := loadCachedManifest(cachePath, true); cacheErr == nil {
 			return m, nil
 		}
 		return nil, fmt.Errorf("fetch manifest: %w", err)
@@ -80,7 +80,7 @@ func FetchManifest(forceRefresh bool) (*Manifest, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		// Try stale cache on HTTP errors
-		if m, err := loadCachedManifest(cachePath); err == nil {
+		if m, cacheErr := loadCachedManifest(cachePath, true); cacheErr == nil {
 			return m, nil
 		}
 		return nil, fmt.Errorf("fetch manifest: HTTP %d", resp.StatusCode)
@@ -145,9 +145,9 @@ func validateSeedName(name string) error {
 }
 
 // loadCachedManifest reads and validates the cached manifest.
-// Returns nil if the cache is missing, stale, or corrupt.
-// Note: for network-fallback usage, we accept stale caches.
-func loadCachedManifest(path string) (*Manifest, error) {
+// Returns nil if the cache is missing, corrupt, or (when allowStale is false) expired.
+// Set allowStale to true for network-failure fallback paths.
+func loadCachedManifest(path string, allowStale bool) (*Manifest, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func loadCachedManifest(path string) (*Manifest, error) {
 	if err := json.Unmarshal(data, &cache); err != nil {
 		return nil, err
 	}
-	if time.Since(cache.FetchedAt) > ManifestCacheTTL {
+	if !allowStale && time.Since(cache.FetchedAt) > ManifestCacheTTL {
 		return nil, fmt.Errorf("cache expired")
 	}
 	if cache.Manifest.SchemaVersion != 1 {
