@@ -150,6 +150,9 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 		if err := copyFile(exampleConfig, configDest); err != nil {
 			return nil, fmt.Errorf("copy config: %w", err)
 		}
+		// Fix vault path: seed configs often use path = "." which resolves
+		// to CWD instead of the seed directory. Rewrite to absolute path.
+		fixConfigVaultPath(configDest, absDir)
 	} else {
 		// Generate a minimal config pointing at this vault
 		config.GenerateConfig(absDir)
@@ -162,6 +165,18 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 		origOverride := config.VaultOverride
 		config.VaultOverride = absDir
 		defer func() { config.VaultOverride = origOverride }()
+
+		// Set VAULT_PATH env as belt-and-suspenders — ensures the indexer
+		// uses the seed directory even if config resolution picks up CWD.
+		origEnv := os.Getenv("VAULT_PATH")
+		os.Setenv("VAULT_PATH", absDir)
+		defer func() {
+			if origEnv != "" {
+				os.Setenv("VAULT_PATH", origEnv)
+			} else {
+				os.Unsetenv("VAULT_PATH")
+			}
+		}()
 
 		dbPath := filepath.Join(dataDir, "vault.db")
 		db, err := store.OpenPath(dbPath)
@@ -254,6 +269,46 @@ func IsInstalled(name string) bool {
 	reg := config.LoadRegistry()
 	_, ok := reg.Vaults[name]
 	return ok
+}
+
+// fixConfigVaultPath reads a TOML config file and rewrites any relative
+// vault path to the given absolute path. Seed configs commonly ship with
+// path = "." which would resolve to CWD at runtime instead of the seed dir.
+func fixConfigVaultPath(configPath, absVaultPath string) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return
+	}
+	content := string(data)
+
+	// Match path = "." or path = "./" or any relative path (not starting with /)
+	// We look for the pattern in the [vault] section
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "path") {
+			// Extract the value after "path ="
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			val := strings.TrimSpace(parts[1])
+			val = strings.Trim(val, `"'`)
+			if val == "" {
+				continue
+			}
+			// Rewrite if relative (doesn't start with /)
+			if !filepath.IsAbs(val) {
+				indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+				lines[i] = fmt.Sprintf("%spath = %q", indent, absVaultPath)
+			}
+		}
+	}
+
+	fixed := strings.Join(lines, "\n")
+	if fixed != content {
+		os.WriteFile(configPath, []byte(fixed), 0o600)
+	}
 }
 
 // copyFile copies src to dst.

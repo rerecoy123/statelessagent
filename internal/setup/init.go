@@ -376,8 +376,7 @@ func RunInit(opts InitOptions) error {
 		fmt.Printf("  Your AI will remember your decisions, your architecture,\n")
 		fmt.Printf("  your preferences — across every session.\n")
 		fmt.Println()
-		fmt.Printf("  %sTip:%s Explore pre-built knowledge vaults with %ssame seed list%s\n",
-			cli.Bold, cli.Reset, cli.Bold, cli.Reset)
+		showSeedIntro()
 	} else {
 		offerSeedInstall(opts)
 	}
@@ -518,6 +517,47 @@ func offerSeedInstall(opts InitOptions) bool {
 	fmt.Printf("\n  %sSearch it with:%s same search \"your query\" --vault %s\n\n",
 		cli.Bold, cli.Reset, chosen.Name)
 	return true
+}
+
+// showSeedIntro displays a non-blocking seed vaults section during init.
+// Shows featured seeds from the manifest with a clear CTA. Gracefully
+// degrades if the manifest can't be fetched (offline).
+func showSeedIntro() {
+	cli.Section("Seed Vaults")
+	fmt.Printf("  Add expert knowledge alongside your own notes.\n")
+	fmt.Printf("  Pre-built, domain-specific — install in one command.\n")
+	fmt.Println()
+
+	manifest, err := seed.FetchManifest(false)
+	if err == nil && len(manifest.Seeds) > 0 {
+		// Featured seeds first, then the rest
+		for _, s := range manifest.Seeds {
+			if s.Featured {
+				fmt.Printf("    %s★%s %-28s %s%d notes — %s%s\n",
+					cli.Cyan, cli.Reset, s.DisplayName,
+					cli.Dim, s.NoteCount, s.Description, cli.Reset)
+			}
+		}
+		for _, s := range manifest.Seeds {
+			if !s.Featured {
+				fmt.Printf("    %s·%s %-28s %s%d notes — %s%s\n",
+					cli.Dim, cli.Reset, s.DisplayName,
+					cli.Dim, s.NoteCount, s.Description, cli.Reset)
+			}
+		}
+		fmt.Println()
+	}
+
+	fmt.Printf("  %sBrowse:%s  same seed list\n", cli.Bold, cli.Reset)
+	fmt.Printf("  %sInstall:%s same seed install <name>\n", cli.Bold, cli.Reset)
+	fmt.Printf("  %sCreate:%s  github.com/sgx-labs/seed-vaults#creating-a-seed\n", cli.Bold, cli.Reset)
+	fmt.Println()
+	fmt.Printf("  %sSeeds grow smarter with use — your decisions, handoffs, and notes%s\n", cli.Dim, cli.Reset)
+	fmt.Printf("  %sbuild on top of seed knowledge, creating a feedback loop that gets%s\n", cli.Dim, cli.Reset)
+	fmt.Printf("  %smore valuable every session.%s\n", cli.Dim, cli.Reset)
+	fmt.Println()
+	fmt.Printf("  %sSeeds are a community project — PRs welcome.%s\n", cli.Dim, cli.Reset)
+	fmt.Printf("  %sImprove an existing seed or create your own.%s\n", cli.Dim, cli.Reset)
 }
 
 // checkOllama verifies Ollama is running and has the required model.
