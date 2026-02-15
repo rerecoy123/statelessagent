@@ -14,6 +14,10 @@ import (
 // This closes the learning loop: notes that get used rise in confidence,
 // notes that are surfaced but ignored gradually decay.
 func runFeedbackLoop(db *store.DB, input *HookInput) *HookOutput {
+	if stopHookDebounce(db, input.SessionID, "feedback-loop") {
+		return nil
+	}
+
 	if input.TranscriptPath == "" || input.SessionID == "" {
 		writeVerboseLog("feedback-loop: no transcript path or session ID provided\n")
 		return nil

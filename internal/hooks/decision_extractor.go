@@ -10,7 +10,11 @@ import (
 )
 
 // runDecisionExtractor reads the transcript, extracts decisions, and appends to the log.
-func runDecisionExtractor(_ *store.DB, input *HookInput) *HookOutput {
+func runDecisionExtractor(db *store.DB, input *HookInput) *HookOutput {
+	if stopHookDebounce(db, input.SessionID, "decision-extractor") {
+		return nil
+	}
+
 	transcriptPath := input.TranscriptPath
 	if transcriptPath == "" {
 		writeVerboseLog("decision-extractor: no transcript path provided\n")

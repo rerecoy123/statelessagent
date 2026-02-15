@@ -3,13 +3,47 @@ package hooks
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/sgx-labs/statelessagent/internal/memory"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
+// stopHookCooldown is the minimum seconds between successive runs of each
+// Stop hook within the same session. Claude Code fires the Stop event on
+// every assistant turn, not just session end — without debouncing, hooks
+// would re-parse the transcript and create duplicate artifacts every turn.
+const stopHookCooldown = 300 // 5 minutes
+
+// stopHookDebounce checks whether a Stop hook ran recently for this session.
+// Returns true if the hook should be skipped (still within cooldown).
+// On first run or after cooldown expires, returns false and records the timestamp.
+func stopHookDebounce(db *store.DB, sessionID, hookName string) bool {
+	if sessionID == "" {
+		return false // no session tracking possible, let it run
+	}
+	key := "stop_cooldown_" + hookName
+	if last, ok := db.SessionStateGet(sessionID, key); ok {
+		if ts, err := strconv.ParseInt(last, 10, 64); err == nil {
+			if time.Now().Unix()-ts < stopHookCooldown {
+				writeVerboseLog(fmt.Sprintf("%s: skipped (cooldown, last ran %ds ago)\n",
+					hookName, time.Now().Unix()-ts))
+				return true
+			}
+		}
+	}
+	// Record this run
+	_ = db.SessionStateSet(sessionID, key, strconv.FormatInt(time.Now().Unix(), 10))
+	return false
+}
+
 // runHandoffGenerator generates a handoff note from the transcript.
-func runHandoffGenerator(_ *store.DB, input *HookInput) *HookOutput {
+func runHandoffGenerator(db *store.DB, input *HookInput) *HookOutput {
+	if stopHookDebounce(db, input.SessionID, "handoff-generator") {
+		return nil
+	}
+
 	transcriptPath := input.TranscriptPath
 	if transcriptPath == "" {
 		writeVerboseLog("handoff-generator: no transcript path provided\n")
