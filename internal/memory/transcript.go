@@ -3,6 +3,7 @@ package memory
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -54,6 +55,10 @@ func ParseTranscript(path string) TranscriptData {
 		}
 
 		processEntry(entry, &result.Messages, &result.ToolCalls, filesChanged)
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "same: warning: transcript read error (partial data): %v\n", err)
 	}
 
 	for f := range filesChanged {

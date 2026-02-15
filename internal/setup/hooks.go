@@ -250,17 +250,31 @@ func containsSAMEHook(command, hookName string) bool {
 }
 
 func detectBinaryPath() string {
-	// Check if 'same' is in PATH
+	// Check if 'same' is in PATH (LookPath handles .exe on Windows)
 	if p, err := exec.LookPath("same"); err == nil {
 		return quotePath(p)
+	}
+
+	// Platform-specific binary name
+	bin := "same"
+	if runtime.GOOS == "windows" {
+		bin = "same.exe"
 	}
 
 	// Check common install locations
 	home, _ := os.UserHomeDir()
 	candidates := []string{
-		filepath.Join(home, ".local", "bin", "same"),
-		filepath.Join(home, "go", "bin", "same"),
-		"/usr/local/bin/same",
+		filepath.Join(home, ".local", "bin", bin),
+		filepath.Join(home, "go", "bin", bin),
+	}
+	if runtime.GOOS != "windows" {
+		candidates = append(candidates, "/usr/local/bin/same")
+	} else {
+		// Windows-specific locations
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData != "" {
+			candidates = append(candidates, filepath.Join(localAppData, "Programs", "SAME", bin))
+		}
 	}
 
 	for _, p := range candidates {
@@ -270,12 +284,12 @@ func detectBinaryPath() string {
 	}
 
 	// Fall back to just "same" and hope it's in PATH at runtime
-	return "same"
+	return bin
 }
 
-// quotePath wraps a path in double quotes if it contains spaces (Windows paths).
+// quotePath wraps a path in double quotes if it contains spaces.
 func quotePath(p string) string {
-	if runtime.GOOS == "windows" && strings.Contains(p, " ") {
+	if strings.Contains(p, " ") {
 		return `"` + p + `"`
 	}
 	return p

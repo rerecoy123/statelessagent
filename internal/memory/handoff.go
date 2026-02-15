@@ -128,7 +128,7 @@ func WriteHandoff(
 	)
 
 	filename := time.Now().Format("2006-01-02-150405") + "-handoff.md"
-	relativePath := config.HandoffDirectory() + "/" + filename
+	relativePath := filepath.Join(config.HandoffDirectory(), filename)
 
 	// SECURITY: Validate the resolved path stays inside the vault boundary.
 	absPath, ok := config.SafeVaultSubpath(relativePath)

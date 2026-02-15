@@ -321,7 +321,7 @@ func runDoctor(jsonOut bool) error {
 	})
 
 	// 9. Hook installation
-	check("Hooks installed", "run 'same init' or 'same setup hooks'", func() (string, error) {
+	check("Hooks installed", "run 'same setup hooks'", func() (string, error) {
 		vp := config.VaultPath()
 		if vp == "" {
 			return "", fmt.Errorf("no vault to check")

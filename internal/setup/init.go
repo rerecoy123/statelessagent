@@ -933,7 +933,7 @@ func promptForPath() (string, error) {
 	}
 
 	// Expand ~ to home dir
-	if strings.HasPrefix(path, "~/") {
+	if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
 		home, _ := os.UserHomeDir()
 		path = filepath.Join(home, path[2:])
 	}
