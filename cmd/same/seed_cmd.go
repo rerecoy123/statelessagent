@@ -81,9 +81,10 @@ func seedInstallCmd() *cobra.Command {
 	var noIndex bool
 
 	cmd := &cobra.Command{
-		Use:   "install [name]",
-		Short: "Download and install a seed vault",
-		Args:  cobra.ExactArgs(1),
+		Use:               "install [name]",
+		Short:             "Download and install a seed vault",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: seedNameCompleter,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
@@ -146,9 +147,10 @@ func seedInstallCmd() *cobra.Command {
 
 func seedInfoCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "info [name]",
-		Short: "Show details about a seed",
-		Args:  cobra.ExactArgs(1),
+		Use:               "info [name]",
+		Short:             "Show details about a seed",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: seedNameCompleter,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manifest, err := seed.FetchManifest(false)
 			if err != nil {
@@ -194,9 +196,10 @@ func seedRemoveCmd() *cobra.Command {
 	var keepFiles bool
 
 	cmd := &cobra.Command{
-		Use:   "remove [name]",
-		Short: "Uninstall a seed vault",
-		Args:  cobra.ExactArgs(1),
+		Use:               "remove [name]",
+		Short:             "Uninstall a seed vault",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: seedNameCompleter,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
@@ -210,12 +213,12 @@ func seedRemoveCmd() *cobra.Command {
 			deleteFiles := !keepFiles
 
 			if !yes && deleteFiles {
-				fmt.Printf("Remove seed %q and delete all its files? [y/N] ", name)
+				fmt.Printf("  Remove seed %q and delete all its files? [y/N] ", name)
 				var confirm string
 				fmt.Scanln(&confirm)
 				confirm = strings.TrimSpace(strings.ToLower(confirm))
 				if confirm != "y" && confirm != "yes" {
-					fmt.Println("Cancelled.")
+					fmt.Println("  Cancelled.")
 					return nil
 				}
 			}
@@ -225,9 +228,9 @@ func seedRemoveCmd() *cobra.Command {
 			}
 
 			if deleteFiles {
-				fmt.Printf("Removed seed %q and deleted files.\n", name)
+				fmt.Printf("  Removed seed %q and deleted files.\n", name)
 			} else {
-				fmt.Printf("Unregistered seed %q (files kept).\n", name)
+				fmt.Printf("  Unregistered seed %q (files kept).\n", name)
 			}
 			return nil
 		},
@@ -255,7 +258,3 @@ func seedNameCompleter(cmd *cobra.Command, args []string, toComplete string) ([]
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-func init() {
-	// Wire up completions if cobra supports it
-	_ = seedNameCompleter // referenced below for install/info/remove
-}

@@ -63,7 +63,20 @@ func ParseTranscript(path string) TranscriptData {
 }
 
 func processEntry(entry map[string]interface{}, messages *[]Message, toolCalls *[]ToolCall, filesChanged map[string]bool) {
+	// Claude Code wraps messages in a "message" envelope:
+	//   {"type": "user", "message": {"role": "user", "content": "..."}}
+	// Unwrap to get the actual message object for role and content extraction.
 	role, _ := entry["role"].(string)
+	if role == "" {
+		if msg, ok := entry["message"].(map[string]interface{}); ok {
+			role, _ = msg["role"].(string)
+			entry = msg // use inner message for content extraction below
+		}
+	}
+	// Also accept the top-level "type" field as a role fallback
+	if role == "" {
+		role, _ = entry["type"].(string)
+	}
 
 	switch {
 	case role == "user" || role == "human":

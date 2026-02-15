@@ -797,6 +797,38 @@ func TestParseTranscript_HumanRole(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_NestedMessageFormat(t *testing.T) {
+	// Claude Code v2.x wraps messages: {"type":"user","message":{"role":"user","content":"..."}}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transcript.jsonl")
+
+	lines := []string{
+		`{"type":"file-history-snapshot","messageId":"abc","snapshot":{}}`,
+		`{"type":"user","message":{"role":"user","content":"Hello from Claude Code"},"uuid":"123","sessionId":"s1"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":"Hi there!"},"uuid":"456","sessionId":"s1"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me write that"},{"type":"tool_use","name":"Write","input":{"file_path":"/tmp/test.go"}}]},"uuid":"789"}`,
+		`{"type":"progress","uuid":"012"}`,
+	}
+	os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+
+	data := ParseTranscript(path)
+	if len(data.Messages) != 3 {
+		t.Fatalf("expected 3 messages from nested format, got %d", len(data.Messages))
+	}
+	if data.Messages[0].Role != "user" || data.Messages[0].Content != "Hello from Claude Code" {
+		t.Errorf("first message: role=%q content=%q", data.Messages[0].Role, data.Messages[0].Content)
+	}
+	if data.Messages[1].Role != "assistant" || data.Messages[1].Content != "Hi there!" {
+		t.Errorf("second message: role=%q content=%q", data.Messages[1].Role, data.Messages[1].Content)
+	}
+	if len(data.ToolCalls) != 1 || data.ToolCalls[0].Tool != "Write" {
+		t.Errorf("expected 1 tool call (Write), got %d: %v", len(data.ToolCalls), data.ToolCalls)
+	}
+	if len(data.FilesChanged) != 1 {
+		t.Errorf("expected 1 file changed, got %d: %v", len(data.FilesChanged), data.FilesChanged)
+	}
+}
+
 // --- GetLastNMessages ---
 
 func TestGetLastNMessages_All(t *testing.T) {

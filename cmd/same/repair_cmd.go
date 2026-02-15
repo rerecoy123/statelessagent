@@ -14,10 +14,10 @@ func repairCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "repair",
 		Short: "Back up and rebuild the database",
-		Long: `Creates a backup of same.db and force-rebuilds the index.
+		Long: `Creates a backup of vault.db and force-rebuilds the index.
 
 This is the go-to command when something seems broken. It:
-  1. Copies same.db to same.db.bak
+  1. Copies vault.db to vault.db.bak
   2. Runs a full force reindex
 
 After repair, verify with 'same doctor'.`,

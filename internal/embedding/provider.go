@@ -38,7 +38,7 @@ type Provider interface {
 
 // ProviderConfig holds embedding provider settings.
 type ProviderConfig struct {
-	Provider   string // "ollama" (default), "openai"
+	Provider   string // "ollama" (default), "openai", "openai-compatible"
 	Model      string // model name (provider-specific defaults if empty)
 	APIKey     string // API key (required for cloud providers)
 	BaseURL    string // base URL (provider-specific defaults if empty)

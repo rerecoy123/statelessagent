@@ -190,16 +190,17 @@ Need help? https://discord.gg/9KfTkcGs7g`,
 		ciCmd(),
 	)
 
-	// Ungrouped (hidden or internal)
+	// User-facing but ungrouped
 	root.AddCommand(versionCmd())
 	root.AddCommand(updateCmd())
 	root.AddCommand(statsCmd())
-	root.AddCommand(migrateCmd())
-	root.AddCommand(hookCmd())
-	root.AddCommand(budgetCmd())
-	root.AddCommand(pluginCmd())
-	root.AddCommand(pushAllowCmd())
 	root.AddCommand(repairCmd())
+
+	// Internal commands (hidden from --help)
+	for _, cmd := range []*cobra.Command{migrateCmd(), hookCmd(), budgetCmd(), pluginCmd(), pushAllowCmd()} {
+		cmd.Hidden = true
+		root.AddCommand(cmd)
+	}
 
 	// Global --vault flag
 	root.PersistentFlags().StringVar(&config.VaultOverride, "vault", "", "Vault name or path (overrides auto-detect)")

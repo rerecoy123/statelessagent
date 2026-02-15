@@ -385,7 +385,13 @@ func RunInit(opts InitOptions) error {
 
 	// Privacy at the end
 	cli.Section("Privacy")
-	fmt.Printf("  All processing is local via Ollama.\n")
+	ec := config.EmbeddingProviderConfig()
+	if ec.Provider == "openai" || ec.Provider == "openai-compatible" {
+		fmt.Printf("  Embeddings processed via %s.\n", ec.Provider)
+		fmt.Printf("  Your raw notes stay on this machine.\n")
+	} else {
+		fmt.Printf("  All processing is local.\n")
+	}
 	fmt.Printf("  Context sent to your AI tool's API as\n")
 	fmt.Printf("  part of your conversation.\n")
 

@@ -139,7 +139,7 @@ Your markdown notes are embedded locally via Ollama and stored in a SQLite datab
 | Context surfacing | Relevant notes injected into AI prompts | No* |
 | `same demo` | Try SAME in 60 seconds | No |
 | `same tutorial` | 6 hands-on lessons | No |
-| `same doctor` | 16 diagnostic checks | No |
+| `same doctor` | 17 diagnostic checks | No |
 | Push protection | Safety rails for multi-agent workflows | No |
 | `same seed install` | One-command install of pre-built knowledge vaults | No* |
 | Cross-vault federation | Search across all vaults at once | No* |
@@ -160,11 +160,11 @@ same seed install claude-code-power-user
 
 | Seed | Notes | What you get |
 |------|:-----:|-------------|
-| `claude-code-power-user` | 50 | Master-level Claude Code patterns, workflows, and tricks |
-| `ai-agent-architecture` | 56 | Agent design patterns, orchestration, memory strategies |
+| `claude-code-power-user` | 52 | Master-level Claude Code patterns, workflows, and tricks |
+| `ai-agent-architecture` | 58 | Agent design patterns, orchestration, memory strategies |
 | `personal-productivity-os` | 118 | GTD, time blocking, habit systems, review frameworks |
 
-8 seeds available. Browse with `same seed list`.
+10 seeds available — 622+ notes of expert knowledge. Browse with `same seed list`.
 
 [Browse all seeds](https://github.com/sgx-labs/seed-vaults)
 
@@ -320,7 +320,7 @@ Requires Go 1.25+ and CGO.
 | `same search --all <query>` | Search across all registered vaults |
 | `same related <path>` | Find related notes |
 | `same status` | See what SAME is tracking |
-| `same doctor` | Run 16 diagnostic checks |
+| `same doctor` | Run 17 diagnostic checks |
 | `same pin <path>` | Always include a note in every session |
 | `same pin list` | Show pinned notes |
 | `same pin remove <path>` | Unpin a note |
@@ -370,7 +370,7 @@ decision_log = "decisions.md"
 url = "http://localhost:11434"
 
 [embedding]
-provider = "ollama"           # "ollama" (default) or "openai"
+provider = "ollama"           # "ollama" (default), "openai", or "openai-compatible"
 model = "nomic-embed-text"    # see supported models below
 # api_key = ""                # required for openai, or set SAME_EMBED_API_KEY
 

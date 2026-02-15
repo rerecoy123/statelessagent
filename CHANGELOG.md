@@ -11,7 +11,7 @@ One-command install of pre-built knowledge vaults. `same seed install claude-cod
   - `same seed install <name>` — download, extract, index, and register a seed vault. Flags: `--path`, `--force`, `--no-index`
   - `same seed info <name>` — show detailed seed metadata (audience, tags, requirements)
   - `same seed remove <name>` — uninstall a seed vault. Flags: `--yes`, `--keep-files`
-- **8 official seed vaults** — Claude Code Power User, AI Agent Architecture, Security Audit Framework, DevOps Runbooks, Indie Hacker Playbook, Open Source Launch Kit, Freelancer Business Kit, Personal Productivity OS. Browse at [github.com/sgx-labs/seed-vaults](https://github.com/sgx-labs/seed-vaults)
+- **10 official seed vaults** — Claude Code Power User, AI Agent Architecture, Personal Productivity OS, Security Audit Framework, DevOps Runbooks, Indie Hacker Playbook, Open Source Launch Kit, Freelancer Business Kit, Home Chef Essentials, Fitness & Wellness. Browse at [github.com/sgx-labs/seed-vaults](https://github.com/sgx-labs/seed-vaults)
 - **Seed manifest registry** — `seeds.json` hosted in seed-vaults repo with schema versioning, 1-hour client-side cache, stale-cache fallback on network errors
 - **`same model` command** — show current embedding model and switch between models with `same model use <name>`. Lists all 10 supported models with dimensions and descriptions. Warns about reindex after switching.
 - **Automatic lite mode fallback** — seed install falls back to keyword-only indexing when Ollama isn't available
@@ -94,7 +94,7 @@ Search across all your vaults from one place. Manage multiple vaults from the CL
 - **`same vault feed`** — one-way note propagation between vaults. Copy notes from a source vault into the current vault's `fed/<alias>/` directory. Includes PII guard (scans for email/phone/SSN patterns), symlink rejection, 10MB file size limit, self-feed prevention, and `--dry-run` mode.
 - **`store.AllNotes()`** — returns all chunk_id=0 notes excluding `_PRIVATE/`, ordered by modified date.
 - **20 new tests** — `sanitizeAlias` (14 cases), `safeFeedPath` (19 cases), `FederatedSearch` (empty query, too many vaults, private note exclusion, mixed vault health, graceful skip).
-- **Progressive feature discovery** — CLI teaches new capabilities at the moment they become relevant. `vault add` hints about `--all` when 2+ vaults registered. `search` hints about `same related`. `reindex` hints about `same watch`. `status` shows available vaults and `same ask` when a chat model is detected. `doctor` validates vault registry health (16 checks total).
+- **Progressive feature discovery** — CLI teaches new capabilities at the moment they become relevant. `vault add` hints about `--all` when 2+ vaults registered. `search` hints about `same related`. `reindex` hints about `same watch`. `status` shows available vaults and `same ask` when a chat model is detected. `doctor` validates vault registry health (17 checks total).
 - **Pinned notes in session bootstrap** — pinned notes now survive context compaction. Previously only surfaced during per-prompt context, pinned notes are now included at session start (Priority 1, 2000-char budget) so your AI always has your most important context.
 
 ### Fixed
