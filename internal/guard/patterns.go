@@ -18,16 +18,16 @@ const (
 type Category string
 
 const (
-	CatEmail       Category = "pii_email"
-	CatPhone       Category = "pii_phone"
-	CatSSN         Category = "pii_ssn"
-	CatLocalPath   Category = "pii_local_path"
-	CatAPIKey      Category = "pii_api_key"
-	CatAWSKey      Category = "pii_aws_key"
-	CatPrivateKey  Category = "pii_private_key"
-	CatHardBlock   Category = "hard_blocklist"
-	CatSoftBlock   Category = "soft_blocklist"
-	CatPathBlock   Category = "path_violation"
+	CatEmail      Category = "pii_email"
+	CatPhone      Category = "pii_phone"
+	CatSSN        Category = "pii_ssn"
+	CatLocalPath  Category = "pii_local_path"
+	CatAPIKey     Category = "pii_api_key"
+	CatAWSKey     Category = "pii_aws_key"
+	CatPrivateKey Category = "pii_private_key"
+	CatHardBlock  Category = "hard_blocklist"
+	CatSoftBlock  Category = "soft_blocklist"
+	CatPathBlock  Category = "path_violation"
 )
 
 // Pattern is a compiled PII detection pattern.
@@ -94,6 +94,18 @@ func builtinPatterns() []Pattern {
 			Tier:     TierHard,
 			Category: CatPrivateKey,
 			Regex:    regexp.MustCompile(`-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----`),
+		},
+		{
+			Name:     "github_token",
+			Tier:     TierHard,
+			Category: CatAPIKey,
+			Regex:    regexp.MustCompile(`\bgh[ps]_[a-zA-Z0-9]{36,}\b`),
+		},
+		{
+			Name:     "slack_token",
+			Tier:     TierHard,
+			Category: CatAPIKey,
+			Regex:    regexp.MustCompile(`\bxox[bpsar]-[a-zA-Z0-9\-]{10,}\b`),
 		},
 	}
 }

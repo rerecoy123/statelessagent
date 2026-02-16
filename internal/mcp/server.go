@@ -344,7 +344,9 @@ func handleGetNote(ctx context.Context, req *mcp.CallToolRequest, input getInput
 		return textResult("Error reading file."), nil, nil
 	}
 
-	return textResult(string(content)), nil, nil
+	// SECURITY: Neutralize XML-like tags that could enable prompt injection
+	// when the note content is returned to an AI agent via MCP.
+	return textResult(neutralizeTags(string(content))), nil, nil
 }
 
 func handleFindSimilar(ctx context.Context, req *mcp.CallToolRequest, input similarInput) (*mcp.CallToolResult, any, error) {
@@ -715,6 +717,11 @@ func handleRecentActivity(ctx context.Context, req *mcp.CallToolRequest, input r
 
 	entries := make([]map[string]string, 0, len(notes))
 	for _, n := range notes {
+		// SECURITY: Filter _PRIVATE/ paths (defense-in-depth; DB query may not filter)
+		upper := strings.ToUpper(n.Path)
+		if strings.HasPrefix(upper, "_PRIVATE/") || strings.HasPrefix(upper, "_PRIVATE\\") {
+			continue
+		}
 		entries = append(entries, map[string]string{
 			"path":     n.Path,
 			"title":    n.Title,
@@ -738,10 +745,11 @@ func handleGetSessionContext(ctx context.Context, req *mcp.CallToolRequest, inpu
 			if len(text) > 500 {
 				text = text[:500] + "..."
 			}
+			// SECURITY: Neutralize injection tags in pinned note text
 			pinnedList = append(pinnedList, map[string]string{
 				"path":  p.Path,
 				"title": p.Title,
-				"text":  text,
+				"text":  neutralizeTags(text),
 			})
 		}
 		result["pinned_notes"] = pinnedList
@@ -754,10 +762,11 @@ func handleGetSessionContext(ctx context.Context, req *mcp.CallToolRequest, inpu
 		if len(text) > 1000 {
 			text = text[:1000] + "..."
 		}
+		// SECURITY: Neutralize injection tags in handoff text
 		result["latest_handoff"] = map[string]string{
 			"path":     handoff.Path,
 			"title":    handoff.Title,
-			"text":     text,
+			"text":     neutralizeTags(text),
 			"modified": formatTimestamp(handoff.Modified),
 		}
 	}

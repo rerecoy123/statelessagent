@@ -8,7 +8,11 @@ Fixes keyword-only search (the biggest issue for no-Ollama environments), adds l
 
 - **BUG-035: Hardened prompt injection sanitization** — `sanitizeContextTags` (hooks) and `neutralizeTags` (MCP) now neutralize LLM-specific injection delimiters: Llama/Mistral `[INST]`/`[/INST]`, `<<SYS>>`/`<</SYS>>`, and XML `<![CDATA[` sequences. Previously only XML-like structural tags were sanitized
 - **Fixed case-insensitive tag matching for `IMPORTANT`** — the `IMPORTANT` tag was listed in uppercase but compared against lowercased text, so `<IMPORTANT>` injection payloads were not neutralized. Now correctly matched case-insensitively
-- **Comprehensive security test suite** — added dedicated security tests for injection sanitization, plugin validation, MCP input validation (agent normalization, rate limiting, tag neutralization), web dashboard middleware (localhost-only, security headers, private path filtering), and path traversal prevention
+- **MCP `get_note` now sanitizes output** — previously returned raw note content to agents without neutralizing XML-like tags, allowing stored prompt injection via crafted notes. Now applies `neutralizeTags` before returning content
+- **MCP `get_session_context` now sanitizes pinned notes and handoff text** — pinned note text and latest handoff text were returned unsanitized, allowing injection via crafted pinned/handoff content
+- **MCP `recent_activity` now filters `_PRIVATE/` paths** — defense-in-depth gap: recent notes listing did not filter private paths at the application level
+- **Guard: added GitHub token (`ghp_`/`ghs_`) and Slack token (`xoxb-`/`xoxp-`) PII patterns** — pre-commit scanner now detects these common credential types
+- **Comprehensive security test suite** — added dedicated security tests for injection sanitization, plugin validation, MCP input validation (agent normalization, rate limiting, tag neutralization), web dashboard middleware (localhost-only, security headers, private path filtering), path traversal prevention, claims path normalization, search term sanitization, and guard pattern detection
 
 ### Fixed
 

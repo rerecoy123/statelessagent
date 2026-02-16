@@ -75,5 +75,8 @@ install: build
 	cp $(BUILD_DIR)/$(BINARY_NAME) "$$INSTALL_DIR/$(BINARY_NAME)"; \
 	echo "Installed to $$INSTALL_DIR/$(BINARY_NAME)"
 
+security-test:
+	go test ./internal/hooks/... ./internal/mcp/... ./internal/web/... ./internal/guard/... ./internal/store/... -run "Security|Injection|Sanitize|Plugin|RateLimit|Private|Traversal" -count=1 -v
+
 clean:
 	rm -rf $(BUILD_DIR)

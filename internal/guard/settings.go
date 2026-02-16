@@ -75,7 +75,7 @@ var userFacingKeyToPatternNames = map[string][]string{
 	"phone":       {"us_phone"},
 	"ssn":         {"ssn"},
 	"local_path":  {"local_path_unix", "local_path_windows"},
-	"api_key":     {"api_key_assignment", "sk_key"},
+	"api_key":     {"api_key_assignment", "sk_key", "github_token", "slack_token"},
 	"aws_key":     {"aws_key"},
 	"private_key": {"private_key_header"},
 }

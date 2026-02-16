@@ -4,8 +4,10 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.5.x   | :white_check_mark: |
-| < 0.5   | :x:                |
+| 0.8.x   | :white_check_mark: |
+| 0.7.x   | :white_check_mark: |
+| 0.6.x   | Security fixes only |
+| < 0.6   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -51,14 +53,25 @@ SAME is designed with a local-first security model:
 - Surfaced snippets are scanned for prompt injection patterns before injection
 - Uses [go-promptguard](https://github.com/mdombrov-33/go-promptguard) for detection
 - Suspicious content is blocked from context surfacing
+- XML-like structural tags (`<vault-context>`, `<session-bootstrap>`, etc.) are neutralized in all output paths
+- LLM-specific injection delimiters (`[INST]`, `<<SYS>>`, CDATA) are neutralized (v0.8.3)
+- MCP `get_note`, `get_session_context`, and all search handlers sanitize output before returning to agents (v0.8.3)
+- Write rate limiting (30 ops/min) prevents abuse via prompt-injected write loops
 
 ### Path Traversal Protection
 - MCP `get_note` tool validates paths stay within vault boundary
+- Symlink resolution verifies real path stays inside vault (v0.8.3)
 - Relative path components (`..`) are rejected
+- Null bytes in paths are rejected
+- Windows drive-letter paths are rejected regardless of host OS
 
 ### Input Validation
 - All user inputs are validated before processing
 - SQL queries use parameterized statements (no injection risk)
+- FTS5 query terms are sanitized to prevent FTS operator injection
+- Agent attribution values are validated (length, no control chars, no newlines)
+- MCP write operations enforce 100KB content limit
+- Plugin commands are validated against shell metacharacters, path traversal, and null bytes
 
 ### Eval Data Boundary
 
@@ -78,6 +91,13 @@ Eval data must be either **entirely synthetic** or use a **purpose-built demo va
 
 3. **No encryption at rest:** The SQLite database is not encrypted. Use disk encryption if needed.
 
+### `_PRIVATE/` Directory Protection
+- `_PRIVATE/` directories are excluded from indexing at the file walker level
+- All search handlers (vector, FTS5, keyword, federated) filter `_PRIVATE/` paths at the SQL level
+- MCP `recent_activity` and `get_session_context` filter `_PRIVATE/` paths in application code (v0.8.3)
+- Hook context surfacing filters `_PRIVATE/` paths before injection
+- Web dashboard filters `_PRIVATE/` paths from all views
+
 ## Security Checklist
 
 Run `same doctor` to verify:
@@ -86,3 +106,5 @@ Run `same doctor` to verify:
 - [x] Database is accessible only to current user
 - [x] Vector search is functioning
 - [x] Context surfacing respects skip patterns
+- [x] Web dashboard binds to localhost only
+- [x] MCP write operations are rate-limited
