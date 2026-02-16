@@ -263,6 +263,9 @@ type emptyInput struct{}
 // Tool handlers
 
 func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input searchInput) (*mcp.CallToolResult, any, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return textResult("Error: query is required."), nil, nil
+	}
 	if len(input.Query) > maxQueryLen {
 		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
 	}
@@ -284,8 +287,15 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 }
 
 func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, input searchFilteredInput) (*mcp.CallToolResult, any, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return textResult("Error: query is required."), nil, nil
+	}
 	if len(input.Query) > maxQueryLen {
 		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+	}
+	agentFilter, err := normalizeAgent(input.Agent)
+	if err != nil {
+		return textResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
 	}
 	topK := clampTopK(input.TopK, 10)
 
@@ -303,7 +313,7 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 		TopK:       topK,
 		Domain:     input.Domain,
 		Workstream: input.Workstream,
-		Agent:      strings.TrimSpace(input.Agent),
+		Agent:      agentFilter,
 		Tags:       tags,
 	}
 
@@ -422,9 +432,6 @@ func handleIndexStats(ctx context.Context, req *mcp.CallToolRequest, input empty
 // Write-side handlers
 
 func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNoteInput) (*mcp.CallToolResult, any, error) {
-	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
-	}
 	if strings.TrimSpace(input.Path) == "" {
 		return textResult("Error: path is required."), nil, nil
 	}
@@ -451,6 +458,9 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 	relPath, relErr := store.NormalizeClaimPath(input.Path)
 	if relErr != nil {
 		return textResult("Error: path must stay within the vault. Use a relative path like 'notes/topic.md'."), nil, nil
+	}
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
 	}
 
 	// S11: Prepend a provenance header so readers know this was MCP-generated.
@@ -542,9 +552,6 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 }
 
 func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input saveDecisionInput) (*mcp.CallToolResult, any, error) {
-	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
-	}
 	if strings.TrimSpace(input.Title) == "" {
 		return textResult("Error: title is required."), nil, nil
 	}
@@ -592,6 +599,9 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 	if safePath == "" {
 		return textResult("Error: decision log path is invalid. Set `vault.decision_log` to a relative file under the vault."), nil, nil
 	}
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+	}
 	if agent != "" {
 		if existing, readErr := os.ReadFile(safePath); readErr == nil {
 			updated := upsertAgentFrontmatter(string(existing), agent)
@@ -630,9 +640,6 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 }
 
 func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input createHandoffInput) (*mcp.CallToolResult, any, error) {
-	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
-	}
 	if strings.TrimSpace(input.Summary) == "" {
 		return textResult("Error: summary is required."), nil, nil
 	}
@@ -660,6 +667,9 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 	safePath := safeVaultPath(relPath)
 	if safePath == "" {
 		return textResult("Error: handoff path is invalid. Set `vault.handoff_dir` to a relative directory under the vault."), nil, nil
+	}
+	if !checkWriteRateLimit() {
+		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
 	}
 
 	// Build handoff content
@@ -1017,10 +1027,24 @@ func normalizeAgent(raw string) (string, error) {
 	if strings.ContainsRune(clean, 0) || strings.Contains(clean, "\n") || strings.Contains(clean, "\r") {
 		return "", fmt.Errorf("invalid agent")
 	}
+	for _, r := range clean {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("invalid agent")
+		}
+	}
 	if len(clean) > 128 {
 		return "", fmt.Errorf("agent too long")
 	}
 	return clean, nil
+}
+
+func hasWindowsDrivePrefix(path string) bool {
+	if len(path) < 3 {
+		return false
+	}
+	ch := path[0]
+	isLetter := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+	return isLetter && path[1] == ':' && path[2] == '/'
 }
 
 func upsertAgentFrontmatter(content, agent string) string {
@@ -1171,11 +1195,17 @@ func safeVaultPath(path string) string {
 	if strings.ContainsRune(path, 0) {
 		return ""
 	}
-	if filepath.IsAbs(path) {
+	// SECURITY: normalize backslashes before any checks so traversal patterns
+	// like "..\" are caught on all platforms.
+	normalizedInput := strings.ReplaceAll(path, "\\", "/")
+	if hasWindowsDrivePrefix(normalizedInput) {
+		return ""
+	}
+	if filepath.IsAbs(normalizedInput) {
 		return ""
 	}
 	// SECURITY: block access to _PRIVATE/ directory (case-insensitive for macOS)
-	clean := filepath.ToSlash(filepath.Clean(path))
+	clean := filepath.ToSlash(filepath.Clean(normalizedInput))
 	upper := strings.ToUpper(clean)
 	if strings.HasPrefix(upper, "_PRIVATE/") || upper == "_PRIVATE" {
 		return ""
@@ -1185,7 +1215,7 @@ func safeVaultPath(path string) string {
 	if strings.HasPrefix(clean, ".") {
 		return ""
 	}
-	full, err := filepath.Abs(filepath.Join(config.VaultPath(), filepath.FromSlash(path)))
+	full, err := filepath.Abs(filepath.Join(config.VaultPath(), filepath.FromSlash(normalizedInput)))
 	if err != nil {
 		return ""
 	}

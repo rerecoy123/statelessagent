@@ -253,8 +253,18 @@ func safeFeedPath(notePath string) string {
 	if strings.ContainsRune(notePath, 0) {
 		return ""
 	}
+	// SECURITY: normalize backslashes before any checks so traversal patterns
+	// like "..\" are caught on all platforms.
+	normalized := strings.ReplaceAll(notePath, "\\", "/")
+	// SECURITY: reject Windows drive-letter absolute paths (e.g. C:/...)
+	if len(normalized) >= 3 {
+		ch := normalized[0]
+		if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) && normalized[1] == ':' && normalized[2] == '/' {
+			return ""
+		}
+	}
 	// Clean the path to resolve any ../
-	clean := filepath.Clean(filepath.FromSlash(notePath))
+	clean := filepath.Clean(filepath.FromSlash(normalized))
 	// Convert back to forward slashes for consistency
 	cleanSlash := filepath.ToSlash(clean)
 	// Reject absolute paths

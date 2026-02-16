@@ -25,14 +25,23 @@ var shellMetaRe = regexp.MustCompile(`[;|&$` + "`" + `!(){}<>\\\n\r]`)
 // Allows alphanumeric, hyphens, underscores, and dots (e.g. "python3", "my-plugin.sh").
 var safeCommandNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
+func hasControlChars(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 // PluginConfig defines a custom hook plugin.
 type PluginConfig struct {
-	Name    string `json:"name"`
-	Event   string `json:"event"`   // e.g. "UserPromptSubmit", "Stop", "SessionStart"
-	Command string `json:"command"` // path to executable
+	Name    string   `json:"name"`
+	Event   string   `json:"event"`   // e.g. "UserPromptSubmit", "Stop", "SessionStart"
+	Command string   `json:"command"` // path to executable
 	Args    []string `json:"args,omitempty"`
-	Timeout int    `json:"timeout_ms,omitempty"` // default 10000
-	Enabled bool   `json:"enabled"`
+	Timeout int      `json:"timeout_ms,omitempty"` // default 10000
+	Enabled bool     `json:"enabled"`
 }
 
 // PluginsFile holds all registered plugins.
@@ -72,9 +81,15 @@ func validatePlugin(p PluginConfig) error {
 	if strings.ContainsRune(p.Command, 0) {
 		return fmt.Errorf("command contains null byte")
 	}
+	if hasControlChars(p.Command) {
+		return fmt.Errorf("command contains control characters")
+	}
 	for i, arg := range p.Args {
 		if strings.ContainsRune(arg, 0) {
 			return fmt.Errorf("arg[%d] contains null byte", i)
+		}
+		if hasControlChars(arg) {
+			return fmt.Errorf("arg[%d] contains control characters", i)
 		}
 	}
 
