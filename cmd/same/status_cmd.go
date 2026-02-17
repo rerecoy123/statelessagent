@@ -422,6 +422,11 @@ func detectChatStatus() runtimeStatus {
 	st.Provider = client.Provider()
 	model, modelErr := client.PickBestModel()
 	if modelErr == nil {
+		if strings.TrimSpace(model) == "" {
+			st.Status = "unavailable"
+			st.Error = "no chat-capable model detected"
+			return st
+		}
 		st.Status = "available"
 		st.Model = model
 		return st
