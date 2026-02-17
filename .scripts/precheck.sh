@@ -25,6 +25,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 PASS=0
 FAIL=0
 WARN=0
+SCAN_SCOPE="${SAME_PRECHECK_SCAN:-changed}"
 
 pass() { echo -e "  ${GREEN}PASS${RESET}  $1"; PASS=$((PASS + 1)); }
 fail() { echo -e "  ${RED}FAIL${RESET}  $1"; FAIL=$((FAIL + 1)); }
@@ -34,6 +35,11 @@ info() { echo -e "  ${BOLD}....${RESET}  $1"; }
 echo ""
 echo -e "${BOLD}Pre-release checks${RESET}"
 echo ""
+
+if [ "$SCAN_SCOPE" != "changed" ] && [ "$SCAN_SCOPE" != "full" ]; then
+    warn "SAME_PRECHECK_SCAN=$SCAN_SCOPE is invalid; expected changed|full (using changed)"
+    SCAN_SCOPE="changed"
+fi
 
 # --- 1. Version consistency ---
 echo -e "${BOLD}Version consistency${RESET}"
@@ -100,7 +106,11 @@ fi
 # --- 4. Repo-scope pattern scan ---
 echo ""
 echo -e "${BOLD}Release hygiene (repo scope)${RESET}"
-info "Scope: scans changed tracked repo files with configured blocklist patterns."
+if [ "$SCAN_SCOPE" = "full" ]; then
+    info "Scope: scans all tracked repo files with configured blocklist patterns."
+else
+    info "Scope: scans changed tracked repo files with configured blocklist patterns."
+fi
 info "Does not audit user vault contents, full git history, forks, or mirrors."
 
 # Run blocklist pattern checks against changed tracked files.
@@ -111,7 +121,6 @@ if [ ! -f "$BLOCKLIST" ] && [ -f "$REPO_ROOT/.scripts/blocklist.example" ]; then
     BLOCKLIST_LABEL=".scripts/blocklist.example"
 fi
 if [ -f "$BLOCKLIST" ]; then
-    # Scan all tracked files (not just staged) for PII patterns
     PATTERN=""
     while IFS= read -r line; do
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -124,20 +133,31 @@ if [ -f "$BLOCKLIST" ]; then
     done < "$BLOCKLIST"
 
     if [ -n "$PATTERN" ]; then
-        # Check both uncommitted and staged changes
-        CHANGED_FILES=$( (git -C "$REPO_ROOT" diff HEAD --name-only 2>/dev/null; git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null) | sort -u)
+        if [ "$SCAN_SCOPE" = "full" ]; then
+            FILES_TO_SCAN="$(git -C "$REPO_ROOT" ls-files 2>/dev/null || true)"
+        else
+            FILES_TO_SCAN="$( (git -C "$REPO_ROOT" diff HEAD --name-only 2>/dev/null; git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null) | sort -u )"
+        fi
         PII_HITS=""
         while IFS= read -r f; do
             [ -z "$f" ] && continue
+            [ "$f" = ".scripts/.blocklist" ] && continue
+            [ "$f" = ".scripts/blocklist.example" ] && continue
             [ -f "$REPO_ROOT/$f" ] || continue
             if grep -lE "$PATTERN" "$REPO_ROOT/$f" >/dev/null 2>&1; then
                 PII_HITS="$PII_HITS $f"
             fi
-        done <<< "$CHANGED_FILES"
-        if [ -z "$PII_HITS" ]; then
-            pass "No blocklist pattern matches in changed tracked files (patterns: $BLOCKLIST_LABEL)"
+        done <<< "$FILES_TO_SCAN"
+        if [ -z "${FILES_TO_SCAN// }" ]; then
+            if [ "$SCAN_SCOPE" = "full" ]; then
+                warn "No tracked files found for full-scope blocklist scan"
+            else
+                pass "No changed tracked files to scan for blocklist patterns (patterns: $BLOCKLIST_LABEL)"
+            fi
+        elif [ -z "$PII_HITS" ]; then
+            pass "No blocklist pattern matches in $SCAN_SCOPE tracked files (patterns: $BLOCKLIST_LABEL)"
         else
-            fail "Blocklist pattern matches found in changed tracked files:$PII_HITS"
+            fail "Blocklist pattern matches found in $SCAN_SCOPE tracked files:$PII_HITS"
         fi
     fi
 else

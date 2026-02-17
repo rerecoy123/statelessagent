@@ -15,6 +15,12 @@ make precheck
 - CLI smoke
 - provider smoke baseline (`provider=none`)
 
+For a full tracked-file hygiene scan (instead of changed files only):
+
+```bash
+make precheck-full
+```
+
 ## Provider Matrix
 
 Run the broader provider flow (reindex/search/graph/web) when endpoints are available:

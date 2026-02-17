@@ -50,6 +50,7 @@ Point advanced users to:
 - Runtime env vars in README (`SAME_EMBED_*`, `SAME_CHAT_*`, `SAME_GRAPH_LLM`)
 - `same status --json` for integration dashboards
 - `same doctor` for support triage
+- `make precheck-full` when maintainers want full tracked-file hygiene scans before release
 
 ## Positioning guidance
 

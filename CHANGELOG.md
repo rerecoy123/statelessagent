@@ -41,7 +41,7 @@
 - **Graph path lookup ergonomics** — `same graph path` now resolves note/file type mismatches (for paths that exist as file nodes but were requested as note nodes, and vice versa)
 - **Graph query readability** — `same graph query` now reconstructs full edge sequences so output shows relationship-labeled paths, not node-only chains
 - **Markdown cross-note linking** — `.md` references now map to note nodes, enabling direct note-to-note traversal (for example, `notes/a.md -> notes/b.md`)
-- **Precheck scope clarity** — `make precheck` now labels its blocklist scan as repo-scope release hygiene and explicitly notes what it does not cover (user vaults, full history, forks, mirrors)
+- **Precheck scope clarity** — `make precheck` now labels its blocklist scan as repo-scope release hygiene and explicitly notes what it does not cover (user vaults, full history, forks, mirrors); `make precheck-full` adds an all-tracked-files blocklist sweep
 
 ### Privacy
 
