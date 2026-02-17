@@ -72,7 +72,9 @@ func SetupHooks(vaultPath string) error {
 	// Parse existing hooks
 	var existingHooks map[string][]hookEntry
 	if raw, ok := existing["hooks"]; ok {
-		json.Unmarshal(raw, &existingHooks)
+		if err := json.Unmarshal(raw, &existingHooks); err != nil {
+			return fmt.Errorf("parse %s hooks: %w (fix hooks JSON manually to avoid data loss)", settingsPath, err)
+		}
 	}
 	if existingHooks == nil {
 		existingHooks = make(map[string][]hookEntry)
@@ -126,7 +128,9 @@ func RemoveHooks(vaultPath string) error {
 
 	var existingHooks map[string][]hookEntry
 	if raw, ok := existing["hooks"]; ok {
-		json.Unmarshal(raw, &existingHooks)
+		if err := json.Unmarshal(raw, &existingHooks); err != nil {
+			return fmt.Errorf("parse hooks: %w", err)
+		}
 	}
 	if existingHooks == nil {
 		fmt.Println("  No hooks found.")

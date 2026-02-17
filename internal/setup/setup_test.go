@@ -215,6 +215,18 @@ func TestSetupHooks_RejectsInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestSetupHooks_RejectsInvalidHooksShape(t *testing.T) {
+	dir := t.TempDir()
+	claudeDir := filepath.Join(dir, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"hooks":[]}`), 0o644)
+
+	err := SetupHooks(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid hooks shape")
+	}
+}
+
 func TestSetupHooks_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 
@@ -332,6 +344,18 @@ func TestRemoveHooks_NoHooksKey(t *testing.T) {
 	err := RemoveHooks(dir)
 	if err != nil {
 		t.Fatalf("RemoveHooks with no hooks key: %v", err)
+	}
+}
+
+func TestRemoveHooks_RejectsInvalidHooksShape(t *testing.T) {
+	dir := t.TempDir()
+	claudeDir := filepath.Join(dir, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"hooks":[]}`), 0o644)
+
+	err := RemoveHooks(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid hooks shape")
 	}
 }
 
