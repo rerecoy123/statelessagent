@@ -68,8 +68,7 @@ echo ""
 echo -e "${BOLD}Build${RESET}"
 
 info "Building..."
-BUILD_OUT=$(make -C "$REPO_ROOT" build 2>&1)
-if [ $? -eq 0 ]; then
+if BUILD_OUT=$(make -C "$REPO_ROOT" build 2>&1); then
     pass "make build"
 else
     fail "make build"
@@ -91,8 +90,7 @@ echo ""
 echo -e "${BOLD}Tests${RESET}"
 
 info "Running test suite..."
-TEST_OUT=$(make -C "$REPO_ROOT" test 2>&1)
-if [ $? -eq 0 ]; then
+if TEST_OUT=$(make -C "$REPO_ROOT" test 2>&1); then
     pass "make test (all packages)"
 else
     fail "make test"
