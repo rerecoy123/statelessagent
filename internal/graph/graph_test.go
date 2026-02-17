@@ -293,6 +293,66 @@ func TestExtractFromNote_MarkdownReferenceBecomesNoteNode(t *testing.T) {
 	}
 }
 
+func TestGraphQualityFixture_NoteReferencesAreTraversable(t *testing.T) {
+	db := setupTestDB(t)
+	ext := NewExtractor(db)
+
+	alphaContent := `
+We decided: split command handlers for clarity.
+See notes/beta.md and internal/indexer/indexer.go.
+`
+	betaContent := `
+We chose to keep regex extraction as the default fallback.
+`
+
+	if err := ext.ExtractFromNote(1, "notes/alpha.md", alphaContent, "woody"); err != nil {
+		t.Fatalf("extract alpha: %v", err)
+	}
+	if err := ext.ExtractFromNote(2, "notes/beta.md", betaContent, "buzz"); err != nil {
+		t.Fatalf("extract beta: %v", err)
+	}
+
+	stats, err := db.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats: %v", err)
+	}
+	if stats.NodesByType[NodeNote] < 2 {
+		t.Fatalf("expected at least 2 note nodes, got %d", stats.NodesByType[NodeNote])
+	}
+	if stats.NodesByType[NodeAgent] < 2 {
+		t.Fatalf("expected at least 2 agent nodes, got %d", stats.NodesByType[NodeAgent])
+	}
+	if stats.NodesByType[NodeDecision] < 2 {
+		t.Fatalf("expected at least 2 decision nodes, got %d", stats.NodesByType[NodeDecision])
+	}
+	if stats.NodesByType[NodeFile] < 1 {
+		t.Fatalf("expected at least 1 file node, got %d", stats.NodesByType[NodeFile])
+	}
+
+	alpha, err := db.FindNode(NodeNote, "notes/alpha.md")
+	if err != nil {
+		t.Fatalf("find alpha node: %v", err)
+	}
+	beta, err := db.FindNode(NodeNote, "notes/beta.md")
+	if err != nil {
+		t.Fatalf("find beta node: %v", err)
+	}
+
+	path, err := db.FindShortestPath(alpha.ID, beta.ID)
+	if err != nil {
+		t.Fatalf("FindShortestPath alpha->beta: %v", err)
+	}
+	if path == nil {
+		t.Fatal("expected traversable path from alpha to beta")
+	}
+	if len(path.Nodes) != 2 {
+		t.Fatalf("expected direct 2-node path alpha->beta, got %d nodes", len(path.Nodes))
+	}
+	if len(path.Edges) != 1 || path.Edges[0].Relationship != RelReferences {
+		t.Fatalf("expected single references edge, got %#v", path.Edges)
+	}
+}
+
 func BenchmarkQueryGraph(b *testing.B) {
 	db := setupTestDB(&testing.T{})
 

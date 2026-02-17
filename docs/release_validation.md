@@ -32,6 +32,23 @@ Notes:
 - non-`none` providers verify semantic indexing behavior (`index_mode=full`).
 - in restricted runtimes that block localhost bind, web checks are skipped with an explicit reason.
 
+## One-Command Gate
+
+```bash
+make release-candidate
+```
+
+This runs:
+- `make precheck`
+- `go vet ./...`
+- `go test ./internal/store -run TestOpenPath_MigratesLegacyV5ToV6 -count=1`
+
+To include full provider matrix:
+
+```bash
+make release-candidate-full
+```
+
 ## Upgrade Path
 
 Run the on-disk migration regression test:

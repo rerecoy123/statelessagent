@@ -103,10 +103,13 @@ func graphQueryCmd() *cobra.Command {
 			defer db.Close()
 
 			gdb := graph.NewDB(db.Conn())
+			startNode, err := resolveGraphNode(gdb, nodeType, nodeName)
+			if err != nil {
+				return fmt.Errorf("start node not found: %w", err)
+			}
 
 			opts := graph.QueryOptions{
-				FromNodeType: nodeType,
-				FromNodeName: nodeName,
+				FromNodeID:   startNode.ID,
 				Relationship: rel,
 				MaxDepth:     depth,
 				Direction:    dir,
