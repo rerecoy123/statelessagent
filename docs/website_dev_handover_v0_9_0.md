@@ -20,7 +20,9 @@
 - `same watch` now cleans up stale entries on rename/missing-file races
 - vault feed source/target containment checks use boundary-safe path validation
 - seed manifest cache now enforces the same validation as fresh manifest downloads
+- `same seed install --force` now refuses dangerous destination paths (root/home/seed-root parent)
 - `SafeVaultSubpath` rejects absolute inputs and enforces vault-root containment
+- guard allowlist file entries now use exact path matching to avoid nested basename bypasses
 
 ## Suggested website copy updates
 

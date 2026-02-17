@@ -587,6 +587,37 @@ func TestRemove_RejectsDeletingDefaultSeedRoot(t *testing.T) {
 	}
 }
 
+func TestIsDangerousInstallDestination(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	seedRoot := DefaultSeedDir()
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "filesystem root", path: string(filepath.Separator), want: true},
+		{name: "home dir", path: home, want: true},
+		{name: "default seed root", path: seedRoot, want: true},
+		{name: "seed root child", path: filepath.Join(seedRoot, "my-seed"), want: false},
+		{name: "other dedicated dir", path: filepath.Join(home, "projects", "seed-vault"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			abs, err := filepath.Abs(tt.path)
+			if err != nil {
+				t.Fatalf("abs path: %v", err)
+			}
+			if got := isDangerousInstallDestination(abs); got != tt.want {
+				t.Fatalf("isDangerousInstallDestination(%q)=%v want %v", abs, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPathWithinBase_PrefixConfusion(t *testing.T) {
 	base := filepath.Join("tmp", "seed-root")
 	inside := filepath.Join(base, "notes", "a.md")

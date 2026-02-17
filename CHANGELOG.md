@@ -27,9 +27,11 @@
 - **`same init --provider` input validation** — invalid provider names now fail fast with a clear error instead of falling into confusing runtime fallback paths
 - **Seed manifest/cache parity checks** — cached manifests now enforce the same seed name/path validation as fresh downloads (including rejection of embedded `.` / `..` traversal segments), preventing trust gaps when falling back to local cache
 - **`same seed remove` consistency safeguards** — destructive path checks now run before registry mutation, root seed-dir deletion is explicitly refused, and delete failures trigger best-effort registry rollback
+- **`same seed install --force` path safeguards** — install now refuses dangerous destinations (filesystem root, home directory, or seed root parent), preventing accidental high-impact deletes on forced reinstall
 - **Seed extraction containment checks** — archive extraction boundary validation now uses path-relative containment checks to avoid prefix-confusion edge cases
 - **Vault feed containment checks** — source/destination path enforcement now uses `filepath.Rel`-based boundary checks instead of raw prefix matching for safer cross-platform behavior
 - **Vault subpath guard strictness** — `SafeVaultSubpath` now rejects absolute subpath inputs and uses boundary-safe containment checks before writing handoff/decision files
+- **Guard allowlist path matching** — file allowlist entries now require exact path matches (no basename-only fallback), preventing nested-file bypasses like `docs/README.md`
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
 - **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
 - **Keyword-only reindex UX** — `same reindex` now reliably falls back to lite mode when embeddings are disabled (`provider = "none"`), with clear next-step messaging

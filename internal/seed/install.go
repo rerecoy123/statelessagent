@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
@@ -83,6 +84,13 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 	absDir, err := filepath.Abs(destDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
+	}
+	if isDangerousInstallDestination(absDir) {
+		return nil, fmt.Errorf(
+			"refusing dangerous install destination %s — choose a dedicated subdirectory (example: %s)",
+			absDir,
+			filepath.Join(DefaultSeedDir(), seed.Name),
+		)
 	}
 
 	// 4b. Reject installing into CWD when an explicit path was given
@@ -299,6 +307,28 @@ func pathWithin(base, candidate string) bool {
 	}
 	rel = filepath.ToSlash(rel)
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
+}
+
+func isDangerousInstallDestination(absDir string) bool {
+	clean := filepath.Clean(absDir)
+	if clean == string(filepath.Separator) {
+		return true
+	}
+	home, err := os.UserHomeDir()
+	if err == nil && samePath(clean, filepath.Clean(home)) {
+		return true
+	}
+	if samePath(clean, filepath.Clean(DefaultSeedDir())) {
+		return true
+	}
+	return false
+}
+
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // IsInstalled checks if a seed is registered in the vault registry.

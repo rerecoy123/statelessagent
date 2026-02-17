@@ -40,8 +40,8 @@ func IsPathAllowed(filePath string, customPaths []string) bool {
 				return true
 			}
 		} else {
-			// Exact file match (compare basename or full path)
-			if normalized == allowed || filepath.Base(normalized) == allowed {
+			// Exact file match only; avoid basename matches that can leak nested files.
+			if normalized == allowed {
 				return true
 			}
 		}

@@ -174,6 +174,7 @@ func TestIsPathAllowed(t *testing.T) {
 		{"package.json", true},
 		{"SECURITY.md", true},
 		{"README.md", true},
+		{"docs/README.md", false},
 		{"projects/notes.md", false},
 		{"Transcript 2 (Alice call).md", false},
 		{"_PRIVATE/secret.md", false},
@@ -195,6 +196,9 @@ func TestIsPathAllowed_CustomPaths(t *testing.T) {
 	}
 	if !IsPathAllowed("Makefile", custom) {
 		t.Error("expected Makefile to be allowed with custom paths")
+	}
+	if IsPathAllowed("scripts/Makefile", custom) {
+		t.Error("did not expect basename-only custom file match")
 	}
 }
 
