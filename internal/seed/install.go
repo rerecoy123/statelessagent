@@ -244,9 +244,31 @@ func Remove(name string, deleteFiles bool) error {
 		return fmt.Errorf("seed %q is not installed — run 'same seed list' to see installed seeds", name)
 	}
 
+	wasDefault := reg.Default == name
+	absPath := ""
+	absSeedDir := ""
+
+	// Pre-flight deletion safety checks before mutating registry state.
+	if deleteFiles {
+		var err error
+		absPath, err = filepath.Abs(vaultPath)
+		if err != nil {
+			return fmt.Errorf("resolve path: %w", err)
+		}
+		seedDir := DefaultSeedDir()
+		absSeedDir, err = filepath.Abs(seedDir)
+		if err != nil {
+			return fmt.Errorf("resolve seed dir: %w", err)
+		}
+		if !pathWithin(absSeedDir, absPath) {
+			return fmt.Errorf("refusing to delete %s — not under %s (use 'same vault remove %s' instead)",
+				absPath, seedDir, name)
+		}
+	}
+
 	// Unregister
 	delete(reg.Vaults, name)
-	if reg.Default == name {
+	if wasDefault {
 		reg.Default = ""
 	}
 	if err := reg.Save(); err != nil {
@@ -255,26 +277,28 @@ func Remove(name string, deleteFiles bool) error {
 
 	// Optionally delete files
 	if deleteFiles {
-		// SECURITY: only delete if under the default seed directory
-		absPath, err := filepath.Abs(vaultPath)
-		if err != nil {
-			return fmt.Errorf("resolve path: %w", err)
-		}
-		seedDir := DefaultSeedDir()
-		absSeedDir, err := filepath.Abs(seedDir)
-		if err != nil {
-			return fmt.Errorf("resolve seed dir: %w", err)
-		}
-		if !strings.HasPrefix(absPath, absSeedDir+string(filepath.Separator)) {
-			return fmt.Errorf("refusing to delete %s — not under %s (use 'same vault remove %s' instead)",
-				absPath, seedDir, name)
-		}
 		if err := os.RemoveAll(absPath); err != nil {
+			// Best-effort rollback to keep registry and filesystem consistent.
+			rollback := config.LoadRegistry()
+			rollback.Vaults[name] = vaultPath
+			if wasDefault && rollback.Default == "" {
+				rollback.Default = name
+			}
+			_ = rollback.Save()
 			return fmt.Errorf("delete seed files: %w", err)
 		}
 	}
 
 	return nil
+}
+
+func pathWithin(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
 }
 
 // IsInstalled checks if a seed is registered in the vault registry.

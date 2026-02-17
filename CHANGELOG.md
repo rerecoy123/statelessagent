@@ -25,6 +25,8 @@
 - **Provider-neutral diagnostics and status UX** — `same status`/`same doctor` now report embedding/chat/graph runtime state across `ollama`, `openai`, `openai-compatible`, and `none` modes instead of Ollama-only assumptions
 - **`same watch` rename/delete consistency** — watcher now removes stale indexed paths on file rename, cleans up entries when files vanish before debounce flush, and rejects out-of-vault relative-path escapes
 - **`same init --provider` input validation** — invalid provider names now fail fast with a clear error instead of falling into confusing runtime fallback paths
+- **Seed manifest/cache parity checks** — cached manifests now enforce the same seed name/path validation as fresh downloads, preventing trust gaps when falling back to local cache
+- **`same seed remove` consistency safeguards** — destructive path checks now run before registry mutation, and delete failures trigger best-effort registry rollback
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
 - **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
 - **Keyword-only reindex UX** — `same reindex` now reliably falls back to lite mode when embeddings are disabled (`provider = "none"`), with clear next-step messaging

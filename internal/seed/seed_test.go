@@ -11,6 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/sgx-labs/statelessagent/internal/config"
 )
 
 func newLocalHTTPServer(t *testing.T, handler http.Handler) *httptest.Server {
@@ -409,5 +412,145 @@ func TestManifestCachePath(t *testing.T) {
 	}
 	if !filepath.IsAbs(path) {
 		t.Error("expected absolute cache path")
+	}
+}
+
+func TestValidateSeedPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "simple", input: "my-seed", wantErr: false},
+		{name: "nested", input: "collections/my-seed", wantErr: false},
+		{name: "empty", input: "", wantErr: true},
+		{name: "absolute", input: "/etc/passwd", wantErr: true},
+		{name: "traversal", input: "../seeds", wantErr: true},
+		{name: "dot segment normalized", input: "./seeds", wantErr: false},
+		{name: "hidden segment", input: ".hidden/seed", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSeedPath(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateSeedPath(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoadCachedManifest_ValidatesSeedEntries(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "seed-manifest.json")
+
+	writeCache := func(seedName, seedPath string) {
+		t.Helper()
+		c := manifestCache{
+			FetchedAt: time.Now().UTC(),
+			Manifest: Manifest{
+				SchemaVersion: 1,
+				Seeds: []Seed{
+					{
+						Name:        seedName,
+						DisplayName: "Test",
+						Path:        seedPath,
+						NoteCount:   1,
+					},
+				},
+			},
+		}
+		data, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("marshal cache: %v", err)
+		}
+		if err := os.WriteFile(cachePath, data, 0o600); err != nil {
+			t.Fatalf("write cache: %v", err)
+		}
+	}
+
+	t.Run("rejects invalid seed name from cache", func(t *testing.T) {
+		writeCache("Bad_Name", "good-seed")
+		if _, err := loadCachedManifest(cachePath, true); err == nil {
+			t.Fatal("expected error for invalid cached seed name")
+		}
+	})
+
+	t.Run("rejects invalid seed path from cache", func(t *testing.T) {
+		writeCache("good-seed", "../escape")
+		if _, err := loadCachedManifest(cachePath, true); err == nil {
+			t.Fatal("expected error for invalid cached seed path")
+		}
+	})
+
+	t.Run("accepts valid cached seed", func(t *testing.T) {
+		writeCache("good-seed", "good-seed")
+		if _, err := loadCachedManifest(cachePath, true); err != nil {
+			t.Fatalf("expected valid cache, got: %v", err)
+		}
+	})
+}
+
+func TestRemove_OutsideDefaultSeedDir_DoesNotUnregister(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	outside := t.TempDir()
+	reg := &config.VaultRegistry{
+		Vaults:  map[string]string{"test-seed": outside},
+		Default: "test-seed",
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("save registry: %v", err)
+	}
+
+	err := Remove("test-seed", true)
+	if err == nil {
+		t.Fatal("expected refusal error for out-of-seed-dir delete")
+	}
+
+	after := config.LoadRegistry()
+	if _, ok := after.Vaults["test-seed"]; !ok {
+		t.Fatal("seed should remain registered on delete refusal")
+	}
+	if after.Default != "test-seed" {
+		t.Fatalf("default should be preserved, got %q", after.Default)
+	}
+}
+
+func TestRemove_DeleteFilesSuccess_UnregistersAndDeletes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	seedPath := filepath.Join(DefaultSeedDir(), "test-seed")
+	if err := os.MkdirAll(seedPath, 0o755); err != nil {
+		t.Fatalf("mkdir seed path: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seedPath, "note.md"), []byte("# note"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+
+	reg := &config.VaultRegistry{
+		Vaults:  map[string]string{"test-seed": seedPath},
+		Default: "test-seed",
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("save registry: %v", err)
+	}
+
+	if err := Remove("test-seed", true); err != nil {
+		t.Fatalf("remove seed: %v", err)
+	}
+
+	after := config.LoadRegistry()
+	if _, ok := after.Vaults["test-seed"]; ok {
+		t.Fatal("seed should be unregistered after successful remove")
+	}
+	if after.Default != "" {
+		t.Fatalf("default should be cleared, got %q", after.Default)
+	}
+	if _, err := os.Stat(seedPath); !os.IsNotExist(err) {
+		t.Fatalf("seed path should be deleted, stat err=%v", err)
 	}
 }

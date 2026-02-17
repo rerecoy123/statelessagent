@@ -97,15 +97,8 @@ func FetchManifest(forceRefresh bool) (*Manifest, error) {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 
-	if manifest.SchemaVersion != 1 {
-		return nil, fmt.Errorf("unsupported manifest schema version: %d", manifest.SchemaVersion)
-	}
-
-	// Validate seed names
-	for _, s := range manifest.Seeds {
-		if err := validateSeedName(s.Name); err != nil {
-			return nil, fmt.Errorf("invalid seed in manifest: %w", err)
-		}
+	if err := validateManifest(&manifest); err != nil {
+		return nil, fmt.Errorf("invalid manifest: %w", err)
 	}
 
 	// Write cache
@@ -144,6 +137,53 @@ func validateSeedName(name string) error {
 	return nil
 }
 
+func validateSeedPath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("seed path cannot be empty")
+	}
+	if strings.ContainsRune(path, 0) {
+		return fmt.Errorf("seed path contains null byte")
+	}
+
+	normalized := strings.ReplaceAll(path, "\\", "/")
+	if len(normalized) >= 3 {
+		ch := normalized[0]
+		if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) && normalized[1] == ':' && normalized[2] == '/' {
+			return fmt.Errorf("seed path must be relative (got %q)", path)
+		}
+	}
+
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(normalized)))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") {
+		return fmt.Errorf("seed path must stay within repository (got %q)", path)
+	}
+
+	for _, part := range strings.Split(clean, "/") {
+		if part == "" || part == "." || part == ".." {
+			return fmt.Errorf("seed path contains invalid segment (got %q)", path)
+		}
+		if strings.HasPrefix(part, ".") {
+			return fmt.Errorf("seed path cannot contain hidden segment %q", part)
+		}
+	}
+	return nil
+}
+
+func validateManifest(m *Manifest) error {
+	if m.SchemaVersion != 1 {
+		return fmt.Errorf("unsupported manifest schema version: %d", m.SchemaVersion)
+	}
+	for _, s := range m.Seeds {
+		if err := validateSeedName(s.Name); err != nil {
+			return fmt.Errorf("invalid seed name %q: %w", s.Name, err)
+		}
+		if err := validateSeedPath(s.Path); err != nil {
+			return fmt.Errorf("invalid seed path for %q: %w", s.Name, err)
+		}
+	}
+	return nil
+}
+
 // loadCachedManifest reads and validates the cached manifest.
 // Returns nil if the cache is missing, corrupt, or (when allowStale is false) expired.
 // Set allowStale to true for network-failure fallback paths.
@@ -159,8 +199,8 @@ func loadCachedManifest(path string, allowStale bool) (*Manifest, error) {
 	if !allowStale && time.Since(cache.FetchedAt) > ManifestCacheTTL {
 		return nil, fmt.Errorf("cache expired")
 	}
-	if cache.Manifest.SchemaVersion != 1 {
-		return nil, fmt.Errorf("stale schema version")
+	if err := validateManifest(&cache.Manifest); err != nil {
+		return nil, err
 	}
 	return &cache.Manifest, nil
 }
