@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -174,13 +176,13 @@ func graphPathCmd() *cobra.Command {
 			gdb := graph.NewDB(db.Conn())
 
 			// Resolve start node
-			startNode, err := gdb.FindNode(fromType, fromName)
+			startNode, err := resolveGraphNode(gdb, fromType, fromName)
 			if err != nil {
 				return fmt.Errorf("start node not found: %w", err)
 			}
 
 			// Resolve end node
-			endNode, err := gdb.FindNode(toType, toName)
+			endNode, err := resolveGraphNode(gdb, toType, toName)
 			if err != nil {
 				return fmt.Errorf("end node not found: %w", err)
 			}
@@ -249,4 +251,26 @@ func graphRebuildCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func resolveGraphNode(gdb *graph.DB, nodeType, nodeName string) (*graph.Node, error) {
+	node, err := gdb.FindNode(nodeType, nodeName)
+	if err == nil {
+		return node, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	altType := ""
+	switch nodeType {
+	case graph.NodeNote:
+		altType = graph.NodeFile
+	case graph.NodeFile:
+		altType = graph.NodeNote
+	default:
+		return nil, err
+	}
+
+	return gdb.FindNode(altType, nodeName)
 }

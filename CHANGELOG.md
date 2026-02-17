@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased (v0.9.0)
+
+### Added
+
+- **Knowledge graph command group (`same graph`)** — new CLI for graph traversal and diagnostics:
+  - `same graph stats` — node/edge counts by type and relationship
+  - `same graph query` — depth-limited recursive traversal from a start node
+  - `same graph path` — shortest path between two nodes
+  - `same graph rebuild` — rebuild baseline note/agent/produced graph from indexed notes
+- **Schema migration v6 (`graph_nodes`, `graph_edges`)** — graph tables are now first-class in the versioned migration pipeline
+- **Incremental graph sync test coverage** — added regression coverage for graph cleanup on note delete/force clear and lite single-file updates
+
+### Fixed
+
+- **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
+- **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
+- **Keyword-only reindex UX** — `same reindex` now reliably falls back to lite mode when embeddings are disabled (`provider = "none"`), with clear next-step messaging
+- **`--vault` precedence** — CLI `--vault` now correctly overrides env/config vault paths, preventing accidental indexing/querying of the wrong vault
+- **Graph path lookup ergonomics** — `same graph path` now resolves note/file type mismatches (for paths that exist as file nodes but were requested as note nodes, and vice versa)
+
+### Privacy
+
+- **No privacy boundary changes** — graph extraction still operates only on indexed notes; `_PRIVATE/` remains excluded because it is never indexed
+
+---
+
 ## v0.8.3 — Keyword-Only Mode & ARM Linux
 
 Fixes keyword-only search (the biggest issue for no-Ollama environments), adds linux-arm64 pre-built binaries, and adds `provider = "none"` for permanent keyword-only mode.

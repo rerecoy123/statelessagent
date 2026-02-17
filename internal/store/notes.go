@@ -232,6 +232,24 @@ func (db *DB) DeleteByPath(path string) error {
 	}
 	defer tx.Rollback()
 
+	// Keep the knowledge graph in sync even when SQLite FK pragmas differ.
+	// We remove note nodes for this path and connected edges, then prune
+	// orphan non-note nodes (file/decision/agent/entity) with no edges.
+	{
+		ids, err := noteRootIDsByPathTx(tx, path)
+		if err != nil {
+			return fmt.Errorf("lookup note ids: %w", err)
+		}
+		if len(ids) > 0 {
+			if err := deleteGraphForNoteIDsTx(tx, ids); err != nil && !isNoSuchTableErr(err) {
+				return fmt.Errorf("delete graph note subgraph: %w", err)
+			}
+			if err := pruneOrphanGraphNodesTx(tx); err != nil && !isNoSuchTableErr(err) {
+				return fmt.Errorf("prune orphan graph nodes: %w", err)
+			}
+		}
+	}
+
 	// Delete vectors first (referential)
 	if _, err := tx.Exec(
 		"DELETE FROM vault_notes_vec WHERE note_id IN (SELECT id FROM vault_notes WHERE path = ?)",
@@ -259,6 +277,14 @@ func (db *DB) DeleteAllNotes() error {
 	}
 	defer tx.Rollback()
 
+	// Reset graph tables as part of force-clear to avoid stale nodes/edges.
+	if _, err := tx.Exec("DELETE FROM graph_edges"); err != nil && !isNoSuchTableErr(err) {
+		return fmt.Errorf("delete all graph edges: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM graph_nodes"); err != nil && !isNoSuchTableErr(err) {
+		return fmt.Errorf("delete all graph nodes: %w", err)
+	}
+
 	if _, err := tx.Exec("DELETE FROM vault_notes_vec"); err != nil {
 		return fmt.Errorf("delete all vectors: %w", err)
 	}
@@ -266,6 +292,64 @@ func (db *DB) DeleteAllNotes() error {
 		return fmt.Errorf("delete all notes: %w", err)
 	}
 	return tx.Commit()
+}
+
+func noteRootIDsByPathTx(tx *sql.Tx, path string) ([]int64, error) {
+	rows, err := tx.Query("SELECT id FROM vault_notes WHERE path = ? AND chunk_id = 0", path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func deleteGraphForNoteIDsTx(tx *sql.Tx, noteIDs []int64) error {
+	placeholders := make([]string, len(noteIDs))
+	args := make([]interface{}, len(noteIDs))
+	for i, id := range noteIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	in := strings.Join(placeholders, ",")
+
+	edgeQuery := `
+		DELETE FROM graph_edges
+		WHERE source_id IN (SELECT id FROM graph_nodes WHERE note_id IN (` + in + `))
+		   OR target_id IN (SELECT id FROM graph_nodes WHERE note_id IN (` + in + `))`
+	edgeArgs := append([]interface{}{}, args...)
+	edgeArgs = append(edgeArgs, args...)
+	if _, err := tx.Exec(edgeQuery, edgeArgs...); err != nil {
+		return err
+	}
+
+	nodeQuery := "DELETE FROM graph_nodes WHERE note_id IN (" + in + ")"
+	_, err := tx.Exec(nodeQuery, args...)
+	return err
+}
+
+func pruneOrphanGraphNodesTx(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		DELETE FROM graph_nodes
+		WHERE type != 'note'
+		  AND id NOT IN (
+			SELECT source_id FROM graph_edges
+			UNION
+			SELECT target_id FROM graph_edges
+		  )`)
+	return err
+}
+
+func isNoSuchTableErr(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "no such table")
 }
 
 // IncrementAccessCount increments the access count for notes at the given paths.

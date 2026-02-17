@@ -642,7 +642,7 @@ REST is simpler and better suited for our use case.
 	filePath := writeTestNote(t, dir, "decisions/api-design.md", content)
 	relPath := "decisions/api-design.md"
 
-	records, err := buildRecordsLite(filePath, relPath, dir)
+	records, _, err := buildRecordsLite(filePath, relPath, dir)
 	if err != nil {
 		t.Fatalf("buildRecordsLite: %v", err)
 	}
@@ -692,7 +692,7 @@ func TestBuildRecordsLiteTitleFromFilename(t *testing.T) {
 	content := "# No Frontmatter\n\nJust body text.\n"
 	filePath := writeTestNote(t, dir, "my-note.md", content)
 
-	records, err := buildRecordsLite(filePath, "my-note.md", dir)
+	records, _, err := buildRecordsLite(filePath, "my-note.md", dir)
 	if err != nil {
 		t.Fatalf("buildRecordsLite: %v", err)
 	}
@@ -715,7 +715,7 @@ Body.
 `
 	filePath := writeTestNote(t, dir, "note.md", content)
 
-	records, err := buildRecordsLite(filePath, "note.md", dir)
+	records, _, err := buildRecordsLite(filePath, "note.md", dir)
 	if err != nil {
 		t.Fatalf("buildRecordsLite: %v", err)
 	}
@@ -741,7 +741,7 @@ func TestBuildRecordsLiteChunking(t *testing.T) {
 
 	filePath := writeTestNote(t, dir, "long.md", body.String())
 
-	records, err := buildRecordsLite(filePath, "long.md", dir)
+	records, _, err := buildRecordsLite(filePath, "long.md", dir)
 	if err != nil {
 		t.Fatalf("buildRecordsLite: %v", err)
 	}
@@ -775,7 +775,7 @@ func TestBuildRecordsLiteTextTruncation(t *testing.T) {
 	content := "---\ntitle: \"Huge\"\n---\n\n" + strings.Repeat("x", 12000)
 	filePath := writeTestNote(t, dir, "huge.md", content)
 
-	records, err := buildRecordsLite(filePath, "huge.md", dir)
+	records, _, err := buildRecordsLite(filePath, "huge.md", dir)
 	if err != nil {
 		t.Fatalf("buildRecordsLite: %v", err)
 	}
@@ -788,7 +788,7 @@ func TestBuildRecordsLiteTextTruncation(t *testing.T) {
 }
 
 func TestBuildRecordsLiteFileNotFound(t *testing.T) {
-	_, err := buildRecordsLite("/nonexistent/file.md", "file.md", "/nonexistent")
+	_, _, err := buildRecordsLite("/nonexistent/file.md", "file.md", "/nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent file")
 	}
@@ -1019,6 +1019,93 @@ func TestReindexLiteEmptyVault(t *testing.T) {
 	}
 	if stats.NewlyIndexed != 0 {
 		t.Errorf("expected 0 newly indexed, got %d", stats.NewlyIndexed)
+	}
+}
+
+func TestIndexSingleFileLite_UpsertsAndSyncsGraph(t *testing.T) {
+	vaultDir := setupTestVault(t)
+	relPath := "notes/live.md"
+
+	filePath := writeTestNote(t, vaultDir, relPath, `---
+agent: buzz
+---
+We decided: use old path.
+See internal/old.go for details.
+`)
+
+	db, err := store.OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	if err := IndexSingleFileLite(db, filePath, relPath, vaultDir); err != nil {
+		t.Fatalf("first IndexSingleFileLite: %v", err)
+	}
+
+	var count int
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_nodes WHERE type = 'file' AND name = 'internal/old.go'",
+	).Scan(&count); err != nil {
+		t.Fatalf("count old file node: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected old file node count 1 after first index, got %d", count)
+	}
+
+	// Update note content and ensure incremental single-file reindex replaces prior graph links.
+	filePath = writeTestNote(t, vaultDir, relPath, `---
+agent: buzz
+---
+We decided: use new path.
+See internal/new.go for details.
+`)
+	if err := IndexSingleFileLite(db, filePath, relPath, vaultDir); err != nil {
+		t.Fatalf("second IndexSingleFileLite: %v", err)
+	}
+
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM vault_notes WHERE path = ? AND chunk_id = 0",
+		relPath,
+	).Scan(&count); err != nil {
+		t.Fatalf("count note roots: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one root note row after reindex, got %d", count)
+	}
+
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_nodes WHERE type = 'file' AND name = 'internal/old.go'",
+	).Scan(&count); err != nil {
+		t.Fatalf("count old file node after update: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected old file node to be pruned after update, got %d", count)
+	}
+
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_nodes WHERE type = 'file' AND name = 'internal/new.go'",
+	).Scan(&count); err != nil {
+		t.Fatalf("count new file node after update: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected new file node count 1 after update, got %d", count)
+	}
+
+	if err := db.Conn().QueryRow(`
+		SELECT COUNT(*)
+		FROM graph_edges e
+		JOIN graph_nodes src ON src.id = e.source_id
+		JOIN graph_nodes dst ON dst.id = e.target_id
+		WHERE src.type = 'agent' AND src.name = 'buzz'
+		  AND dst.type = 'note' AND dst.name = ?
+		  AND e.relationship = 'produced'`,
+		relPath,
+	).Scan(&count); err != nil {
+		t.Fatalf("count produced edges: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected single produced edge after reindex, got %d", count)
 	}
 }
 

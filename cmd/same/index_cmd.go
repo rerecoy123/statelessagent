@@ -68,10 +68,14 @@ func runReindex(force bool, verbose bool) error {
 	stats, err := indexer.ReindexWithProgress(db, force, progress)
 	if err != nil {
 		errMsg := strings.ToLower(err.Error())
-		if strings.Contains(errMsg, "ollama") || strings.Contains(errMsg, "connection") || strings.Contains(errMsg, "refused") {
-			// Ollama-specific fallback — offer lite mode
-			fmt.Fprintf(os.Stderr, "  Ollama not available — indexing with keyword search only.\n")
-			fmt.Fprintf(os.Stderr, "  Start Ollama and run 'same reindex' again for semantic search.\n\n")
+		if strings.Contains(errMsg, "ollama") ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "refused") ||
+			strings.Contains(errMsg, "keyword-only mode") ||
+			strings.Contains(errMsg, `provider is "none"`) {
+			// Embedding unavailable/disabled — offer lite mode
+			fmt.Fprintf(os.Stderr, "  Embedding backend unavailable or disabled — indexing with keyword search only.\n")
+			fmt.Fprintf(os.Stderr, "  Start Ollama (or switch embedding provider) and run 'same reindex' again for semantic search.\n\n")
 			stats, err = indexer.ReindexLite(db, force, progress)
 			if err != nil {
 				return err

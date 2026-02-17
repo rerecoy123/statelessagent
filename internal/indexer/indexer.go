@@ -347,6 +347,40 @@ func IndexSingleFile(database *store.DB, filePath, relPath, vaultPath string, em
 	return nil
 }
 
+// IndexSingleFileLite indexes (or re-indexes) a single file without embeddings.
+// Used by watcher mode when provider="none" (keyword-only mode).
+func IndexSingleFileLite(database *store.DB, filePath, relPath, vaultPath string) error {
+	records, content, err := buildRecordsLite(filePath, relPath, vaultPath)
+	if err != nil {
+		return fmt.Errorf("build records lite: %w", err)
+	}
+	if len(records) == 0 {
+		return nil
+	}
+
+	if err := database.DeleteByPath(relPath); err != nil {
+		return fmt.Errorf("delete old chunks: %w", err)
+	}
+
+	insertedIDs, err := database.BulkInsertNotesLite(records)
+	if err != nil {
+		return fmt.Errorf("insert notes lite: %w", err)
+	}
+
+	graphDB := graph.NewDB(database.Conn())
+	extractor := graph.NewExtractor(graphDB)
+	if rootID, ok := insertedIDs[relPath]; ok {
+		agent := ""
+		if len(records) > 0 {
+			agent = records[0].Agent
+		}
+		_ = extractor.ExtractFromNote(rootID, relPath, string(content), agent)
+	}
+
+	_ = database.RebuildFTS()
+	return nil
+}
+
 // BuildRecordsForFile builds note records and embeddings for a single file.
 // Exported for use by the watcher.
 func BuildRecordsForFile(filePath, relPath, vaultPath string, embedClient embedding.Provider) ([]store.NoteRecord, [][]float32, error) {
@@ -551,7 +585,7 @@ func ReindexLite(db *store.DB, force bool, progress ProgressFunc) (*Stats, error
 			}
 		}
 
-		records, err := buildRecordsLite(fp, relPath, vaultPath)
+		records, _, err := buildRecordsLite(fp, relPath, vaultPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [ERROR] %s: %v\n", relPath, err)
 			stats.Errors++
@@ -605,10 +639,10 @@ func ReindexLite(db *store.DB, force bool, progress ProgressFunc) (*Stats, error
 }
 
 // buildRecordsLite builds note records WITHOUT embeddings.
-func buildRecordsLite(filePath, relPath, vaultPath string) ([]store.NoteRecord, error) {
+func buildRecordsLite(filePath, relPath, vaultPath string) ([]store.NoteRecord, []byte, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
+		return nil, nil, fmt.Errorf("read file: %w", err)
 	}
 
 	parsed := ParseNote(string(content))
@@ -617,7 +651,7 @@ func buildRecordsLite(filePath, relPath, vaultPath string) ([]store.NoteRecord, 
 
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("stat file: %w", err)
+		return nil, nil, fmt.Errorf("stat file: %w", err)
 	}
 	mtime := float64(info.ModTime().Unix())
 	contentHash := sha256Hash(body)
@@ -678,7 +712,7 @@ func buildRecordsLite(filePath, relPath, vaultPath string) ([]store.NoteRecord, 
 		})
 	}
 
-	return records, nil
+	return records, content, nil
 }
 
 func saveStats(stats *Stats) {

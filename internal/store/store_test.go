@@ -964,6 +964,170 @@ func TestDeleteByPath(t *testing.T) {
 	}
 }
 
+func TestDeleteByPath_CleansGraphNodesAndEdges(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	records := []NoteRecord{
+		{
+			Path:         "notes/graph-delete.md",
+			Title:        "Graph Delete",
+			Tags:         "[]",
+			ChunkID:      0,
+			ChunkHeading: "(full)",
+			Text:         "See internal/store/db.go",
+			Modified:     1700000000,
+			ContentHash:  "graph-del",
+			ContentType:  "note",
+			Confidence:   0.5,
+		},
+	}
+	embeddings := [][]float32{make([]float32, 768)}
+	insertedIDs, err := db.BulkInsertNotes(records, embeddings)
+	if err != nil {
+		t.Fatalf("BulkInsertNotes: %v", err)
+	}
+
+	noteID := insertedIDs["notes/graph-delete.md"]
+	res, err := db.Conn().Exec(
+		`INSERT INTO graph_nodes(type, name, note_id, properties, created_at)
+		 VALUES ('note', ?, ?, '{}', unixepoch())`,
+		"notes/graph-delete.md", noteID,
+	)
+	if err != nil {
+		t.Fatalf("insert graph note node: %v", err)
+	}
+	noteNodeID, _ := res.LastInsertId()
+
+	res, err = db.Conn().Exec(
+		`INSERT INTO graph_nodes(type, name, properties, created_at)
+		 VALUES ('file', 'internal/store/db.go', '{}', unixepoch())`,
+	)
+	if err != nil {
+		t.Fatalf("insert graph file node: %v", err)
+	}
+	fileNodeID, _ := res.LastInsertId()
+
+	if _, err := db.Conn().Exec(
+		`INSERT INTO graph_edges(source_id, target_id, relationship, weight, properties, created_at)
+		 VALUES (?, ?, 'references', 1.0, '{}', unixepoch())`,
+		noteNodeID, fileNodeID,
+	); err != nil {
+		t.Fatalf("insert graph edge: %v", err)
+	}
+
+	if err := db.DeleteByPath("notes/graph-delete.md"); err != nil {
+		t.Fatalf("DeleteByPath: %v", err)
+	}
+
+	var count int
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_nodes WHERE note_id = ?",
+		noteID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count graph note nodes: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected graph note nodes to be removed, got %d", count)
+	}
+
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_edges WHERE source_id = ? OR target_id = ?",
+		noteNodeID, noteNodeID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count graph edges: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected note-connected graph edges to be removed, got %d", count)
+	}
+
+	if err := db.Conn().QueryRow(
+		"SELECT COUNT(*) FROM graph_nodes WHERE type = 'file' AND name = 'internal/store/db.go'",
+	).Scan(&count); err != nil {
+		t.Fatalf("count orphan file nodes: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected orphan file node prune, got %d", count)
+	}
+}
+
+func TestDeleteAllNotes_ClearsGraphTables(t *testing.T) {
+	db, err := OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory: %v", err)
+	}
+	defer db.Close()
+
+	records := []NoteRecord{
+		{
+			Path:         "notes/graph-clear.md",
+			Title:        "Graph Clear",
+			Tags:         "[]",
+			ChunkID:      0,
+			ChunkHeading: "(full)",
+			Text:         "decision: keep graph in sync",
+			Modified:     1700000000,
+			ContentHash:  "graph-clear",
+			ContentType:  "note",
+			Confidence:   0.5,
+		},
+	}
+	embeddings := [][]float32{make([]float32, 768)}
+	insertedIDs, err := db.BulkInsertNotes(records, embeddings)
+	if err != nil {
+		t.Fatalf("BulkInsertNotes: %v", err)
+	}
+	noteID := insertedIDs["notes/graph-clear.md"]
+
+	res, err := db.Conn().Exec(
+		`INSERT INTO graph_nodes(type, name, note_id, properties, created_at)
+		 VALUES ('note', ?, ?, '{}', unixepoch())`,
+		"notes/graph-clear.md", noteID,
+	)
+	if err != nil {
+		t.Fatalf("insert graph note node: %v", err)
+	}
+	noteNodeID, _ := res.LastInsertId()
+	res, err = db.Conn().Exec(
+		`INSERT INTO graph_nodes(type, name, properties, created_at)
+		 VALUES ('decision', 'Keep graph synced', '{}', unixepoch())`,
+	)
+	if err != nil {
+		t.Fatalf("insert graph decision node: %v", err)
+	}
+	decisionNodeID, _ := res.LastInsertId()
+	if _, err := db.Conn().Exec(
+		`INSERT INTO graph_edges(source_id, target_id, relationship, weight, properties, created_at)
+		 VALUES (?, ?, 'affects', 1.0, '{}', unixepoch())`,
+		decisionNodeID, noteNodeID,
+	); err != nil {
+		t.Fatalf("insert graph edge: %v", err)
+	}
+
+	if err := db.DeleteAllNotes(); err != nil {
+		t.Fatalf("DeleteAllNotes: %v", err)
+	}
+
+	var nodeCount int
+	if err := db.Conn().QueryRow("SELECT COUNT(*) FROM graph_nodes").Scan(&nodeCount); err != nil {
+		t.Fatalf("count graph nodes: %v", err)
+	}
+	if nodeCount != 0 {
+		t.Fatalf("expected graph_nodes to be empty, got %d", nodeCount)
+	}
+
+	var edgeCount int
+	if err := db.Conn().QueryRow("SELECT COUNT(*) FROM graph_edges").Scan(&edgeCount); err != nil {
+		t.Fatalf("count graph edges: %v", err)
+	}
+	if edgeCount != 0 {
+		t.Fatalf("expected graph_edges to be empty, got %d", edgeCount)
+	}
+}
+
 func TestRecentNotes(t *testing.T) {
 	db, err := OpenMemory()
 	if err != nil {

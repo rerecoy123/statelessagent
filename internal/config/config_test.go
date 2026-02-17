@@ -127,6 +127,20 @@ func TestLoadConfig_EnvOverrides(t *testing.T) {
 	}
 }
 
+func TestVaultPath_VaultOverrideBeatsEnv(t *testing.T) {
+	envVault := t.TempDir()
+	overrideVault := t.TempDir()
+
+	t.Setenv("VAULT_PATH", envVault)
+	VaultOverride = overrideVault
+	defer func() { VaultOverride = "" }()
+
+	got := VaultPath()
+	if got != overrideVault {
+		t.Fatalf("expected VaultOverride %q to win, got %q", overrideVault, got)
+	}
+}
+
 func TestLoadConfig_InvalidTOML(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, ".same")

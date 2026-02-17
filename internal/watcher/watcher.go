@@ -99,8 +99,11 @@ func Watch(db *store.DB) error {
 
 			if event.Has(fsnotify.Remove) {
 				relPath := relativePath(event.Name, vaultPath)
-				db.DeleteByPath(relPath)
-				fmt.Fprintf(os.Stderr, "  Removed from index: %s\n", relPath)
+				if err := db.DeleteByPath(relPath); err != nil {
+					fmt.Fprintf(os.Stderr, "  [ERROR] remove %s: %v\n", relPath, err)
+				} else {
+					fmt.Fprintf(os.Stderr, "  Removed from index: %s\n", relPath)
+				}
 			}
 
 		case err, ok := <-w.Errors:
@@ -118,10 +121,11 @@ func reindexFiles(db *store.DB, paths []string, vaultPath string) {
 		Provider:   ec.Provider,
 		Model:      ec.Model,
 		APIKey:     ec.APIKey,
+		BaseURL:    ec.BaseURL,
 		Dimensions: ec.Dimensions,
 	}
-	// Only pass the Ollama URL to the Ollama provider
-	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
+	// For ollama provider, use the legacy [ollama] URL if no base_url is set.
+	if (provCfg.Provider == "ollama" || provCfg.Provider == "") && provCfg.BaseURL == "" {
 		ollamaURL, err := config.OllamaURL()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [ERROR] ollama URL: %v\n", err)
@@ -129,35 +133,38 @@ func reindexFiles(db *store.DB, paths []string, vaultPath string) {
 		}
 		provCfg.BaseURL = ollamaURL
 	}
+
+	liteMode := false
 	embedClient, err := embedding.NewProvider(provCfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  [ERROR] embedding provider: %v\n", err)
-		return
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "keyword-only mode") || strings.Contains(errMsg, `provider is "none"`) {
+			liteMode = true
+		} else {
+			fmt.Fprintf(os.Stderr, "  [ERROR] embedding provider: %v\n", err)
+			return
+		}
 	}
 
 	for _, fp := range paths {
 		relPath := relativePath(fp, vaultPath)
 
-		// Delete old chunks
-		db.DeleteByPath(relPath)
-
-		// Build new records
-		records, embeddings, err := indexer.BuildRecordsForFile(fp, relPath, vaultPath, embedClient)
+		var err error
+		if liteMode {
+			err = indexer.IndexSingleFileLite(db, fp, relPath, vaultPath)
+		} else {
+			err = indexer.IndexSingleFile(db, fp, relPath, vaultPath, embedClient)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [ERROR] %s: %v\n", relPath, err)
 			continue
 		}
 
-		if len(records) == 0 {
-			continue
+		if liteMode {
+			fmt.Fprintf(os.Stderr, "  Indexed (lite): %s\n", relPath)
+		} else {
+			fmt.Fprintf(os.Stderr, "  Indexed: %s\n", relPath)
 		}
-
-		if _, err := db.BulkInsertNotes(records, embeddings); err != nil {
-			fmt.Fprintf(os.Stderr, "  [ERROR] storing %s: %v\n", relPath, err)
-			continue
-		}
-
-		fmt.Fprintf(os.Stderr, "  Indexed: %s (%d chunks)\n", relPath, len(records))
 	}
 }
 

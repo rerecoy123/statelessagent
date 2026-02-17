@@ -721,7 +721,15 @@ func RebuildSkipDirs(extra []string) {
 // dangerous top-level paths that would cause the indexer to walk the entire filesystem).
 func VaultPath() string {
 	var path string
-	if v := os.Getenv("VAULT_PATH"); v != "" {
+	// CLI flag should always have highest priority.
+	if VaultOverride != "" {
+		reg := LoadRegistry()
+		if resolved := reg.ResolveVault(VaultOverride); resolved != "" {
+			path = resolved
+		} else {
+			path = VaultOverride
+		}
+	} else if v := os.Getenv("VAULT_PATH"); v != "" {
 		path = v
 	} else if cfg := loadConfigSafe(); cfg != nil && cfg.Vault.Path != "" {
 		path = cfg.Vault.Path
