@@ -2,8 +2,8 @@
 # ==============================================================================
 # precheck.sh — Pre-release verification gate
 # ==============================================================================
-# Run before every push/tag. Catches version mismatches, test failures, build
-# errors, and PII leaks in one command: `make precheck`
+# Run before every push/tag. Repo-scope hygiene checks for version consistency,
+# test/build health, and blocklist-pattern scanning in tracked files.
 # ==============================================================================
 
 set -euo pipefail
@@ -99,11 +99,13 @@ else
     echo "$TEST_OUT" | grep -E '(FAIL|panic)' | tail -5 | while IFS= read -r l; do echo "        $l"; done
 fi
 
-# --- 4. PII scan ---
+# --- 4. Repo-scope pattern scan ---
 echo ""
-echo -e "${BOLD}Security${RESET}"
+echo -e "${BOLD}Release hygiene (repo scope)${RESET}"
+info "Scope: scans changed tracked repo files with configured blocklist patterns."
+info "Does not audit user vault contents, full git history, forks, or mirrors."
 
-# Run the existing pre-commit check against changed files.
+# Run blocklist pattern checks against changed tracked files.
 BLOCKLIST="$REPO_ROOT/.scripts/.blocklist"
 BLOCKLIST_LABEL=".scripts/.blocklist"
 if [ ! -f "$BLOCKLIST" ] && [ -f "$REPO_ROOT/.scripts/blocklist.example" ]; then
@@ -135,13 +137,13 @@ if [ -f "$BLOCKLIST" ]; then
             fi
         done <<< "$CHANGED_FILES"
         if [ -z "$PII_HITS" ]; then
-            pass "No PII in changed files (patterns: $BLOCKLIST_LABEL)"
+            pass "No blocklist pattern matches in changed tracked files (patterns: $BLOCKLIST_LABEL)"
         else
-            fail "PII patterns found in:$PII_HITS"
+            fail "Blocklist pattern matches found in changed tracked files:$PII_HITS"
         fi
     fi
 else
-    warn "No .scripts/.blocklist — PII scan skipped"
+    warn "No .scripts/.blocklist — repo blocklist scan skipped"
 fi
 
 # Check git identity
@@ -181,6 +183,6 @@ if [ "$FAIL" -gt 0 ]; then
 else
     echo -e "${GREEN}${BOLD}ALL CLEAR${RESET}: $PASS passed, $WARN warnings (of $TOTAL checks)"
     echo ""
-    echo "Ready to push."
+    echo "Ready to push (repo-scope checks)."
     exit 0
 fi
