@@ -952,15 +952,19 @@ func validateDataDir(dir string) string {
 		}
 		// Check writable by attempting to create a temp file
 		testFile := filepath.Join(abs, ".same_write_test")
-		if f, err := os.Create(testFile); err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q is not writable, using default.\n", abs)
-			return filepath.Join(VaultPath(), ".same", "data")
-		} else {
-			f.Close()
-			os.Remove(testFile)
+			if f, err := os.Create(testFile); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q is not writable, using default.\n", abs)
+				return filepath.Join(VaultPath(), ".same", "data")
+			} else {
+				if cerr := f.Close(); cerr != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: SAME_DATA_DIR=%q writable-check failed (%v), using default.\n", abs, cerr)
+					_ = os.Remove(testFile)
+					return filepath.Join(VaultPath(), ".same", "data")
+				}
+				_ = os.Remove(testFile)
+			}
+			return abs
 		}
-		return abs
-	}
 
 	// Path doesn't exist — try to create it
 	if err := os.MkdirAll(abs, 0o755); err != nil {
@@ -1037,8 +1041,15 @@ func acquireFileLock(lockPath string) (func(), error) {
 	for i := 0; i < maxRetries; i++ {
 		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
-			fmt.Fprintf(f, "%d\n", os.Getpid())
-			f.Close()
+			if _, werr := fmt.Fprintf(f, "%d\n", os.Getpid()); werr != nil {
+				_ = f.Close()
+				_ = os.Remove(lockPath)
+				return nil, fmt.Errorf("write lockfile: %w", werr)
+			}
+			if cerr := f.Close(); cerr != nil {
+				_ = os.Remove(lockPath)
+				return nil, fmt.Errorf("close lockfile: %w", cerr)
+			}
 			return func() { os.Remove(lockPath) }, nil
 		}
 		if !os.IsExist(err) {
