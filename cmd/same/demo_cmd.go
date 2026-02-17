@@ -365,7 +365,9 @@ Answer concisely, citing sources by name:`, ctx.String(), askQuery)
 	fmt.Printf("  %sExplore: same search \"query\" --vault %s%s\n\n", cli.Dim, demoDir, cli.Reset)
 
 	if clean {
-		os.RemoveAll(demoDir)
+		if err := os.RemoveAll(demoDir); err != nil {
+			fmt.Fprintf(os.Stderr, "same: warning: failed to clean up demo vault %q: %v\n", demoDir, err)
+		}
 		fmt.Printf("  %s(demo vault cleaned up)%s\n\n", cli.Dim, cli.Reset)
 	}
 

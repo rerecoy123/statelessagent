@@ -121,7 +121,9 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 	success := false
 	defer func() {
 		if !success {
-			os.RemoveAll(absDir)
+			if err := os.RemoveAll(absDir); err != nil {
+				fmt.Fprintf(os.Stderr, "same: warning: failed to clean up partial seed install at %q: %v\n", absDir, err)
+			}
 		}
 	}()
 

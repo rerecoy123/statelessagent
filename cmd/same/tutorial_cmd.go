@@ -77,7 +77,9 @@ func newTutorialState() (*tutorialState, error) {
 
 	sameDir := filepath.Join(dir, ".same", "data")
 	if err := os.MkdirAll(sameDir, 0o755); err != nil {
-		os.RemoveAll(dir)
+		if cleanErr := os.RemoveAll(dir); cleanErr != nil {
+			fmt.Fprintf(os.Stderr, "same: warning: failed to clean up tutorial directory %q: %v\n", dir, cleanErr)
+		}
 		return nil, err
 	}
 
@@ -89,7 +91,9 @@ func newTutorialState() (*tutorialState, error) {
 	db, err := store.OpenPath(dbPath)
 	if err != nil {
 		config.VaultOverride = origVault
-		os.RemoveAll(dir)
+		if cleanErr := os.RemoveAll(dir); cleanErr != nil {
+			fmt.Fprintf(os.Stderr, "same: warning: failed to clean up tutorial directory %q: %v\n", dir, cleanErr)
+		}
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
@@ -99,7 +103,9 @@ func newTutorialState() (*tutorialState, error) {
 func (ts *tutorialState) close() {
 	ts.db.Close()
 	config.VaultOverride = ts.origVault
-	os.RemoveAll(ts.dir)
+	if err := os.RemoveAll(ts.dir); err != nil {
+		fmt.Fprintf(os.Stderr, "same: warning: failed to clean up tutorial directory %q: %v\n", ts.dir, err)
+	}
 }
 
 // writeNote writes a markdown file to the tutorial vault and indexes it.
