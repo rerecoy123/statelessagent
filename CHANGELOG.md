@@ -23,7 +23,7 @@
 ### Fixed
 
 - **Provider-neutral diagnostics and status UX** — `same status`/`same doctor` now report embedding/chat/graph runtime state across `ollama`, `openai`, `openai-compatible`, and `none` modes instead of Ollama-only assumptions
-- **`same watch` rename/delete consistency** — watcher now removes stale indexed paths on file rename and cleans up entries when files vanish before debounce flush
+- **`same watch` rename/delete consistency** — watcher now removes stale indexed paths on file rename, cleans up entries when files vanish before debounce flush, and rejects out-of-vault relative-path escapes
 - **`same init --provider` input validation** — invalid provider names now fail fast with a clear error instead of falling into confusing runtime fallback paths
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
 - **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
