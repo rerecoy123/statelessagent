@@ -27,6 +27,7 @@
 - **`same init --provider` input validation** — invalid provider names now fail fast with a clear error instead of falling into confusing runtime fallback paths
 - **Seed manifest/cache parity checks** — cached manifests now enforce the same seed name/path validation as fresh downloads, preventing trust gaps when falling back to local cache
 - **`same seed remove` consistency safeguards** — destructive path checks now run before registry mutation, and delete failures trigger best-effort registry rollback
+- **Seed extraction containment checks** — archive extraction boundary validation now uses path-relative containment checks to avoid prefix-confusion edge cases
 - **Vault feed containment checks** — source/destination path enforcement now uses `filepath.Rel`-based boundary checks instead of raw prefix matching for safer cross-platform behavior
 - **Vault subpath guard strictness** — `SafeVaultSubpath` now rejects absolute subpath inputs and uses boundary-safe containment checks before writing handoff/decision files
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well

@@ -554,3 +554,16 @@ func TestRemove_DeleteFilesSuccess_UnregistersAndDeletes(t *testing.T) {
 		t.Fatalf("seed path should be deleted, stat err=%v", err)
 	}
 }
+
+func TestPathWithinBase_PrefixConfusion(t *testing.T) {
+	base := filepath.Join("tmp", "seed-root")
+	inside := filepath.Join(base, "notes", "a.md")
+	outsidePrefix := base + "-other"
+
+	if !pathWithinBase(base, inside) {
+		t.Fatalf("expected inside path to be accepted")
+	}
+	if pathWithinBase(base, outsidePrefix) {
+		t.Fatalf("expected prefix-confusion sibling to be rejected")
+	}
+}

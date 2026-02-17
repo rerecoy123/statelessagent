@@ -68,9 +68,18 @@ func validateExtractPath(entryPath, destDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve result path: %w", err)
 	}
-	if !strings.HasPrefix(absResultClean, absDest+string(filepath.Separator)) && absResultClean != absDest {
+	if !pathWithinBase(absDest, absResultClean) {
 		return "", fmt.Errorf("path escapes destination: %s", entryPath)
 	}
 
 	return absResultClean, nil
+}
+
+func pathWithinBase(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
 }
