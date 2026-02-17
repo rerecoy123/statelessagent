@@ -365,7 +365,7 @@ func runVaultFeed(sourceAlias, targetAlias string, dryRun bool) error {
 		// SECURITY: Build source file path and verify it stays within source vault
 		srcFile := filepath.Join(sourcePath, cleanPath)
 		absSrc, err := filepath.Abs(srcFile)
-		if err != nil || !strings.HasPrefix(absSrc, absSource+string(filepath.Separator)) {
+		if err != nil || !pathWithinBase(absSource, absSrc) {
 			skipped++
 			continue
 		}
@@ -415,7 +415,7 @@ func runVaultFeed(sourceAlias, targetAlias string, dryRun bool) error {
 		// SECURITY: Build dest file path and verify it stays within destDir
 		destFile := filepath.Join(destDir, cleanPath)
 		absDest, err := filepath.Abs(destFile)
-		if err != nil || !strings.HasPrefix(absDest, absDestDir+string(filepath.Separator)) {
+		if err != nil || !pathWithinBase(absDestDir, absDest) {
 			skipped++
 			continue
 		}
@@ -460,4 +460,13 @@ func runVaultFeed(sourceAlias, targetAlias string, dryRun bool) error {
 	}
 
 	return nil
+}
+
+func pathWithinBase(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
 }

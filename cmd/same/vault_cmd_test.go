@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -131,6 +132,30 @@ func TestSafeFeedPath(t *testing.T) {
 			}
 			if !tt.safe && got != "" {
 				t.Errorf("safeFeedPath(%q) = %q, expected rejection", tt.input, got)
+			}
+		})
+	}
+}
+
+func TestPathWithinBase(t *testing.T) {
+	base := filepath.Join("tmp", "vault")
+
+	tests := []struct {
+		name      string
+		candidate string
+		want      bool
+	}{
+		{name: "same path", candidate: base, want: true},
+		{name: "child path", candidate: filepath.Join(base, "notes", "a.md"), want: true},
+		{name: "outside sibling", candidate: filepath.Join("tmp", "other", "a.md"), want: false},
+		{name: "outside via parent", candidate: filepath.Join(base, "..", "escape.md"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pathWithinBase(base, tt.candidate)
+			if got != tt.want {
+				t.Fatalf("pathWithinBase(%q, %q) = %v, want %v", base, tt.candidate, got, tt.want)
 			}
 		})
 	}
