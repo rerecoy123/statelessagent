@@ -19,9 +19,11 @@ echo ""
 echo "Release candidate gate"
 echo "  Repo: $REPO_ROOT"
 
+cd "$REPO_ROOT"
+
 echo ""
 echo "1) Baseline precheck"
-make -C "$REPO_ROOT" precheck
+make precheck
 
 echo ""
 echo "2) Vet"
@@ -34,7 +36,7 @@ GOCACHE=/tmp/go-build go test ./internal/store -run TestOpenPath_MigratesLegacyV
 if [ "${SAME_RC_FULL_MATRIX:-0}" = "1" ]; then
     echo ""
     echo "4) Full provider matrix"
-    make -C "$REPO_ROOT" provider-smoke-full
+    make provider-smoke-full
 else
     echo ""
     echo "4) Full provider matrix"

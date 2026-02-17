@@ -32,8 +32,13 @@ jobs:
       - name: Verify binary
         run: ./build/same version
 
+      - name: Upgrade-path migration smoke
+        env:
+          CGO_ENABLED: '1'
+        run: go test ./internal/store -run TestOpenPath_MigratesLegacyV5ToV6 -count=1
+
       - name: Provider smoke matrix (keyword baseline)
         env:
           SAME_SMOKE_PROVIDERS: none
           SAME_SMOKE_REQUIRED: none
-        run: /usr/bin/env bash .scripts/provider-smoke.sh
+        run: make provider-smoke
