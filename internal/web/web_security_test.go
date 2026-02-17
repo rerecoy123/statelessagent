@@ -122,36 +122,55 @@ func TestIsPrivatePath_Variants(t *testing.T) {
 	}
 }
 
-// --- Path traversal in handleNoteByPath ---
+func TestIsUnsafeAPIPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"../etc/passwd", true},
+		{"../../etc/shadow", true},
+		{"/etc/passwd", true},
+		{".git/config", true},
+		{"notes/.hidden/file.md", true},
+		{"notes/.git/config", true},
+		{"C:/Windows/System32/drivers/etc/hosts", true},
+		{"notes/public.md", false},
+		{"projects/api/design.md", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			clean := tt.path
+			got := isUnsafeAPIPath(clean)
+			if got != tt.want {
+				t.Errorf("isUnsafeAPIPath(%q) = %v, want %v", clean, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestHandleNoteByPath_PathTraversal(t *testing.T) {
-	// We can't easily test the full handler without a DB, but we can test
-	// the path validation logic by checking that traversal paths get rejected.
-	traversalPaths := []string{
-		"../etc/passwd",
-		"../../etc/shadow",
-		"notes/../../etc/passwd",
-		"/etc/passwd",
-		".git/config",
-		".same/config.toml",
-		"_PRIVATE/secret.md",
+	cases := []struct {
+		path    string
+		reject  bool
+		private bool
+	}{
+		{path: "../etc/passwd", reject: true},
+		{path: "../../etc/shadow", reject: true},
+		{path: "notes/../../etc/passwd", reject: true},
+		{path: "/etc/passwd", reject: true},
+		{path: ".git/config", reject: true},
+		{path: "notes/.hidden/file.md", reject: true},
+		{path: "notes/.git/config", reject: true},
+		{path: "_PRIVATE/secret.md", reject: false, private: true},
+		{path: "notes/public.md", reject: false, private: false},
 	}
-	for _, path := range traversalPaths {
-		t.Run(path, func(t *testing.T) {
-			// Simulate the path validation logic from handleNoteByPath
-			clean := path
-			if len(clean) > 0 && (clean[0] == '.' || clean[0] == '/') {
-				return // would be rejected
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := isUnsafeAPIPath(tc.path); got != tc.reject {
+				t.Fatalf("isUnsafeAPIPath(%q)=%v want %v", tc.path, got, tc.reject)
 			}
-			if len(clean) > 1 && clean[:2] == ".." {
-				return // would be rejected
-			}
-			if isPrivatePath(clean) {
-				return // would be rejected
-			}
-			// If we get here for a traversal path, that's a problem
-			if path == "../etc/passwd" || path == "../../etc/shadow" || path == "/etc/passwd" {
-				t.Errorf("traversal path %q was not caught by validation", path)
+			if got := isPrivatePath(tc.path); got != tc.private {
+				t.Fatalf("isPrivatePath(%q)=%v want %v", tc.path, got, tc.private)
 			}
 		})
 	}

@@ -187,8 +187,8 @@ func (s *server) handleNoteByPath(w http.ResponseWriter, r *http.Request) {
 	}
 	clean := filepath.ToSlash(filepath.Clean(decoded))
 
-	// Security: block path traversal and private/hidden paths
-	if strings.HasPrefix(clean, "..") || strings.HasPrefix(clean, "/") || strings.HasPrefix(clean, ".") || strings.Contains(clean, "/..") {
+	// Security: block invalid relative paths and private paths.
+	if isUnsafeAPIPath(clean) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
@@ -331,7 +331,7 @@ func (s *server) handleRelated(w http.ResponseWriter, r *http.Request) {
 	}
 	clean := filepath.ToSlash(filepath.Clean(decoded))
 
-	if strings.HasPrefix(clean, "..") || strings.HasPrefix(clean, "/") || strings.HasPrefix(clean, ".") || strings.Contains(clean, "/..") {
+	if isUnsafeAPIPath(clean) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
@@ -439,7 +439,7 @@ func (s *server) handleGraphConnections(w http.ResponseWriter, r *http.Request) 
 	}
 	clean := filepath.ToSlash(filepath.Clean(decoded))
 
-	if strings.HasPrefix(clean, "..") || strings.HasPrefix(clean, "/") || strings.HasPrefix(clean, ".") || strings.Contains(clean, "/..") {
+	if isUnsafeAPIPath(clean) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
@@ -587,6 +587,32 @@ func isNoSuchGraphTableErr(err error) bool {
 func isPrivatePath(path string) bool {
 	upper := strings.ToUpper(path)
 	return strings.HasPrefix(upper, "_PRIVATE/") || strings.HasPrefix(upper, "_PRIVATE\\")
+}
+
+func isUnsafeAPIPath(clean string) bool {
+	if clean == "" || clean == "." || clean == ".." {
+		return true
+	}
+	if hasWindowsDrivePrefix(clean) || strings.HasPrefix(clean, "/") {
+		return true
+	}
+	for _, part := range strings.Split(clean, "/") {
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasWindowsDrivePrefix(path string) bool {
+	if len(path) < 3 {
+		return false
+	}
+	ch := path[0]
+	if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+		return false
+	}
+	return path[1] == ':' && path[2] == '/'
 }
 
 func filterPrivateNotes(notes []store.NoteRecord) []noteJSON {
