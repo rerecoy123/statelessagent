@@ -214,7 +214,12 @@ func walkDirs(root string) []string {
 func relativePath(filePath, vaultPath string) string {
 	rel, err := filepath.Rel(vaultPath, filePath)
 	if err != nil {
-		return filePath
+		return filepath.ToSlash(filePath)
 	}
-	return filepath.ToSlash(rel)
+	rel = filepath.ToSlash(rel)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		// Fail closed for paths outside the vault root.
+		return filepath.ToSlash(filePath)
+	}
+	return rel
 }

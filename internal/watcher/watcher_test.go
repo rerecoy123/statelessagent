@@ -52,6 +52,15 @@ func TestRelativePath_NormalizesToSlash(t *testing.T) {
 	}
 }
 
+func TestRelativePath_OutsideVaultFallsBackToAbsolute(t *testing.T) {
+	vault := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "note.md")
+	got := relativePath(outside, vault)
+	if got != filepath.ToSlash(outside) {
+		t.Fatalf("relativePath outside vault = %q, want %q", got, filepath.ToSlash(outside))
+	}
+}
+
 func TestRemoveFromIndex_DeletesIndexedPath(t *testing.T) {
 	db, err := store.OpenMemory()
 	if err != nil {
