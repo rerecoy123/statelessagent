@@ -20,7 +20,7 @@ func initCmd() *cobra.Command {
 		Long: `The setup wizard walks you through connecting SAME to your project.
 
 What it does:
-  1. Checks that Ollama is running (needed for local AI processing)
+  1. Checks your embedding runtime (Ollama/OpenAI/OpenAI-compatible)
   2. Finds your notes/markdown files
   3. Indexes them so your AI can search them
   4. Connects to your AI tools (Claude, Cursor, etc.)

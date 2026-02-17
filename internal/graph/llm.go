@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// LLMClient abstracts the Ollama client for testing.
+// LLMClient abstracts a chat provider for testing.
 type LLMClient interface {
 	GenerateJSON(model, prompt string) (string, error)
 }

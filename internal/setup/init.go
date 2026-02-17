@@ -29,10 +29,10 @@ var welcomeNotes embed.FS
 
 // InitOptions controls the init wizard behavior.
 type InitOptions struct {
-	Yes       bool   // skip all prompts, accept defaults
-	MCPOnly   bool   // skip hooks setup (for Cursor/Windsurf users)
-	HooksOnly bool   // skip MCP setup (Claude Code only)
-	Verbose   bool   // show detailed progress (each file being processed)
+	Yes       bool // skip all prompts, accept defaults
+	MCPOnly   bool // skip hooks setup (for Cursor/Windsurf users)
+	HooksOnly bool // skip MCP setup (Claude Code only)
+	Verbose   bool // show detailed progress (each file being processed)
 	Version   string
 	Provider  string // embedding provider override: ollama, openai, openai-compatible
 }
@@ -45,10 +45,10 @@ const (
 	LevelDev       ExperienceLevel = "dev"
 )
 
-// checkDependencies verifies runtime dependencies (Node, Ollama) and
+// checkDependencies verifies runtime dependencies (Node, embedding runtime) and
 // optionally checks Go/CGO for users building from source.
 // Warns but does not block setup for missing deps.
-func checkDependencies() {
+func checkDependencies(embedProvider string) {
 	headerShown := false
 	showHeader := func() {
 		if !headerShown {
@@ -67,17 +67,22 @@ func checkDependencies() {
 		fmt.Printf("  %s✓%s Node.js installed\n", cli.Green, cli.Reset)
 	}
 
-	// Check Ollama (just presence, checkOllama() later verifies it's running + has model)
+	// Check Ollama availability. It's required only when using provider=ollama.
 	if _, err := exec.LookPath("ollama"); err != nil {
 		showHeader()
-		fmt.Printf("  %s!%s Ollama not found\n", cli.Yellow, cli.Reset)
-		fmt.Println("    SAME needs Ollama to generate embeddings for your notes.")
-		fmt.Println()
-		fmt.Println("    Install from: https://ollama.com")
-		fmt.Println()
+		if embedProvider == "ollama" || embedProvider == "" {
+			fmt.Printf("  %s!%s Ollama not found\n", cli.Yellow, cli.Reset)
+			fmt.Println("    You selected provider=ollama for semantic search.")
+			fmt.Println("    Install from: https://ollama.com")
+			fmt.Println()
+		} else {
+			fmt.Printf("  %s·%s Ollama not found %s(optional for provider=%s)%s\n",
+				cli.Dim, cli.Reset, cli.Dim, embedProvider, cli.Reset)
+		}
 	} else {
 		showHeader()
-		fmt.Printf("  %s✓%s Ollama installed\n", cli.Green, cli.Reset)
+		fmt.Printf("  %s✓%s Ollama installed %s(local semantic option)%s\n",
+			cli.Green, cli.Reset, cli.Dim, cli.Reset)
 	}
 
 	// ── Build-from-source dependencies (Go, CGO) ─────────
@@ -195,8 +200,14 @@ func RunInit(opts InitOptions) error {
 	}
 	cli.Banner(version)
 
-	// Check dependencies (Node, Ollama, Go version, CGO)
-	checkDependencies()
+	// Checking embedding provider (--provider flag overrides config)
+	embedProvider := config.EmbeddingProvider()
+	if opts.Provider != "" {
+		embedProvider = opts.Provider
+	}
+
+	// Check dependencies (Node, selected embedding runtime, Go version, CGO)
+	checkDependencies(embedProvider)
 
 	// Ask experience level first (unless auto-accepting)
 	experience := LevelVibeCoder // default
@@ -204,19 +215,14 @@ func RunInit(opts InitOptions) error {
 		experience = askExperienceLevel()
 	}
 
-	// Checking embedding provider (--provider flag overrides config)
-	embedProvider := config.EmbeddingProvider()
-	if opts.Provider != "" {
-		embedProvider = opts.Provider
-	}
-	ollamaOK := true
+	providerReady := true
 
 	if embedProvider == "none" {
 		// Explicit keyword-only mode — skip Ollama entirely
 		cli.Section("Embeddings")
 		fmt.Printf("  %s✓%s Keyword-only mode (provider=none)\n", cli.Green, cli.Reset)
-		fmt.Printf("  %s  Semantic search disabled. Install Ollama anytime and run 'same reindex' to upgrade.%s\n", cli.Dim, cli.Reset)
-		ollamaOK = false
+		fmt.Printf("  %s  Semantic search disabled. Switch to ollama/openai/openai-compatible later and run 'same reindex' to upgrade.%s\n", cli.Dim, cli.Reset)
+		providerReady = false
 	} else if embedProvider == "openai" || embedProvider == "openai-compatible" {
 		// User has configured an alternate provider — skip Ollama check
 		cli.Section("Embeddings")
@@ -233,43 +239,42 @@ func RunInit(opts InitOptions) error {
 		if err := checkOllama(); err != nil {
 			if opts.Yes {
 				// Non-interactive (piped install) — silently fall back to lite mode
-				ollamaOK = false
+				providerReady = false
 			} else {
-				// Interactive — make them really want to skip this
+				// Interactive fallback guidance.
 				fmt.Println()
-				fmt.Printf("  %sOllama is what makes SAME powerful.%s Without it:\n\n", cli.Bold, cli.Reset)
-				fmt.Printf("    %sWith Ollama%s              %sWithout%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
+				fmt.Printf("  %sSAME needs an embedding provider for semantic search.%s\n\n", cli.Bold, cli.Reset)
+				fmt.Printf("    %sWith embeddings%s          %sWithout embeddings%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
 				fmt.Printf("    Semantic search           Keyword matching only\n")
 				fmt.Printf("    \"auth flow\" finds          \"auth flow\" misses\n")
 				fmt.Printf("    \"login system\"             \"login system\"\n")
 				fmt.Printf("    Understands %smeaning%s        Exact words only\n\n", cli.Bold, cli.Reset)
-				fmt.Printf("  %sStart Ollama and run 'same init' again for the full experience.%s\n\n", cli.Dim, cli.Reset)
 				fmt.Printf("  %sAlternatives:%s\n", cli.Dim, cli.Reset)
-				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=openai (or openai-compatible) for llama.cpp, VLLM, LM Studio, OpenAI%s\n", cli.Dim, cli.Reset)
-				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=none (or --provider none) to skip this check%s\n\n", cli.Dim, cli.Reset)
+				fmt.Printf("  %s  • Start Ollama (provider=ollama) for local-first embeddings%s\n", cli.Dim, cli.Reset)
+				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=openai or openai-compatible (llama.cpp, VLLM, LM Studio, OpenAI)%s\n", cli.Dim, cli.Reset)
+				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=none (or --provider none) for keyword-only mode%s\n\n", cli.Dim, cli.Reset)
 
-				if !confirm("  Skip Ollama and use keyword-only mode?", false) {
-					return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+				if !confirm("  Continue with keyword-only mode?", false) {
+					return fmt.Errorf("setup cancelled — configure an embedding provider and run 'same init' again")
 				}
 
-				// They said yes — push back one more time
+				// They said yes — one final confirmation.
 				fmt.Println()
 				fmt.Printf("  %sSemantic search is SAME's core feature — it's the difference\n", cli.Dim)
 				fmt.Printf("  between your AI finding the right context and missing it entirely.%s\n\n", cli.Reset)
-				fmt.Printf("  Install Ollama anytime: %shttps://ollama.com%s\n", cli.Bold, cli.Reset)
-				fmt.Printf("  Then run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
+				fmt.Printf("  Add embeddings anytime and run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
 
 				if !confirm("  Are you sure you want keyword-only mode?", false) {
-					return fmt.Errorf("setup cancelled — start Ollama and run 'same init' again")
+					return fmt.Errorf("setup cancelled — configure an embedding provider and run 'same init' again")
 				}
 
-				ollamaOK = false
+				providerReady = false
 			}
 		}
 	}
 
 	// Offer model selection (interactive only)
-	if !opts.Yes && (ollamaOK || embedProvider == "openai" || embedProvider == "openai-compatible") {
+	if !opts.Yes && embedProvider != "none" && providerReady {
 		offerModelChoice(embedProvider)
 	}
 
@@ -292,7 +297,7 @@ func RunInit(opts InitOptions) error {
 	createSeedStructure(vaultPath)
 
 	// Indexing — use full mode if any embedding provider is available
-	useEmbeddings := ollamaOK || embedProvider == "openai" || embedProvider == "openai-compatible"
+	useEmbeddings := embedProvider != "none" && providerReady
 	cli.Section("Indexing")
 	stats, err := runIndex(vaultPath, opts.Verbose, useEmbeddings)
 	if err != nil {
@@ -750,7 +755,7 @@ func checkOllama() error {
 	if err != nil {
 		fmt.Printf("  %s✗%s Ollama is not running\n\n",
 			cli.Yellow, cli.Reset)
-		fmt.Println("  SAME needs Ollama (a free app) to understand your notes.")
+		fmt.Println("  provider=ollama requires Ollama to generate local embeddings.")
 		fmt.Println()
 		fmt.Println("  To fix this:")
 		fmt.Println()
@@ -763,7 +768,10 @@ func checkOllama() error {
 		fmt.Println("    - Look for the llama icon in your menu bar (Mac) or system tray (Windows)")
 		fmt.Println("    - If you don't see it, open the Ollama app")
 		fmt.Println()
-		fmt.Println("  Once the llama icon appears, run 'same init' again.")
+		fmt.Println("  Or switch provider:")
+		fmt.Println("    - SAME_EMBED_PROVIDER=openai")
+		fmt.Println("    - SAME_EMBED_PROVIDER=openai-compatible")
+		fmt.Println("    - SAME_EMBED_PROVIDER=none")
 		fmt.Println()
 		fmt.Println("  Need help? Join our Discord: https://discord.gg/9KfTkcGs7g")
 		return fmt.Errorf("Ollama not running. Start Ollama and try 'same init' again")
@@ -851,10 +859,10 @@ func isCloudSyncedPath(path string) (bool, string) {
 	lowerPath := strings.ToLower(absPath)
 
 	cloudIndicators := map[string]string{
-		"dropbox":         "Dropbox",
-		"onedrive":        "OneDrive",
-		"google drive":    "Google Drive",
-		"icloud":          "iCloud",
+		"dropbox":          "Dropbox",
+		"onedrive":         "OneDrive",
+		"google drive":     "Google Drive",
+		"icloud":           "iCloud",
 		"mobile documents": "iCloud",
 	}
 
@@ -1119,8 +1127,8 @@ func promptForPath() (string, error) {
 }
 
 // runIndex indexes the vault with a progress bar.
-// If useOllama is false, uses lite mode (keyword search only, no embeddings).
-func runIndex(vaultPath string, verbose, useOllama bool) (*indexer.Stats, error) {
+// If useEmbeddings is false, uses lite mode (keyword search only, no embeddings).
+func runIndex(vaultPath string, verbose, useEmbeddings bool) (*indexer.Stats, error) {
 	// Count files first for time estimate
 	noteCount := indexer.CountMarkdownFiles(vaultPath)
 
@@ -1185,7 +1193,7 @@ func runIndex(vaultPath string, verbose, useOllama bool) (*indexer.Stats, error)
 	}
 
 	var stats *indexer.Stats
-	if useOllama {
+	if useEmbeddings {
 		stats, err = indexer.ReindexWithProgress(db, true, progress)
 	} else {
 		stats, err = indexer.ReindexLite(db, true, progress)
@@ -1199,7 +1207,6 @@ func runIndex(vaultPath string, verbose, useOllama bool) (*indexer.Stats, error)
 	}
 	return stats, nil
 }
-
 
 // sameGitignoreTemplate is the recommended .gitignore content for SAME vaults.
 const sameGitignoreTemplate = `# SAME — Privacy-first .gitignore

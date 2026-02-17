@@ -415,6 +415,7 @@ func generateTOMLContent(vaultPath string) string {
 	b.WriteString("# dimensions = 0                # 0 = use provider default\n\n")
 
 	b.WriteString("[memory]\n")
+	b.WriteString("# Presets: same profile use precise|balanced|broad|pi\n")
 	b.WriteString("max_token_budget = 1600\n")
 	b.WriteString("max_results = 4\n")
 	b.WriteString("distance_threshold = 16.2\n")
@@ -1096,6 +1097,14 @@ var BuiltinProfiles = map[string]Profile{
 		CompositeThreshold: 0.55,
 		TokenWarning:       "Uses ~2x more tokens per query",
 	},
+	"pi": {
+		Name:               "pi",
+		Description:        "Raspberry Pi / low-resource optimization",
+		MaxResults:         2,
+		DistanceThreshold:  15.0,
+		CompositeThreshold: 0.65,
+		TokenWarning:       "Minimizes CPU/RAM pressure and token usage",
+	},
 }
 
 // CurrentProfile returns the name of the current profile based on config values,
@@ -1120,7 +1129,7 @@ func CurrentProfile() string {
 func SetProfile(vaultPath, profileName string) error {
 	profile, ok := BuiltinProfiles[profileName]
 	if !ok {
-		return fmt.Errorf("unknown profile: %s (available: precise, balanced, broad)", profileName)
+		return fmt.Errorf("unknown profile: %s (available: precise, balanced, broad, pi)", profileName)
 	}
 
 	cfgPath := ConfigFilePath(vaultPath)

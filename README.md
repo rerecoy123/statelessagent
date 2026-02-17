@@ -368,7 +368,7 @@ Requires Go 1.25+ and CGO.
 | `same repair` | Back up and rebuild the database |
 | `same reindex [--force]` | Rebuild the search index |
 | `same display full\|compact\|quiet` | Control output verbosity |
-| `same profile use precise\|balanced\|broad` | Adjust precision vs. coverage |
+| `same profile use precise\|balanced\|broad\|pi` | Adjust precision vs. coverage (including Raspberry Pi optimization) |
 | `same model` | Show current embedding model and alternatives |
 | `same model use <name>` | Switch embedding model |
 | `same config show` | Show configuration |
@@ -411,11 +411,12 @@ decision_log = "decisions.md"
 url = "http://localhost:11434"
 
 [embedding]
-provider = "ollama"           # "ollama" (default), "openai", or "openai-compatible"
+provider = "ollama"           # "ollama" (default), "openai", "openai-compatible", or "none"
 model = "nomic-embed-text"    # see supported models below
 # api_key = ""                # required for openai, or set SAME_EMBED_API_KEY
 
 [memory]
+# presets: same profile use precise|balanced|broad|pi
 max_token_budget = 800
 max_results = 2
 distance_threshold = 16.2
@@ -460,10 +461,15 @@ Configuration priority (highest wins):
 | `SAME_DATA_DIR` | `<vault>/.same/data` | Database location |
 | `SAME_HANDOFF_DIR` | `sessions` | Handoff notes directory |
 | `SAME_DECISION_LOG` | `decisions.md` | Decision log path |
-| `SAME_EMBED_PROVIDER` | `ollama` | Embedding provider (`ollama`, `openai`, or `openai-compatible`) |
+| `SAME_EMBED_PROVIDER` | `ollama` | Embedding provider (`ollama`, `openai`, `openai-compatible`, or `none`) |
 | `SAME_EMBED_MODEL` | `nomic-embed-text` | Embedding model name |
 | `SAME_EMBED_BASE_URL` | *(provider default)* | Base URL for embedding API (e.g. `http://localhost:8080` for local servers) |
 | `SAME_EMBED_API_KEY` | *(none)* | API key (required for `openai`, optional for `openai-compatible`) |
+| `SAME_CHAT_PROVIDER` | `auto` | Chat provider for `same ask` / graph LLM extraction (`auto`, `ollama`, `openai`, `openai-compatible`, `none`) |
+| `SAME_CHAT_MODEL` | *(auto-detect)* | Override chat model selection |
+| `SAME_CHAT_BASE_URL` | *(provider default)* | Chat API base URL for OpenAI-compatible endpoints |
+| `SAME_CHAT_API_KEY` | *(none)* | Chat API key (or use `OPENAI_API_KEY`) |
+| `SAME_CHAT_FALLBACKS` | *(none)* | Comma-separated fallback providers for auto mode (e.g. `ollama,openai-compatible`) |
 | `SAME_SKIP_DIRS` | *(none)* | Extra dirs to skip (comma-separated) |
 | `SAME_NOISE_PATHS` | *(none)* | Paths filtered from context surfacing (comma-separated) |
 

@@ -4,6 +4,8 @@
 
 ### Added
 
+- **`pi` advanced profile preset (`same profile use pi`)** — tuned memory retrieval thresholds for Raspberry Pi / low-resource setups, with CLI guidance for lightweight embedding choices
+- **Provider-agnostic chat routing for `same ask` + graph LLM extraction** — new `SAME_CHAT_*` controls support `auto`, `ollama`, `openai`, and `openai-compatible` providers with optional fallback queues
 - **Knowledge graph command group (`same graph`)** — new CLI for graph traversal and diagnostics:
   - `same graph stats` — node/edge counts by type and relationship
   - `same graph query` — depth-limited recursive traversal from a start node

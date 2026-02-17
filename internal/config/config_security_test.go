@@ -350,7 +350,7 @@ func TestRebuildSkipDirs_AddsCustom(t *testing.T) {
 // --- Profile tests ---
 
 func TestBuiltinProfiles_Exist(t *testing.T) {
-	expected := []string{"precise", "balanced", "broad"}
+	expected := []string{"precise", "balanced", "broad", "pi"}
 	for _, name := range expected {
 		if _, ok := BuiltinProfiles[name]; !ok {
 			t.Errorf("expected builtin profile %q to exist", name)

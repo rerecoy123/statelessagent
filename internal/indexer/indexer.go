@@ -15,8 +15,8 @@ import (
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/embedding"
 	"github.com/sgx-labs/statelessagent/internal/graph"
+	"github.com/sgx-labs/statelessagent/internal/llm"
 	"github.com/sgx-labs/statelessagent/internal/memory"
-	"github.com/sgx-labs/statelessagent/internal/ollama"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -83,12 +83,11 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 	graphDB := graph.NewDB(db.Conn())
 	extractor := graph.NewExtractor(graphDB)
 
-	// Attempt to configure LLM for extraction if available
-	// We prioritize a dedicated chat model if we can talk to Ollama
-	if provCfg.Provider == "ollama" || provCfg.Provider == "" {
-		oc := ollama.NewClientWithURL(provCfg.BaseURL)
-		if model, err := oc.PickBestModel(); err == nil && model != "" {
-			extractor.SetLLM(oc, model)
+	// Attempt to configure LLM for extraction if available.
+	// This now follows provider-agnostic chat routing instead of Ollama-only.
+	if chatClient, err := llm.NewClient(); err == nil {
+		if model, modelErr := chatClient.PickBestModel(); modelErr == nil && model != "" {
+			extractor.SetLLM(chatClient, model)
 		}
 	}
 

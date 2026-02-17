@@ -93,6 +93,7 @@ Profiles:
   precise   Fewer results, higher relevance threshold (uses fewer tokens)
   balanced  Default balance of relevance and coverage
   broad     More results, lower threshold (uses ~2x more tokens)
+  pi        Raspberry Pi / low-resource optimization
 
 Example: same profile use precise`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -102,7 +103,7 @@ Example: same profile use precise`,
 
 	useCmd := &cobra.Command{
 		Use:   "use [profile]",
-		Short: "Switch to a profile (precise, balanced, broad)",
+		Short: "Switch to a profile (precise, balanced, broad, pi)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setProfile(args[0])
@@ -119,7 +120,7 @@ func showCurrentProfile() error {
 	cli.Header("SAME Profile")
 	fmt.Println()
 
-	for _, name := range []string{"precise", "balanced", "broad"} {
+	for _, name := range []string{"precise", "balanced", "broad", "pi"} {
 		p := config.BuiltinProfiles[name]
 		marker := "  "
 		if name == current {
@@ -155,7 +156,7 @@ func setProfile(profileName string) error {
 	if !ok {
 		return userError(
 			fmt.Sprintf("Unknown profile: %s", profileName),
-			"Available: precise, balanced, broad",
+			"Available: precise, balanced, broad, pi",
 		)
 	}
 
@@ -164,6 +165,13 @@ func setProfile(profileName string) error {
 		fmt.Printf("\n  %s⚠ Token usage warning:%s\n", cli.Yellow, cli.Reset)
 		fmt.Println("  The 'broad' profile surfaces more notes per query,")
 		fmt.Println("  which uses approximately 2x more tokens.")
+		fmt.Println()
+	}
+
+	if profileName == "pi" {
+		fmt.Printf("\n  %sPi optimization tips:%s\n", cli.Dim, cli.Reset)
+		fmt.Println("  - For local embeddings on constrained hardware: same model use all-minilm")
+		fmt.Println("  - For minimum resource usage: set SAME_EMBED_PROVIDER=none and reindex")
 		fmt.Println()
 	}
 

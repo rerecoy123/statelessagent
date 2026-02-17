@@ -8,7 +8,7 @@ import (
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
-	"github.com/sgx-labs/statelessagent/internal/ollama"
+	"github.com/sgx-labs/statelessagent/internal/llm"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -19,10 +19,11 @@ func askCmd() *cobra.Command {
 		Use:   "ask [question]",
 		Short: "Ask a question and get answers from your notes",
 		Long: `Ask a natural language question and get an answer synthesized from your
-indexed notes using a local LLM via Ollama.
+indexed notes using your configured chat provider.
 
-Requires a chat model installed in Ollama (e.g., llama3.2, mistral, qwen2.5).
-SAME will auto-detect the best available model.
+Provider routing follows SAME_CHAT_PROVIDER (or auto mode), with SAME_EMBED_PROVIDER
+as the default hint. Queue fallback providers with SAME_CHAT_FALLBACKS.
+SAME will auto-detect the best available chat model.
 
 Examples:
   same ask "what did we decide about authentication?"
@@ -33,7 +34,7 @@ Examples:
 			return runAsk(args[0], model, topK)
 		},
 	}
-	cmd.Flags().StringVar(&model, "model", "", "Ollama model to use (auto-detected if empty)")
+	cmd.Flags().StringVar(&model, "model", "", "Chat model to use (auto-detected if empty)")
 	cmd.Flags().IntVar(&topK, "top-k", 5, "Number of notes to use as context")
 	return cmd
 }
@@ -56,7 +57,7 @@ func runAsk(question, model string, topK int) error {
 	if db.HasVectors() {
 		embedClient, err := newEmbedProvider()
 		if err != nil {
-			// Ollama down — try FTS5, then LIKE-based keyword
+			// Embeddings unavailable — try FTS5, then LIKE-based keyword
 			if db.FTSAvailable() {
 				results, _ = db.FTS5Search(question, store.SearchOptions{TopK: topK})
 			}
@@ -78,7 +79,7 @@ func runAsk(question, model string, topK int) error {
 				}
 			}
 			if len(results) == 0 {
-				return fmt.Errorf("can't connect to embedding provider — is Ollama running? (%w)", err)
+				return fmt.Errorf("can't connect to embedding provider: %w", err)
 			}
 		} else {
 			queryVec, err := embedClient.GetQueryEmbedding(question)
@@ -122,30 +123,30 @@ func runAsk(question, model string, topK int) error {
 		return nil
 	}
 
-	// 3. Connect to Ollama LLM
-	llm, err := ollama.NewClient()
+	// 3. Connect to configured chat provider
+	chat, err := llm.NewClient()
 	if err != nil {
 		return userError(
-			"Ollama is not running",
-			"same ask requires Ollama for answers. Start Ollama and try again, or install from: https://ollama.com",
+			"No chat provider available",
+			"Set SAME_CHAT_PROVIDER (ollama/openai/openai-compatible) or configure SAME_EMBED_PROVIDER for auto routing.",
 		)
 	}
 
 	// 4. Pick model
 	if model == "" {
-		model, err = llm.PickBestModel()
+		model, err = chat.PickBestModel()
 		if err != nil {
-			return fmt.Errorf("can't list Ollama models: %w", err)
+			return fmt.Errorf("can't list chat models: %w", err)
 		}
 		if model == "" {
 			return userError(
-				"No chat model found in Ollama",
-				"Install one with: ollama pull llama3.2",
+				"No chat model found",
+				"Set SAME_CHAT_MODEL explicitly or install/configure at least one chat-capable model.",
 			)
 		}
 	}
 
-	fmt.Printf("  %s⦿%s Thinking with %s (%d sources)...\n", cli.Cyan, cli.Reset, model, len(results))
+	fmt.Printf("  %s⦿%s Thinking with %s/%s (%d sources)...\n", cli.Cyan, cli.Reset, chat.Provider(), model, len(results))
 
 	// 6. Build context from search results
 	var context strings.Builder
@@ -171,7 +172,7 @@ QUESTION: %s
 Answer concisely, citing sources by name:`, context.String(), question)
 
 	// 8. Generate answer
-	answer, err := llm.Generate(model, prompt)
+	answer, err := chat.Generate(model, prompt)
 	if err != nil {
 		return fmt.Errorf("generate answer: %w", err)
 	}
