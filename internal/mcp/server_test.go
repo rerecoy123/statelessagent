@@ -132,6 +132,22 @@ func TestSafeVaultPath_EmptyInput(t *testing.T) {
 	}
 }
 
+func TestPathWithin_PrefixConfusion(t *testing.T) {
+	base := filepath.Join("tmp", "vault")
+	inside := filepath.Join(base, "notes", "a.md")
+	outsideSibling := base + "-other"
+
+	if !pathWithin(base, inside) {
+		t.Fatalf("expected inside path to be accepted")
+	}
+	if pathWithin(base, outsideSibling) {
+		t.Fatalf("expected prefix-confusion sibling to be rejected")
+	}
+	if !pathWithin(base, base) {
+		t.Fatalf("expected base path to be accepted")
+	}
+}
+
 // --- filterPrivatePaths ---
 
 func TestFilterPrivatePaths_RemovesPrivate(t *testing.T) {
