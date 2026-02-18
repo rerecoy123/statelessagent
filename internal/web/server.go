@@ -481,7 +481,7 @@ func (s *server) handleGraphConnections(w http.ResponseWriter, r *http.Request) 
 				"start_path": clean,
 				"count":      0,
 				"paths":      []graph.Path{},
-				"hint":       "No graph node found for this note. Run same reindex to extract graph links.",
+				"hint":       "No graph node found for this note. Run same graph rebuild (or same reindex) to extract graph links.",
 			})
 			return
 		}

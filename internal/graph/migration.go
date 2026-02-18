@@ -79,3 +79,93 @@ func PopulateFromExistingNotes(conn *sql.DB) error {
 
 	return nil
 }
+
+// RebuildStats captures rebuild output for UX/reporting.
+type RebuildStats struct {
+	NotesProcessed int
+	TotalNodes     int
+	TotalEdges     int
+}
+
+// RebuildFromIndexedNotes clears graph tables, then rebuilds nodes/edges from
+// indexed notes (including regex/decision/agent extraction).
+//
+// If extractor is nil, a default regex-only extractor is used.
+func RebuildFromIndexedNotes(conn *sql.DB, extractor *Extractor) (*RebuildStats, error) {
+	if extractor == nil {
+		extractor = NewExtractor(NewDB(conn))
+	}
+
+	if _, err := conn.Exec("DELETE FROM graph_edges"); err != nil {
+		return nil, fmt.Errorf("clear graph edges: %w", err)
+	}
+	if _, err := conn.Exec("DELETE FROM graph_nodes"); err != nil {
+		return nil, fmt.Errorf("clear graph nodes: %w", err)
+	}
+
+	rows, err := conn.Query(`
+		SELECT root.id, root.path, COALESCE(root.agent, ''),
+			COALESCE((
+				SELECT group_concat(ch.text, char(10) || char(10))
+				FROM (
+					SELECT text
+					FROM vault_notes
+					WHERE path = root.path
+					ORDER BY chunk_id
+				) ch
+			), '')
+		FROM vault_notes root
+		WHERE root.chunk_id = 0
+		ORDER BY root.path`)
+	if err != nil {
+		return nil, fmt.Errorf("load indexed notes: %w", err)
+	}
+	defer rows.Close()
+
+	type indexedNote struct {
+		id      int64
+		path    string
+		agent   string
+		content string
+	}
+	var notes []indexedNote
+
+	stats := &RebuildStats{}
+	for rows.Next() {
+		var (
+			noteID  int64
+			path    string
+			agent   string
+			content string
+		)
+		if err := rows.Scan(&noteID, &path, &agent, &content); err != nil {
+			return nil, fmt.Errorf("scan indexed note: %w", err)
+		}
+		notes = append(notes, indexedNote{
+			id:      noteID,
+			path:    path,
+			agent:   agent,
+			content: content,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate indexed notes: %w", err)
+	}
+
+	for _, n := range notes {
+		if err := extractor.ExtractFromNote(n.id, n.path, n.content, n.agent); err != nil {
+			return nil, fmt.Errorf("extract graph for %s: %w", n.path, err)
+		}
+		stats.NotesProcessed++
+	}
+
+	gdb := NewDB(conn)
+	gstats, err := gdb.GetStats()
+	if err != nil {
+		return nil, fmt.Errorf("final graph stats: %w", err)
+	}
+	stats.TotalNodes = gstats.TotalNodes
+	stats.TotalEdges = gstats.TotalEdges
+
+	return stats, nil
+}

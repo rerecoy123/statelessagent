@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/graph"
+	"github.com/sgx-labs/statelessagent/internal/llm"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -241,8 +243,8 @@ func graphPathCmd() *cobra.Command {
 func graphRebuildCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rebuild",
-		Short: "Rebuild the basic graph structure",
-		Long:  "Populate the graph from existing notes (notes, agents, produced relationships). Does not re-run text extraction.",
+		Short: "Rebuild graph nodes and relationships from indexed notes",
+		Long:  "Clear and rebuild graph data from indexed notes, including reference/decision extraction.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db, err := store.Open()
 			if err != nil {
@@ -250,13 +252,53 @@ func graphRebuildCmd() *cobra.Command {
 			}
 			defer db.Close()
 
-			fmt.Println("Rebuilding basic graph structure...")
-			if err := graph.PopulateFromExistingNotes(db.Conn()); err != nil {
+			fmt.Println("Rebuilding graph from indexed notes...")
+
+			extractor := graph.NewExtractor(graph.NewDB(db.Conn()))
+			if llmStatus := configureGraphRebuildLLM(extractor); llmStatus != "" {
+				fmt.Printf("  Graph LLM extraction: %s\n", llmStatus)
+			}
+
+			stats, err := graph.RebuildFromIndexedNotes(db.Conn(), extractor)
+			if err != nil {
 				return err
 			}
-			fmt.Println("Done.")
+			fmt.Printf("Done. Processed %d note(s), %d node(s), %d edge(s).\n",
+				stats.NotesProcessed, stats.TotalNodes, stats.TotalEdges)
 			return nil
 		},
+	}
+}
+
+func configureGraphRebuildLLM(extractor *graph.Extractor) string {
+	mode := config.GraphLLMMode()
+	switch mode {
+	case "off":
+		return "disabled (regex-only)"
+	case "local-only":
+		chatClient, err := llm.NewClientWithOptions(llm.Options{LocalOnly: true})
+		if err != nil {
+			return fmt.Sprintf("fallback regex-only (%s)", sanitizeRuntimeError(err))
+		}
+		model, err := chatClient.PickBestModel()
+		if err != nil || strings.TrimSpace(model) == "" {
+			return "fallback regex-only (no local chat model found)"
+		}
+		extractor.SetLLM(chatClient, model)
+		return fmt.Sprintf("enabled (%s/%s)", chatClient.Provider(), model)
+	case "on":
+		chatClient, err := llm.NewClient()
+		if err != nil {
+			return fmt.Sprintf("fallback regex-only (%s)", sanitizeRuntimeError(err))
+		}
+		model, err := chatClient.PickBestModel()
+		if err != nil || strings.TrimSpace(model) == "" {
+			return "fallback regex-only (no chat model found)"
+		}
+		extractor.SetLLM(chatClient, model)
+		return fmt.Sprintf("enabled (%s/%s)", chatClient.Provider(), model)
+	default:
+		return "disabled (regex-only)"
 	}
 }
 

@@ -1630,8 +1630,8 @@ body {
     if (gstats && gstats.available) {
       if (gstats.total_nodes > 0 && gstats.total_edges === 0) {
         insights.push(buildInsight('warn',
-          '<strong>Graph has nodes but no relationships.</strong> Reindex to run relationship extraction and unlock graph traversal.',
-          'same reindex'));
+          '<strong>Graph has nodes but no relationships.</strong> Rebuild graph links to run relationship extraction and unlock traversal.',
+          'same graph rebuild'));
       } else if (gstats.total_edges >= 10) {
         insights.push(buildInsight('good',
           '<strong>Graph relationships are active.</strong> Use <code>same graph query</code> to trace decisions, references, and ownership.'));
@@ -1721,7 +1721,7 @@ body {
     var top = gstats.top_relationships || [];
     if (top.length === 0) {
       relList.appendChild(el('div', {className: 'graph-item'}, [
-        el('div', {className: 'graph-summary', textContent: 'No graph relationships yet. Run `same reindex` to extract links from notes.'})
+        el('div', {className: 'graph-summary', textContent: 'No graph relationships yet. Run `same graph rebuild` (or `same reindex`) to extract links from notes.'})
       ]));
     } else {
       top.forEach(function(item) {

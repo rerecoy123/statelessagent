@@ -13,7 +13,7 @@
   - `same graph stats` — node/edge counts by type and relationship
   - `same graph query` — depth-limited recursive traversal from a start node
   - `same graph path` — shortest path between two nodes
-  - `same graph rebuild` — rebuild baseline note/agent/produced graph from indexed notes
+  - `same graph rebuild` — clear and fully rebuild graph links from indexed notes (references/decisions/agents)
 - **Schema migration v6 (`graph_nodes`, `graph_edges`)** — graph tables are now first-class in the versioned migration pipeline
 - **Incremental graph sync test coverage** — added regression coverage for graph cleanup on note delete/force clear and lite single-file updates
 - **Web graph APIs (`/api/graph/stats`, `/api/graph/connections/{path}`)** — dashboard can now read graph density/relationship stats and fetch per-note traversal paths with input validation + private-path filtering

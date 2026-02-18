@@ -181,6 +181,7 @@ same graph rebuild
 
 Graph data is built from indexed notes and stays local in SQLite. `_PRIVATE/` files remain excluded because they are never indexed.
 Markdown note links (for example `notes/next.md`) are connected as note-to-note edges, so you can traverse actual learning paths across your vault.
+`same graph rebuild` clears stale graph data and re-extracts relationships from your indexed notes.
 LLM graph extraction is `off` by default; enable it explicitly with `SAME_GRAPH_LLM=local-only` (local endpoints only) or `SAME_GRAPH_LLM=on`.
 
 `same web` now surfaces graph highlights (node/edge density + top relationship types) and shows per-note knowledge connections directly in the note viewer, so you can inspect relationship paths without leaving the dashboard.
