@@ -176,7 +176,7 @@ func acquireInitLock() (func(), error) {
 				if time.Since(info.ModTime()) > 30*time.Minute {
 					// Stale lock — remove and retry
 					if rmErr := os.Remove(lockPath); rmErr != nil {
-						return nil, fmt.Errorf("another 'same init' is already running (lockfile: %s)", lockPath)
+						return nil, fmt.Errorf("failed to remove stale init lockfile %s: %w", lockPath, rmErr)
 					}
 					f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 					if err != nil {
@@ -196,18 +196,24 @@ func acquireInitLock() (func(), error) {
 	// Write PID for debugging
 	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
 		_ = f.Close()
-		_ = os.Remove(lockPath)
+		if rmErr := os.Remove(lockPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			fmt.Fprintf(os.Stderr, "same: warning: init lock cleanup failed (%v)\n", rmErr)
+		}
 		fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (failed to write lockfile)\n")
 		return func() {}, nil
 	}
 	if err := f.Close(); err != nil {
-		_ = os.Remove(lockPath)
+		if rmErr := os.Remove(lockPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			fmt.Fprintf(os.Stderr, "same: warning: init lock cleanup failed (%v)\n", rmErr)
+		}
 		fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (failed to finalize lockfile)\n")
 		return func() {}, nil
 	}
 
 	cleanup := func() {
-		os.Remove(lockPath)
+		if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "same: warning: failed to remove init lockfile %s: %v\n", lockPath, err)
+		}
 	}
 	return cleanup, nil
 }

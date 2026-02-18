@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- HooksInstalled tests ---
@@ -115,6 +116,41 @@ func TestHooksInstalled_PartialHooks(t *testing.T) {
 	}
 	if result["decision-extractor"] {
 		t.Error("expected decision-extractor to be false")
+	}
+}
+
+func TestAcquireInitLock_RemovesStaleLockAndAcquires(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	lockPath := filepath.Join(home, ".config", "same", "init.lock")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		t.Fatalf("create init lock dir: %v", err)
+	}
+	if err := os.WriteFile(lockPath, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("create stale lockfile: %v", err)
+	}
+
+	stale := time.Now().Add(-31 * time.Minute)
+	if err := os.Chtimes(lockPath, stale, stale); err != nil {
+		t.Fatalf("mark stale lock: %v", err)
+	}
+
+	unlock, err := acquireInitLock()
+	if err != nil {
+		t.Fatalf("expected stale lock recovery, got err: %v", err)
+	}
+	if unlock == nil {
+		t.Fatal("expected cleanup callback")
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected fresh lockfile after acquisition: %v", err)
+	}
+
+	unlock()
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected lockfile removed by cleanup, got: %v", err)
 	}
 }
 
