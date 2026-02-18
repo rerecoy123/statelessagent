@@ -34,7 +34,7 @@ type InitOptions struct {
 	HooksOnly bool // skip MCP setup (Claude Code only)
 	Verbose   bool // show detailed progress (each file being processed)
 	Version   string
-	Provider  string // embedding provider override: ollama, openai, openai-compatible
+	Provider  string // embedding provider override: ollama, openai, openai-compatible, none
 }
 
 // ExperienceLevel represents the user's coding experience.
@@ -241,6 +241,19 @@ func RunInit(opts InitOptions) error {
 	embedProvider, err = normalizeEmbedProvider(embedProvider)
 	if err != nil {
 		return err
+	}
+	if opts.Provider != "" {
+		prevProvider, hadProvider := os.LookupEnv("SAME_EMBED_PROVIDER")
+		if err := os.Setenv("SAME_EMBED_PROVIDER", embedProvider); err != nil {
+			return fmt.Errorf("set SAME_EMBED_PROVIDER: %w", err)
+		}
+		defer func() {
+			if hadProvider {
+				_ = os.Setenv("SAME_EMBED_PROVIDER", prevProvider)
+			} else {
+				_ = os.Unsetenv("SAME_EMBED_PROVIDER")
+			}
+		}()
 	}
 
 	// Check dependencies (Node, selected embedding runtime, Go version, CGO)
@@ -1032,6 +1045,33 @@ func vaultHasNotes(vaultPath string) bool {
 
 // detectVault finds or prompts for the vault path.
 func detectVault(autoAccept bool) (string, error) {
+	if override := strings.TrimSpace(config.VaultOverride); override != "" {
+		resolved := override
+		if resolvedFromRegistry := config.LoadRegistry().ResolveVault(override); resolvedFromRegistry != "" {
+			resolved = resolvedFromRegistry
+		}
+		if strings.HasPrefix(resolved, "~/") || strings.HasPrefix(resolved, `~\`) {
+			home, _ := os.UserHomeDir()
+			resolved = filepath.Join(home, resolved[2:])
+		}
+		absPath, err := filepath.Abs(resolved)
+		if err != nil {
+			return "", fmt.Errorf("resolve --vault path: %w", err)
+		}
+		info, err := os.Stat(absPath)
+		if err != nil || !info.IsDir() {
+			return "", fmt.Errorf("vault override path does not exist or is not a directory: %s", absPath)
+		}
+		count := indexer.CountMarkdownFiles(absPath)
+		fmt.Printf("  %s✓%s Vault override (--vault)\n", cli.Green, cli.Reset)
+		fmt.Printf("    %s\n", cli.ShortenHome(absPath))
+		fmt.Printf("    %s markdown files\n", cli.FormatNumber(count))
+		if count == 0 {
+			fmt.Printf("  %s!%s No markdown files found\n", cli.Yellow, cli.Reset)
+		}
+		return absPath, nil
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("get working directory: %w", err)

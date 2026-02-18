@@ -136,6 +136,12 @@ func runAsk(question, model string, topK int) error {
 	if model == "" {
 		model, err = chat.PickBestModel()
 		if err != nil {
+			if chat.Provider() == "ollama" {
+				return userError(
+					"No chat provider available",
+					"Start Ollama or set SAME_CHAT_PROVIDER=openai/openai-compatible, then retry 'same ask'. (Keyword search still works with 'same search'.)",
+				)
+			}
 			return fmt.Errorf("can't list chat models: %w", err)
 		}
 		if model == "" {

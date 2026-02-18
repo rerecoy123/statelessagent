@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sgx-labs/statelessagent/internal/config"
 )
 
 // --- HooksInstalled tests ---
@@ -151,6 +153,77 @@ func TestAcquireInitLock_RemovesStaleLockAndAcquires(t *testing.T) {
 	unlock()
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Fatalf("expected lockfile removed by cleanup, got: %v", err)
+	}
+}
+
+func TestDetectVault_UsesVaultOverride(t *testing.T) {
+	vault := t.TempDir()
+	orig := config.VaultOverride
+	config.VaultOverride = vault
+	t.Cleanup(func() { config.VaultOverride = orig })
+
+	got, err := detectVault(true)
+	if err != nil {
+		t.Fatalf("detectVault with --vault override: %v", err)
+	}
+	want, _ := filepath.Abs(vault)
+	if got != want {
+		t.Fatalf("detectVault returned %q, want %q", got, want)
+	}
+}
+
+func TestDetectVault_OverrideRequiresExistingDirectory(t *testing.T) {
+	orig := config.VaultOverride
+	config.VaultOverride = filepath.Join(t.TempDir(), "missing")
+	t.Cleanup(func() { config.VaultOverride = orig })
+
+	_, err := detectVault(true)
+	if err == nil {
+		t.Fatal("expected error for missing --vault override directory")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunInit_ProviderNonePersistsInConfig(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vault, "note.md"), []byte("# Note\nhello\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	origVaultOverride := config.VaultOverride
+	config.VaultOverride = vault
+	t.Cleanup(func() { config.VaultOverride = origVaultOverride })
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	scratch := t.TempDir()
+	if err := os.Chdir(scratch); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	if err := RunInit(InitOptions{
+		Yes:      true,
+		Provider: "none",
+		Version:  "test",
+	}); err != nil {
+		t.Fatalf("RunInit(provider=none): %v", err)
+	}
+
+	cfg, err := config.LoadConfigFrom(config.ConfigFilePath(vault))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if got := strings.ToLower(strings.TrimSpace(cfg.Embedding.Provider)); got != "none" {
+		t.Fatalf("embedding provider = %q, want %q", got, "none")
 	}
 }
 
