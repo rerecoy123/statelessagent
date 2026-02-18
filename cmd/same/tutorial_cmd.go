@@ -148,7 +148,31 @@ func (ts *tutorialState) search(query string, topK int) ([]store.SearchResult, e
 	if ts.db.FTSAvailable() {
 		return ts.db.FTS5Search(query, store.SearchOptions{TopK: topK})
 	}
-	return nil, fmt.Errorf("no search method available")
+
+	// Fall back to LIKE-based keyword search when vectors and FTS5 are unavailable.
+	terms := store.ExtractSearchTerms(query)
+	rawResults, err := ts.db.KeywordSearch(terms, topK)
+	if err != nil {
+		return nil, fmt.Errorf("keyword search: %w", err)
+	}
+	results := make([]store.SearchResult, 0, len(rawResults))
+	for _, rr := range rawResults {
+		snippet := rr.Text
+		if len(snippet) > 500 {
+			snippet = snippet[:500]
+		}
+		results = append(results, store.SearchResult{
+			Path:       rr.Path,
+			Title:      rr.Title,
+			Snippet:    snippet,
+			Domain:     rr.Domain,
+			Workstream: rr.Workstream,
+			Tags:       rr.Tags,
+			ContentType: rr.ContentType,
+			Score:      0.5,
+		})
+	}
+	return results, nil
 }
 
 // errQuit is returned when the user presses 'q' during the tutorial.

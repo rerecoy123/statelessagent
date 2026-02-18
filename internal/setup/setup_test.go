@@ -227,6 +227,24 @@ func TestRunInit_ProviderNonePersistsInConfig(t *testing.T) {
 	}
 }
 
+func TestVaultHasNotes_Recursive(t *testing.T) {
+	vault := t.TempDir()
+	if vaultHasNotes(vault) {
+		t.Fatal("expected empty vault to have no notes")
+	}
+
+	nested := filepath.Join(vault, "notes")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "existing.md"), []byte("# Existing\n"), 0o644); err != nil {
+		t.Fatalf("write nested markdown: %v", err)
+	}
+	if !vaultHasNotes(vault) {
+		t.Fatal("expected nested markdown file to be detected")
+	}
+}
+
 // --- SetupHooks tests ---
 
 func TestSetupHooks_CreatesNewFile(t *testing.T) {

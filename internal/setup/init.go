@@ -1031,16 +1031,7 @@ func copyWelcomeNotes(vaultPath string) {
 // vaultHasNotes checks if the vault root already contains markdown files.
 // Used to skip welcome note generation for vaults with existing content.
 func vaultHasNotes(vaultPath string) bool {
-	entries, err := os.ReadDir(vaultPath)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
-			return true
-		}
-	}
-	return false
+	return indexer.CountMarkdownFiles(vaultPath) > 0
 }
 
 // detectVault finds or prompts for the vault path.
