@@ -39,6 +39,32 @@ func (f failingEmbeddingProvider) Dimensions() int {
 	return 768
 }
 
+type okEmbeddingProvider struct{}
+
+func (okEmbeddingProvider) GetEmbedding(text string, purpose string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+func (okEmbeddingProvider) GetDocumentEmbedding(text string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+func (okEmbeddingProvider) GetQueryEmbedding(text string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+func (okEmbeddingProvider) Name() string {
+	return "ok"
+}
+
+func (okEmbeddingProvider) Model() string {
+	return "ok-model"
+}
+
+func (okEmbeddingProvider) Dimensions() int {
+	return 3
+}
+
 func TestChunkByHeadings(t *testing.T) {
 	body := `## Overview
 
@@ -421,6 +447,22 @@ func TestBuildRecords_AllEmbeddingsFailReturnsError(t *testing.T) {
 	_, _, _, err := buildRecords(filePath, "note.md", dir, failingEmbeddingProvider{})
 	if !errors.Is(err, errNoEmbeddingsForFile) {
 		t.Fatalf("expected errNoEmbeddingsForFile, got %v", err)
+	}
+}
+
+func TestPreflightEmbeddingProvider_Failure(t *testing.T) {
+	err := preflightEmbeddingProvider(failingEmbeddingProvider{})
+	if err == nil {
+		t.Fatal("expected preflight failure")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "preflight") {
+		t.Fatalf("expected preflight context in error, got %v", err)
+	}
+}
+
+func TestPreflightEmbeddingProvider_Success(t *testing.T) {
+	if err := preflightEmbeddingProvider(okEmbeddingProvider{}); err != nil {
+		t.Fatalf("expected preflight success, got %v", err)
 	}
 }
 

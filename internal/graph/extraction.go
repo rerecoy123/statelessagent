@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -47,7 +48,7 @@ func (e *Extractor) ExtractFromNote(noteID int64, path, content, agent string) e
 	}
 
 	// 2. Extract file references (Regex)
-	if err := e.extractRegex(nID, content); err != nil {
+	if err := e.extractRegex(path, nID, content); err != nil {
 		return err
 	}
 
@@ -75,7 +76,7 @@ func (e *Extractor) ExtractFromNote(noteID int64, path, content, agent string) e
 	return nil
 }
 
-func (e *Extractor) extractRegex(nID int64, content string) error {
+func (e *Extractor) extractRegex(notePath string, nID int64, content string) error {
 	files := make(map[string]bool)
 
 	// Find all Go files
@@ -92,7 +93,12 @@ func (e *Extractor) extractRegex(nID int64, content string) error {
 		}
 	}
 
-	for fPath := range files {
+	for rawPath := range files {
+		fPath, ok := normalizeGraphReferencePath(notePath, rawPath)
+		if !ok {
+			continue
+		}
+
 		nodeType := NodeFile
 		if strings.HasSuffix(strings.ToLower(fPath), ".md") {
 			// Markdown links represent note-to-note knowledge paths.
@@ -120,6 +126,58 @@ func (e *Extractor) extractRegex(nID int64, content string) error {
 		}
 	}
 	return nil
+}
+
+func normalizeGraphReferencePath(notePath, candidate string) (string, bool) {
+	candidate = strings.TrimSpace(strings.ReplaceAll(candidate, "\\", "/"))
+	if candidate == "" {
+		return "", false
+	}
+
+	// Reject absolute/home-style paths.
+	if strings.HasPrefix(candidate, "/") || strings.HasPrefix(candidate, "~/") || strings.HasPrefix(candidate, "//") {
+		return "", false
+	}
+	if len(candidate) >= 3 && ((candidate[0] >= 'A' && candidate[0] <= 'Z') || (candidate[0] >= 'a' && candidate[0] <= 'z')) &&
+		candidate[1] == ':' && (candidate[2] == '/' || candidate[2] == '\\') {
+		return "", false
+	}
+
+	clean := candidate
+	if strings.HasPrefix(clean, "./") || strings.HasPrefix(clean, "../") {
+		baseDir := path.Dir(strings.TrimSpace(strings.ReplaceAll(notePath, "\\", "/")))
+		clean = path.Clean(path.Join(baseDir, clean))
+	} else {
+		clean = path.Clean(clean)
+	}
+	if clean == "." || clean == "" {
+		return "", false
+	}
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", false
+	}
+	if isLikelyExternalReference(clean) {
+		return "", false
+	}
+
+	return strings.TrimPrefix(clean, "./"), true
+}
+
+func isLikelyExternalReference(ref string) bool {
+	lower := strings.ToLower(ref)
+	if strings.Contains(lower, "/.windsurf/worktrees/") || strings.Contains(lower, "/.git/worktrees/") {
+		return true
+	}
+
+	top := lower
+	if idx := strings.IndexByte(lower, '/'); idx >= 0 {
+		top = lower[:idx]
+	}
+	switch top {
+	case "users", "home", "private", "var", "opt", "etc", "root", "volumes", "mnt", "usr", "tmp":
+		return true
+	}
+	return false
 }
 
 func (e *Extractor) linkAgent(nID int64, agent string) error {

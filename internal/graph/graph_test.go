@@ -316,6 +316,78 @@ func TestExtractFromNote_MarkdownReferenceBecomesNoteNode(t *testing.T) {
 	}
 }
 
+func TestExtractFromNote_IgnoresExternalOrAbsoluteLikeReferences(t *testing.T) {
+	db := setupTestDB(t)
+	ext := NewExtractor(db)
+
+	content := `
+	See Users/seangleason/.windsurf/worktrees/statelessagent/main.go and tmp/same-graph-test/notes/a.md.
+	Also see internal/store/db.go and notes/next.md.
+	`
+
+	if err := ext.ExtractFromNote(300, "notes/current.md", content, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.FindNode(NodeFile, "Users/seangleason/.windsurf/worktrees/statelessagent/main.go"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected external Users/ path to be ignored, got err=%v", err)
+	}
+	if _, err := db.FindNode(NodeNote, "tmp/same-graph-test/notes/a.md"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected tmp/ path to be ignored, got err=%v", err)
+	}
+
+	if _, err := db.FindNode(NodeFile, "internal/store/db.go"); err != nil {
+		t.Fatalf("expected in-vault file node: %v", err)
+	}
+	if _, err := db.FindNode(NodeNote, "notes/next.md"); err != nil {
+		t.Fatalf("expected in-vault note node: %v", err)
+	}
+}
+
+func TestExtractFromNote_IgnoresExternalFileURLReferences(t *testing.T) {
+	db := setupTestDB(t)
+	ext := NewExtractor(db)
+
+	content := `*Viewed [AGENTS.md](file:///Users/seangleason/.windsurf/worktrees/statelessagent/statelessagent-f716fdc5/AGENTS.md)*`
+
+	if err := ext.ExtractFromNote(301, "notes/current.md", content, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.FindNode(NodeNote, "Users/seangleason/.windsurf/worktrees/statelessagent/statelessagent-f716fdc5/AGENTS.md"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected file:// external path to be ignored, got err=%v", err)
+	}
+}
+
+func TestNormalizeGraphReferencePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		notePath string
+		input    string
+		want     string
+		ok       bool
+	}{
+		{name: "relative same dir", notePath: "notes/current.md", input: "./next.md", want: "notes/next.md", ok: true},
+		{name: "relative parent", notePath: "notes/current.md", input: "../README.md", want: "README.md", ok: true},
+		{name: "escape parent rejected", notePath: "notes/current.md", input: "../../outside.md", ok: false},
+		{name: "absolute rejected", notePath: "notes/current.md", input: "/Users/dev/file.go", ok: false},
+		{name: "users prefix rejected", notePath: "notes/current.md", input: "Users/dev/file.go", ok: false},
+		{name: "normal repo path", notePath: "notes/current.md", input: "internal/store/db.go", want: "internal/store/db.go", ok: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := normalizeGraphReferencePath(tt.notePath, tt.input)
+			if ok != tt.ok {
+				t.Fatalf("ok = %v, want %v (got %q)", ok, tt.ok, got)
+			}
+			if tt.ok && got != tt.want {
+				t.Fatalf("path = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGraphQualityFixture_NoteReferencesAreTraversable(t *testing.T) {
 	db := setupTestDB(t)
 	ext := NewExtractor(db)

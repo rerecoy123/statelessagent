@@ -158,6 +158,14 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 		}
 	}
 
+	// Fail fast when embeddings are unavailable, instead of emitting per-file
+	// embedding errors across the whole vault before lite fallback kicks in.
+	if len(work) > 0 {
+		if err := preflightEmbeddingProvider(embedClient); err != nil {
+			return nil, fmt.Errorf("embedding backend unavailable: %w", err)
+		}
+	}
+
 	// Process files with a worker pool (4 goroutines)
 	const numWorkers = 4
 	workCh := make(chan fileWork, len(work))
@@ -280,6 +288,14 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 	saveStats(stats)
 
 	return stats, nil
+}
+
+func preflightEmbeddingProvider(embedClient embedding.Provider) error {
+	_, err := embedClient.GetDocumentEmbedding("same embedding preflight")
+	if err != nil {
+		return fmt.Errorf("preflight embedding probe failed: %w", err)
+	}
+	return nil
 }
 
 // GetStats reads the last saved index stats.
