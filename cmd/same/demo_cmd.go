@@ -11,7 +11,7 @@ import (
 	"github.com/sgx-labs/statelessagent/internal/cli"
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/indexer"
-	"github.com/sgx-labs/statelessagent/internal/ollama"
+	"github.com/sgx-labs/statelessagent/internal/llm"
 	"github.com/sgx-labs/statelessagent/internal/store"
 )
 
@@ -226,13 +226,13 @@ func runDemo(clean bool) error {
 	}
 	defer db.Close()
 
-	// 3. Index — use Ollama if available, fall back to lite mode
-	ollamaAvailable := true
+	// 3. Index — use semantic mode if embeddings are available, else fall back to lite.
+	semanticAvailable := true
 	fmt.Printf("  Indexing")
 	stats, err := indexer.Reindex(db, true)
 	if err != nil {
 		// Embedding provider failed — fall back to lite mode
-		ollamaAvailable = false
+		semanticAvailable = false
 		fmt.Printf(" (keyword mode)...")
 		stats, err = indexer.ReindexLite(db, true, nil)
 		if err != nil {
@@ -243,8 +243,8 @@ func runDemo(clean bool) error {
 		fmt.Printf(" (semantic mode)...")
 	}
 	fmt.Printf(" done (%d notes, %d chunks)\n", stats.TotalFiles, stats.ChunksInIndex)
-	if !ollamaAvailable {
-		fmt.Printf("  %sInstall Ollama for AI-powered semantic search%s\n", cli.Dim, cli.Reset)
+	if !semanticAvailable {
+		fmt.Printf("  %sConfigure embeddings (ollama/openai/openai-compatible) for semantic search%s\n", cli.Dim, cli.Reset)
 	}
 
 	// 4. Search demo
@@ -253,7 +253,7 @@ func runDemo(clean bool) error {
 	fmt.Printf("  %s$%s same search \"%s\" --vault %s\n\n", cli.Dim, cli.Reset, query, demoDir)
 
 	var results []store.SearchResult
-	if ollamaAvailable {
+	if semanticAvailable {
 		embedClient, err := newEmbedProvider()
 		if err == nil {
 			queryVec, err := embedClient.GetQueryEmbedding(query)
@@ -298,10 +298,10 @@ func runDemo(clean bool) error {
 		fmt.Printf("  %sThis note will appear in EVERY session, regardless of topic.%s\n", cli.Dim, cli.Reset)
 	}
 
-	// 7. Ask demo (if Ollama has a chat model)
-	llm, llmErr := ollama.NewClient()
-	if llmErr == nil {
-		bestModel, _ := llm.PickBestModel()
+	// 7. Ask demo (if a chat provider/model is available)
+	chatClient, chatErr := llm.NewClient()
+	if chatErr == nil {
+		bestModel, _ := chatClient.PickBestModel()
 		if bestModel != "" {
 			cli.Section("Ask — the magic moment")
 
@@ -310,7 +310,7 @@ func runDemo(clean bool) error {
 
 			// Get context via search
 			var askResults []store.SearchResult
-			if ollamaAvailable {
+			if semanticAvailable {
 				embedClient, _ := newEmbedProvider()
 				if embedClient != nil {
 					askVec, err := embedClient.GetQueryEmbedding(askQuery)
@@ -345,12 +345,12 @@ QUESTION: %s
 
 Answer concisely, citing sources by name:`, ctx.String(), askQuery)
 
-				answer, err := llm.Generate(bestModel, prompt)
+				answer, err := chatClient.Generate(bestModel, prompt)
 				if err == nil && answer != "" {
 					for _, line := range strings.Split(answer, "\n") {
 						fmt.Printf("  %s\n", line)
 					}
-					fmt.Printf("\n  %s✓%s Answered from YOUR notes. 100%% local. No cloud API.\n",
+					fmt.Printf("\n  %s✓%s Answered from YOUR notes with source grounding.\n",
 						cli.Green, cli.Reset)
 				}
 			}
