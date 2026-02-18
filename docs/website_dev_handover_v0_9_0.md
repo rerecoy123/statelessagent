@@ -31,6 +31,7 @@
 - key write and cleanup paths (config/registry/MCP note+decision writes/handoff+decision logs/init `.gitignore` updates/index stats/tutorial+demo scaffolding/seed config rewrites+rollback cleanup/verbose logs) now surface failures instead of silently skipping them
 - update install path now surfaces temp cleanup failures and hardens Windows backup-path preparation before binary swap
 - web JSON API encoding failures now log explicit diagnostics server-side
+- init lock fallback now emits explicit warnings if lock enforcement is disabled by filesystem/runtime constraints
 
 ## Suggested website copy updates
 

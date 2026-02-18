@@ -161,6 +161,7 @@ func acquireInitLock() (func(), error) {
 	}
 	lockDir := filepath.Join(home, ".config", "same")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (cannot create lock dir): %v\n", err)
 		return func() {}, nil
 	}
 	lockPath := filepath.Join(lockDir, "init.lock")
@@ -187,6 +188,7 @@ func acquireInitLock() (func(), error) {
 			}
 		}
 		if f == nil {
+			fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (lockfile unavailable)\n")
 			return func() {}, nil // can't lock, proceed anyway
 		}
 	}
@@ -195,10 +197,12 @@ func acquireInitLock() (func(), error) {
 	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
 		_ = f.Close()
 		_ = os.Remove(lockPath)
+		fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (failed to write lockfile)\n")
 		return func() {}, nil
 	}
 	if err := f.Close(); err != nil {
 		_ = os.Remove(lockPath)
+		fmt.Fprintf(os.Stderr, "same: warning: init lock disabled (failed to finalize lockfile)\n")
 		return func() {}, nil
 	}
 
