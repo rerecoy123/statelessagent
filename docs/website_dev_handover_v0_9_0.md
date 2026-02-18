@@ -2,7 +2,7 @@
 
 Updated: 2026-02-18
 Audience: website engineering, docs, launch copy, support
-Product repo: `/Users/seangleason/code/statelessagent`
+Product repo: `github.com/sgx-labs/statelessagent`
 Release target: v0.9.0
 
 ## 1) Executive Summary
@@ -315,9 +315,9 @@ Support-ready points:
 
 ## 16) Source of Truth in Repo
 
-- Release summary: `/Users/seangleason/code/statelessagent/docs/release_brief_v0_9_0.md`
-- Full changelog: `/Users/seangleason/code/statelessagent/CHANGELOG.md`
-- Product philosophy: `/Users/seangleason/code/statelessagent/docs/design_context.md`
-- Web server implementation: `/Users/seangleason/code/statelessagent/internal/web/server.go`
-- Dashboard frontend: `/Users/seangleason/code/statelessagent/internal/web/static/index.html`
+- Release summary: `docs/release_brief_v0_9_0.md`
+- Full changelog: `CHANGELOG.md`
+- Product philosophy: `docs/design_context.md`
+- Web server implementation: `internal/web/server.go`
+- Dashboard frontend: `internal/web/static/index.html`
 

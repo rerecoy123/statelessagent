@@ -321,7 +321,7 @@ func TestExtractFromNote_IgnoresExternalOrAbsoluteLikeReferences(t *testing.T) {
 	ext := NewExtractor(db)
 
 	content := `
-	See Users/seangleason/.windsurf/worktrees/statelessagent/main.go and tmp/same-graph-test/notes/a.md.
+	See Users/jdoe/.windsurf/worktrees/myproject/main.go and tmp/same-graph-test/notes/a.md.
 	Also see internal/store/db.go and notes/next.md.
 	`
 
@@ -329,7 +329,7 @@ func TestExtractFromNote_IgnoresExternalOrAbsoluteLikeReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := db.FindNode(NodeFile, "Users/seangleason/.windsurf/worktrees/statelessagent/main.go"); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := db.FindNode(NodeFile, "Users/jdoe/.windsurf/worktrees/myproject/main.go"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected external Users/ path to be ignored, got err=%v", err)
 	}
 	if _, err := db.FindNode(NodeNote, "tmp/same-graph-test/notes/a.md"); !errors.Is(err, sql.ErrNoRows) {
@@ -348,13 +348,13 @@ func TestExtractFromNote_IgnoresExternalFileURLReferences(t *testing.T) {
 	db := setupTestDB(t)
 	ext := NewExtractor(db)
 
-	content := `*Viewed [AGENTS.md](file:///Users/seangleason/.windsurf/worktrees/statelessagent/statelessagent-f716fdc5/AGENTS.md)*`
+	content := `*Viewed [AGENTS.md](file:///Users/jdoe/.windsurf/worktrees/myproject/myproject-f716fdc5/AGENTS.md)*`
 
 	if err := ext.ExtractFromNote(301, "notes/current.md", content, ""); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := db.FindNode(NodeNote, "Users/seangleason/.windsurf/worktrees/statelessagent/statelessagent-f716fdc5/AGENTS.md"); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := db.FindNode(NodeNote, "Users/jdoe/.windsurf/worktrees/myproject/myproject-f716fdc5/AGENTS.md"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected file:// external path to be ignored, got err=%v", err)
 	}
 }
