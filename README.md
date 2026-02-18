@@ -120,22 +120,22 @@ Replace `/absolute/path/to/your/notes` with the actual path to your project or n
 ## How It Works
 
 ```
-┌─────────────┐     ┌──────────┐     ┌──────────┐     ┌─────────────────┐
-│  Your Notes │     │  Ollama  │     │  SQLite  │     │  Your AI Tool   │
-│   (.md)     │────>│ (embed)  │────>│ (search) │────>│ Claude / Cursor │
-│             │     │ local    │     │ + FTS5   │     │ via Hooks + MCP │
-└─────────────┘     └──────────┘     └──────────┘     └─────────────────┘
-                                          │                    │
-                                     ┌────▼────┐          ┌────▼────┐
-                                     │ Ranking │          │  Write  │
-                                     │ Engine  │          │  Side   │
-                                     └─────────┘          └─────────┘
-                                     semantic +           decisions,
-                                     recency +            handoffs,
-                                     confidence           notes
+┌─────────────┐     ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
+│  Your Notes │     │   Embeddings    │     │  SQLite  │     │  Your AI Tool   │
+│   (.md)     │────>│ local or cloud  │────>│ (search) │────>│ Claude / Cursor │
+│             │     │ provider         │     │ + FTS5   │     │ via Hooks + MCP │
+└─────────────┘     └─────────────────┘     └──────────┘     └─────────────────┘
+                                              │                    │
+                                         ┌────▼────┐          ┌────▼────┐
+                                         │ Ranking │          │  Write  │
+                                         │ Engine  │          │  Side   │
+                                         └─────────┘          └─────────┘
+                                         semantic +           decisions,
+                                         recency +            handoffs,
+                                         confidence           notes
 ```
 
-Your markdown notes are embedded locally via Ollama and stored in a SQLite database with vector search. When your AI tool starts a session, SAME surfaces relevant context automatically. Decisions get extracted. Handoffs get generated. The next session picks up where you left off. Everything stays on your machine.
+Your markdown notes are embedded with your configured provider (local or cloud) and stored in SQLite for semantic and keyword retrieval. When your AI tool starts a session, SAME surfaces relevant context automatically. Decisions get extracted. Handoffs get generated. The next session picks up where you left off.
 
 **No Ollama? No problem.** SAME Lite runs with zero external dependencies. Keyword search via SQLite FTS5 powers all features. Install Ollama later and `same reindex` upgrades to semantic mode instantly.
 

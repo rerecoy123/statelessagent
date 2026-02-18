@@ -272,7 +272,7 @@ func RunInit(opts InitOptions) error {
 			fmt.Printf("  %s✓%s Endpoint: %s\n", cli.Green, cli.Reset, ec.BaseURL)
 		}
 	} else {
-		cli.Section("Ollama")
+		cli.Section("Embeddings")
 		if err := checkOllama(); err != nil {
 			if opts.Yes {
 				// Non-interactive (piped install) — silently fall back to lite mode
@@ -397,6 +397,25 @@ func RunInit(opts InitOptions) error {
 		config.HandoffDirectory(), config.DecisionLogPath())
 	fmt.Println()
 	fmt.Printf("  Run %ssame status%s to review anytime.\n", cli.Bold, cli.Reset)
+
+	// Runtime modes — clarify how search, graph, and ask work together.
+	cli.Section("Modes")
+	searchMode := "keyword-only"
+	if useEmbeddings {
+		searchMode = "semantic"
+	}
+	fmt.Printf("  %sSearch%s     %s (%s provider)\n",
+		cli.Bold, cli.Reset, searchMode, embedProvider)
+	switch config.GraphLLMMode() {
+	case "local-only":
+		fmt.Printf("  %sGraph%s      LLM local-only + regex fallback\n", cli.Bold, cli.Reset)
+	case "on":
+		fmt.Printf("  %sGraph%s      LLM enabled + regex fallback\n", cli.Bold, cli.Reset)
+	default:
+		fmt.Printf("  %sGraph%s      regex-only (default)\n", cli.Bold, cli.Reset)
+	}
+	fmt.Printf("  %sAsk%s        requires a chat provider (configure anytime)\n", cli.Bold, cli.Reset)
+	fmt.Printf("  %sNote%s       graph is additive; it does not replace search\n", cli.Bold, cli.Reset)
 
 	// Test search to prove it works
 	cli.Section("Testing")

@@ -97,8 +97,26 @@ func runReindex(force bool, verbose bool) error {
 	}
 	fmt.Printf("  Notes in index:  %d\n", stats.NotesInIndex)
 	fmt.Printf("  Chunks in index: %d\n", stats.ChunksInIndex)
+	searchMode := "keyword-only"
+	if db.HasVectors() {
+		searchMode = "semantic"
+	}
+	fmt.Printf("  Search mode:    %s\n", searchMode)
+	fmt.Printf("  Graph mode:     %s\n", graphModeSummary(config.GraphLLMMode()))
+	fmt.Printf("  Graph role:     additive (works with search, not a replacement)\n")
 	fmt.Printf("\n  %sTip: Run 'same watch' in another terminal to auto-reindex as you edit notes.%s\n", cli.Dim, cli.Reset)
 	return nil
+}
+
+func graphModeSummary(mode string) string {
+	switch mode {
+	case "local-only":
+		return "LLM local-only + regex fallback"
+	case "on":
+		return "LLM enabled + regex fallback"
+	default:
+		return "regex-only (default)"
+	}
 }
 
 func runStats() error {
