@@ -37,6 +37,7 @@
 - **MCP hidden-path write guard** — `safeVaultPath` now rejects dot-prefixed segments anywhere in the path (for example `notes/.hidden/file.md`), not only at root level
 - **Web API path validation parity** — note/related/graph connection endpoints now share a single path safety guard that rejects traversal, hidden-dot segments, and Windows drive-prefix absolute paths
 - **Filesystem write error handling** — config saves, registry writes, MCP note/decision appends, handoff + decision-log generation, init `.gitignore` updates, tutorial/demo setup cleanup, seed config path rewrites/install rollback cleanup, verbose-log rotation/appends, and index stats persistence now handle write/cleanup failures explicitly instead of silently ignoring them
+- **Self-update cleanup hardening** — `same update` now surfaces temp-file cleanup failures explicitly and validates Windows backup-path cleanup before binary replacement
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
 - **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
 - **Keyword-only reindex UX** — `same reindex` now reliably falls back to lite mode when embeddings are disabled (`provider = "none"`), with clear next-step messaging

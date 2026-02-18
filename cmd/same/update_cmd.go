@@ -265,26 +265,26 @@ func runUpdate(force bool) error {
 		err = closeErr
 	}
 	if err != nil {
-		os.Remove(tmpPath)
+		removeTempFile(tmpPath)
 		fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 		return fmt.Errorf("write file: %w", err)
 	}
 	if n > maxBinaryDownloadSize {
-		os.Remove(tmpPath)
+		removeTempFile(tmpPath)
 		fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 		return fmt.Errorf("download too large (> %d MB)", maxBinaryDownloadSize/(1024*1024))
 	}
 
 	actualSHA256 := hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(actualSHA256, expectedSHA256) {
-		os.Remove(tmpPath)
+		removeTempFile(tmpPath)
 		fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 		return fmt.Errorf("checksum mismatch for %s (expected %s, got %s)", assetName, expectedSHA256, actualSHA256)
 	}
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
-		os.Remove(tmpPath)
+		removeTempFile(tmpPath)
 		fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 		return fmt.Errorf("chmod: %w", err)
 	}
@@ -297,9 +297,13 @@ func runUpdate(force bool) error {
 	// On Windows, we need to rename the old binary first
 	if goos == "windows" {
 		oldPath := execPath + ".old"
-		os.Remove(oldPath) // ignore error
+		if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+			removeTempFile(tmpPath)
+			fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
+			return fmt.Errorf("prepare backup path: %w", err)
+		}
 		if err := os.Rename(execPath, oldPath); err != nil {
-			os.Remove(tmpPath)
+			removeTempFile(tmpPath)
 			fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 			return fmt.Errorf("backup old binary: %w", err)
 		}
@@ -307,7 +311,7 @@ func runUpdate(force bool) error {
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, execPath); err != nil {
-		os.Remove(tmpPath)
+		removeTempFile(tmpPath)
 		fmt.Printf(" %sfailed%s\n", cli.Red, cli.Reset)
 		return fmt.Errorf("install: %w", err)
 	}
@@ -334,6 +338,12 @@ func findReleaseAssetURL(assets []struct {
 		}
 	}
 	return "", false
+}
+
+func removeTempFile(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "same: warning: failed to remove temporary file %q: %v\n", path, err)
+	}
 }
 
 func fetchSHA256Sums(client *http.Client, checksumURL string) (map[string]string, error) {

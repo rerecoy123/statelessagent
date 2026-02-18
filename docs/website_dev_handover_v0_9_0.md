@@ -28,6 +28,7 @@
 - web API note/related/graph path validation now uses one shared guard with traversal + hidden-segment + drive-prefix rejection
 - guard allowlist file entries now use exact path matching to avoid nested basename bypasses
 - key write and cleanup paths (config/registry/MCP note+decision writes/handoff+decision logs/init `.gitignore` updates/index stats/tutorial+demo scaffolding/seed config rewrites+rollback cleanup/verbose logs) now surface failures instead of silently skipping them
+- update install path now surfaces temp cleanup failures and hardens Windows backup-path preparation before binary swap
 
 ## Suggested website copy updates
 
