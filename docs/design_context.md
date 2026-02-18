@@ -44,49 +44,17 @@ SAME is pivoting from a **retrieval/injection engine** to a **session continuity
 
 ### Why the pivot
 
-1. **Per-prompt injection is the wrong abstraction.** It guesses relevance with an embedding match (~46% hook precision on isolated prompts). The agent can read the user's actual intent and search intentionally — with follow-up searches, filtered queries, full note reads. The agent is a better searcher than the hook will ever be.
+1. **Session continuity is the real value.** "Every AI session starts from zero. Not anymore." The magic moment is when a new session picks up where the last one left off without the user doing anything.
 
-2. **Claude Code can search on its own.** It has Read/Grep/Glob tools plus the MCP tools (`search_notes`, `get_note`, `find_similar_notes`). Give the agent orientation and tools, get out of the way.
+2. **Agents are better searchers than hooks.** Modern AI tools have file access and MCP tools. Give them orientation and get out of the way — they'll find what they need.
 
-3. **Session continuity is the real value.** "Every AI session starts from zero. Not anymore." — that tagline is about continuity, not search. The magic moment is when a new session picks up where the last one left off without the user doing anything.
+3. **Graceful degradation matters.** The system must recover context even when sessions end ungracefully. Critical paths cannot depend on exit hooks.
 
-4. **The Stop hook is unreliable.** If you close the terminal window, the Stop hook never fires. Any architecture that depends on Stop for continuity is fragile. Session data should be processed when the NEXT session needs it, from data the IDE already persists.
+4. **Industry convergence.** The broader ecosystem is moving toward structured storage with agent-directed retrieval.
 
-5. **Claude Code already stores session transcripts.** `sessions-index.json` has session summaries, first prompts, message counts, timestamps. The data survives regardless of how the session ended.
+### Architecture direction
 
-6. **Industry convergence.** Graphiti, Letta, A-MEM, GAM, the MCP reference memory server — all moving to structured storage + agent-directed retrieval. None use always-on vector injection.
-
-### v0.x vs v2 architecture
-
-**v0.x (current):**
-```
-SessionStart       → staleness check (no context injection)
-UserPromptSubmit   → embed prompt → KNN search → composite score → inject top 2
-Stop               → regex decision extraction → handoff generation
-MCP                → available but secondary to hooks
-```
-
-**v2 (target):**
-```
-SessionStart       → read previous session data → inject compact orientation → register instance
-UserPromptSubmit   → lightweight or removed (gate chain suppresses ~80% already)
-Stop               → best-effort session capture (value-add, not critical path)
-MCP                → primary search interface, agent-driven
-```
-
-### Token economics
-
-- v0.x: ~800 tokens per prompt from hooks × N prompts per session = ~40,000 tokens/session from hooks alone
-- v2: ~200 tokens total (SessionStart orientation only)
-- For a 50-prompt session: **40,000 → 200 tokens. 99.5% reduction.**
-
-### What stays, what goes
-
-**Keep:** Decision extraction, handoff generation, staleness detection, MCP server (all tools), CLI tooling, cross-platform builds, confidence scoring, file watcher.
-
-**Cut (or gate):** Per-prompt context-surfacing injection. Agent searches via MCP when it needs context. The gate chain (already implemented) suppresses ~80% of injections as a transition step.
-
-**New:** SessionStart orientation (deterministic previous-session injection), instance registration (multi-session awareness), session data reader (parse IDE session storage).
+The pivot moves from per-prompt context injection toward compact session orientation at start, with agent-driven search via MCP during the session. This dramatically reduces token overhead while improving relevance — the agent searches intentionally instead of receiving speculative injections.
 
 ---
 
@@ -216,7 +184,7 @@ These decisions have been made with rationale. The development instance should t
 ### BSL 1.1 Licensing (Feb 2)
 **Decision:** License under Business Source License 1.1.
 **Why:** Source visible and free for personal/educational/hobby use. Retains ability to charge for commercial production use. Auto-converts to Apache 2.0 on 2030-02-02.
-**Rejected:** MIT (too permissive), AGPL (companies blanket-ban it), Open Core (premature feature segmentation).
+**Rejected at launch:** MIT (too permissive for sustainable development), AGPL (companies blanket-ban it).
 
 ### Hard Separation: Dev vs. Vault (Feb 6)
 **Decision:** SAME code is only written from the dedicated dev workspace. Vault sessions never touch source code.
@@ -325,7 +293,7 @@ Non-negotiable constraints that hold regardless of which features get built.
 |---|---|
 | **Data format** | Obsidian-flavored Markdown + YAML frontmatter. The markdown files are the source of truth; the DB is a derived index. |
 | **Transport** | MCP over stdio for agent-facing tools. No custom protocols. |
-| **Embedding** | Local Ollama, always. No cloud API calls for core search. Degrades to keyword-only if Ollama is down, never fails. |
+| **Embedding** | Local by default (Ollama). Optional support for OpenAI and OpenAI-compatible endpoints. Degrades to keyword-only if no embedding provider is available, never fails. |
 | **Storage** | SQLite, single file per vault. If the DB is lost, it's rebuilt from the markdown. |
 | **Hook lifecycle** | SessionStart is the only guaranteed hook. Everything critical reads or emits at SessionStart. Stop/UserPromptSubmit/PreCompact are best-effort. |
 
