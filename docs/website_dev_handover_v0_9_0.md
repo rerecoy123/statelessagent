@@ -32,6 +32,7 @@
 - update install path now surfaces temp cleanup failures and hardens Windows backup-path preparation before binary swap
 - web JSON API encoding failures now log explicit diagnostics server-side
 - init lock fallback now emits explicit warnings if lock enforcement is disabled by filesystem/runtime constraints
+- registry/init lock cleanup paths now surface stale-lock cleanup failures and warn on lockfile cleanup fallback behavior
 
 ## Suggested website copy updates
 

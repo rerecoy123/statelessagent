@@ -41,6 +41,10 @@
 - **Self-update cleanup hardening** — `same update` now surfaces temp-file cleanup failures explicitly and validates Windows backup-path cleanup before binary replacement
 - **Web JSON response diagnostics** — dashboard API JSON encode failures now emit explicit server-side warnings instead of failing silently
 - **Init lock fallback diagnostics** — `same init` now warns when lock enforcement is bypassed due lockfile/permission failures, instead of failing silently
+- **Seed manifest cache write diagnostics** — cache directory/file write failures are now surfaced as explicit warnings instead of being silently ignored after successful manifest fetches
+- **Budget report export reliability** — `SaveBudgetReport` now fails clearly when report directories cannot be created, with regression coverage for parent-path failure
+- **Vault registry lock cleanup hardening** — config lock handling now surfaces stale-lock removal and cleanup failures instead of silently swallowing them
+- **Init lock stale-recovery hardening** — stale init lock removal failures now return explicit errors, and lockfile cleanup paths now warn on removal failures
 - **Graph consistency on deletes and force-clear** — deleting notes now removes related graph nodes/edges and prunes orphan non-note graph nodes; force-clear now resets graph tables as well
 - **Graph freshness during `same watch`** — watcher now updates graph data in both semantic and keyword-only (`provider = "none"`) modes
 - **Keyword-only reindex UX** — `same reindex` now reliably falls back to lite mode when embeddings are disabled (`provider = "none"`), with clear next-step messaging
