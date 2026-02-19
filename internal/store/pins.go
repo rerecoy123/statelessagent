@@ -30,7 +30,10 @@ func (db *DB) UnpinNote(path string) error {
 	if err != nil {
 		return fmt.Errorf("unpin note: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check unpin result: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("note is not pinned: %s", path)
 	}

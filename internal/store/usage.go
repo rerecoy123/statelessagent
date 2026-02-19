@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 )
 
 // UsageRecord represents a context injection event.
@@ -117,14 +118,20 @@ func (db *DB) PruneUsageData(olderThanDays int) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("prune context_usage: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] rows affected (context_usage): %v\n", err)
+	}
 	total += n
 
 	res, err = db.conn.Exec(`DELETE FROM context_decisions WHERE timestamp < datetime('now', ?)`, cutoff)
 	if err != nil {
 		return total, fmt.Errorf("prune context_decisions: %w", err)
 	}
-	n, _ = res.RowsAffected()
+	n, err = res.RowsAffected()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] rows affected (context_decisions): %v\n", err)
+	}
 	total += n
 
 	return total, nil

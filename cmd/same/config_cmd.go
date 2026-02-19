@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -67,7 +68,26 @@ func configCmd() *cobra.Command {
 }
 
 func runEditor(editor, path string) error {
-	cmd := exec.Command(editor, path)
+	editor = strings.TrimSpace(editor)
+	if editor == "" {
+		return fmt.Errorf("empty editor command")
+	}
+	if strings.ContainsAny(editor, "&;|><`$\n\r") {
+		return fmt.Errorf("editor command contains unsupported shell metacharacters")
+	}
+
+	parts := strings.Fields(editor)
+	if len(parts) == 0 {
+		return fmt.Errorf("empty editor command")
+	}
+
+	bin, err := exec.LookPath(parts[0])
+	if err != nil {
+		return fmt.Errorf("editor %q not found in PATH: %w", parts[0], err)
+	}
+
+	args := append(parts[1:], path)
+	cmd := exec.Command(bin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

@@ -2,6 +2,7 @@ package embedding
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -288,6 +289,29 @@ func TestOllamaDefaultDims(t *testing.T) {
 			got := ollamaDefaultDims(tt.model)
 			if got != tt.dims {
 				t.Errorf("ollamaDefaultDims(%q) = %d, want %d", tt.model, got, tt.dims)
+			}
+		})
+	}
+}
+
+func TestClassifyNetworkError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil error", err: nil, want: "unknown"},
+		{name: "connection refused", err: errors.New("dial tcp 127.0.0.1:11434: connect: connection refused"), want: "connection_refused"},
+		{name: "permission denied", err: errors.New("permission denied"), want: "permission_denied"},
+		{name: "timeout", err: errors.New("deadline exceeded"), want: "timeout"},
+		{name: "dns error", err: &net.DNSError{Err: "no such host", Name: "example.invalid"}, want: "dns_failure"},
+		{name: "unknown", err: errors.New("random network failure"), want: "network_error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifyNetworkError(tt.err); got != tt.want {
+				t.Fatalf("classifyNetworkError(%v) = %q, want %q", tt.err, got, tt.want)
 			}
 		})
 	}

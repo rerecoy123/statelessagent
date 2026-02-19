@@ -83,7 +83,7 @@ func runGuardScan(staged, jsonOut bool) error {
 	// Cache last scan for the allow flow
 	if !result.Passed {
 		_ = guard.SaveLastScan(vaultPath, result)
-		os.Exit(1)
+		return fmt.Errorf("guard scan failed")
 	}
 	return nil
 }

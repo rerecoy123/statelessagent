@@ -69,7 +69,7 @@ var embedModels = map[string]bool{
 
 // ListChatModels returns available chat/instruct models (excludes embedding models).
 func (c *Client) ListChatModels() ([]Model, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/api/tags")
+	resp, err := c.httpClient.Get(strings.TrimRight(c.baseURL, "/") + "/api/tags")
 	if err != nil {
 		return nil, fmt.Errorf("connect to Ollama: %w", err)
 	}

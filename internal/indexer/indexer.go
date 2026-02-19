@@ -269,17 +269,27 @@ func ReindexWithProgress(db *store.DB, force bool, progress ProgressFunc) (*Stat
 	embedName := embedClient.Name()
 	embedModel := embedClient.Model()
 	embedDims := embedClient.Dimensions()
-	_ = db.SetEmbeddingMeta(embedName, embedModel, embedDims)
-	_ = db.SetMeta("index_mode", "full")
+	if err := db.SetEmbeddingMeta(embedName, embedModel, embedDims); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] set embedding metadata: %v\n", err)
+	}
+	if err := db.SetMeta("index_mode", "full"); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] set index metadata: %v\n", err)
+	}
 
 	// Record reindex timestamp and version for doctor diagnostics
-	_ = db.SetMeta("last_reindex_time", time.Now().UTC().Format(time.RFC3339))
+	if err := db.SetMeta("last_reindex_time", time.Now().UTC().Format(time.RFC3339)); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] set last reindex time: %v\n", err)
+	}
 	if Version != "" {
-		_ = db.SetMeta("same_version", Version)
+		if err := db.SetMeta("same_version", Version); err != nil {
+			fmt.Fprintf(os.Stderr, "  [WARN] set SAME version metadata: %v\n", err)
+		}
 	}
 
 	// Rebuild FTS5 index after bulk insert
-	_ = db.RebuildFTS()
+	if err := db.RebuildFTS(); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] FTS rebuild: %v\n", err)
+	}
 
 	// Prune old usage data (90 days)
 	_, _ = db.PruneUsageData(90)
@@ -679,13 +689,21 @@ func ReindexLite(db *store.DB, force bool, progress ProgressFunc) (*Stats, error
 	stats.NotesInIndex = noteCount
 	stats.ChunksInIndex = chunkCount
 
-	_ = db.SetMeta("last_reindex_time", time.Now().UTC().Format(time.RFC3339))
-	_ = db.SetMeta("index_mode", "lite")
+	if err := db.SetMeta("last_reindex_time", time.Now().UTC().Format(time.RFC3339)); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] set last reindex time: %v\n", err)
+	}
+	if err := db.SetMeta("index_mode", "lite"); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] set index metadata: %v\n", err)
+	}
 	if Version != "" {
-		_ = db.SetMeta("same_version", Version)
+		if err := db.SetMeta("same_version", Version); err != nil {
+			fmt.Fprintf(os.Stderr, "  [WARN] set SAME version metadata: %v\n", err)
+		}
 	}
 
-	_ = db.RebuildFTS()
+	if err := db.RebuildFTS(); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] FTS rebuild: %v\n", err)
+	}
 	saveStats(stats)
 
 	return stats, nil

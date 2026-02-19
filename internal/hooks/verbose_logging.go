@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/store"
@@ -41,12 +42,11 @@ var quietVerbs = []string{
 
 // verbosePickIndex is a simple counter that rotates through word lists.
 // Not random — deterministic rotation so consecutive prompts always differ.
-var verbosePickIndex int
+var verbosePickIndex atomic.Int32
 
 func pickVerb(verbs []string) string {
-	v := verbs[verbosePickIndex%len(verbs)]
-	verbosePickIndex++
-	return v
+	idx := int(verbosePickIndex.Add(1) - 1)
+	return verbs[idx%len(verbs)]
 }
 
 // verboseLogPath returns the file path for verbose output.

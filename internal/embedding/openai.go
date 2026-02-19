@@ -173,7 +173,7 @@ func (e *openaiHTTPError) isRetryable() bool {
 
 // doEmbedRequest performs a single embedding HTTP request.
 func (p *OpenAIProvider) doEmbedRequest(body []byte) ([]float32, error) {
-	req, err := http.NewRequest("POST", p.baseURL+"/v1/embeddings", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", strings.TrimRight(p.baseURL, "/")+"/v1/embeddings", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

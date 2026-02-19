@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -101,19 +100,6 @@ func classifyNetworkError(err error) string {
 		return "unknown"
 	}
 
-	// Check for syscall errors (connection refused, permission denied)
-	var sysErr syscall.Errno
-	if errors.As(err, &sysErr) {
-		switch sysErr {
-		case syscall.ECONNREFUSED:
-			return "connection_refused"
-		case syscall.EACCES, syscall.EPERM:
-			return "permission_denied"
-		case syscall.ETIMEDOUT:
-			return "timeout"
-		}
-	}
-
 	// Check for net.OpError with specific context
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
@@ -129,7 +115,7 @@ func classifyNetworkError(err error) string {
 	}
 
 	// String-based fallback for wrapped errors
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(msg, "connection refused"):
 		return "connection_refused"
@@ -200,7 +186,7 @@ func (p *OllamaProvider) doEmbedRequest(prompt string) ([]float32, error) {
 	}
 
 	resp, err := p.httpClient.Post(
-		p.baseURL+"/api/embeddings",
+		strings.TrimRight(p.baseURL, "/")+"/api/embeddings",
 		"application/json",
 		bytes.NewReader(body),
 	)
