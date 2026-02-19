@@ -243,8 +243,8 @@ type saveDecisionInput struct {
 
 type createHandoffInput struct {
 	Summary  string `json:"summary" jsonschema:"What was accomplished this session"`
-	Pending  string `json:"pending" jsonschema:"What is left to do"`
-	Blockers string `json:"blockers" jsonschema:"Any blockers or open questions"`
+	Pending  string `json:"pending,omitempty" jsonschema:"What is left to do"`
+	Blockers string `json:"blockers,omitempty" jsonschema:"Any blockers or open questions"`
 	Agent    string `json:"agent,omitempty" jsonschema:"Optional writer attribution (e.g. codex)"`
 }
 
@@ -264,22 +264,22 @@ type emptyInput struct{}
 
 func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input searchInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Query) == "" {
-		return textResult("Error: query is required."), nil, nil
+		return errorResult("Error: query is required."), nil, nil
 	}
 	if len(input.Query) > maxQueryLen {
-		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+		return errorResult("Error: query too long (max 10,000 characters)."), nil, nil
 	}
 	topK := clampTopK(input.TopK, 10)
 	opts := store.SearchOptions{TopK: topK}
 
 	results, err := searchWithFallback(input.Query, opts)
 	if err != nil {
-		return textResult("Search error. Try running reindex() first."), nil, nil
+		return errorResult("Search error. Try running reindex() first."), nil, nil
 	}
 	results = filterPrivatePaths(results)
 	results = sanitizeResultSnippets(results)
 	if len(results) == 0 {
-		return textResult("No results found. The index may be empty — try running reindex() first."), nil, nil
+		return errorResult("No results found. The index may be empty — try running reindex() first."), nil, nil
 	}
 
 	data, _ := json.MarshalIndent(results, "", "  ")
@@ -288,14 +288,14 @@ func handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest, input sear
 
 func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, input searchFilteredInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Query) == "" {
-		return textResult("Error: query is required."), nil, nil
+		return errorResult("Error: query is required."), nil, nil
 	}
 	if len(input.Query) > maxQueryLen {
-		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+		return errorResult("Error: query too long (max 10,000 characters)."), nil, nil
 	}
 	agentFilter, err := normalizeAgent(input.Agent)
 	if err != nil {
-		return textResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
+		return errorResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
 	}
 	topK := clampTopK(input.TopK, 10)
 
@@ -319,12 +319,12 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 
 	results, err := searchWithFallback(input.Query, opts)
 	if err != nil {
-		return textResult("Search error. Try running reindex() first."), nil, nil
+		return errorResult("Search error. Try running reindex() first."), nil, nil
 	}
 	results = filterPrivatePaths(results)
 	results = sanitizeResultSnippets(results)
 	if len(results) == 0 {
-		return textResult("No results found matching the filters."), nil, nil
+		return errorResult("No results found matching the filters."), nil, nil
 	}
 
 	data, _ := json.MarshalIndent(results, "", "  ")
@@ -334,24 +334,24 @@ func handleSearchNotesFiltered(ctx context.Context, req *mcp.CallToolRequest, in
 func handleGetNote(ctx context.Context, req *mcp.CallToolRequest, input getInput) (*mcp.CallToolResult, any, error) {
 	safePath := safeVaultPath(input.Path)
 	if safePath == "" {
-		return textResult("Error: path must be a relative path within the vault."), nil, nil
+		return errorResult("Error: path must be a relative path within the vault."), nil, nil
 	}
 
 	// F04: Check file size before reading to prevent OOM on very large files
 	info, err := os.Stat(safePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return textResult("File not found."), nil, nil
+			return errorResult("File not found."), nil, nil
 		}
-		return textResult("Error reading file."), nil, nil
+		return errorResult("Error reading file."), nil, nil
 	}
 	if info.Size() > maxReadSize {
-		return textResult(fmt.Sprintf("Error: file too large (%dKB). Maximum is %dKB.", info.Size()/1024, maxReadSize/1024)), nil, nil
+		return errorResult(fmt.Sprintf("Error: file too large (%dKB). Maximum is %dKB.", info.Size()/1024, maxReadSize/1024)), nil, nil
 	}
 
 	content, err := os.ReadFile(safePath)
 	if err != nil {
-		return textResult("Error reading file."), nil, nil
+		return errorResult("Error reading file."), nil, nil
 	}
 
 	// SECURITY: Neutralize XML-like tags that could enable prompt injection
@@ -364,22 +364,22 @@ func handleFindSimilar(ctx context.Context, req *mcp.CallToolRequest, input simi
 
 	// Validate path through safeVaultPath to prevent probing _PRIVATE/ or dot-dirs
 	if safeVaultPath(input.Path) == "" {
-		return textResult("Error: invalid note path."), nil, nil
+		return errorResult("Error: invalid note path."), nil, nil
 	}
 
 	if !db.HasVectors() {
-		return textResult("Similar notes requires semantic search (embeddings). Install Ollama and run reindex() to enable."), nil, nil
+		return errorResult("Similar notes requires semantic search (embeddings). Install Ollama and run reindex() to enable."), nil, nil
 	}
 
 	noteVec, err := db.GetNoteEmbedding(input.Path)
 	if err != nil || noteVec == nil {
-		return textResult(fmt.Sprintf("No similar notes found for: %s. Is the note in the index?", input.Path)), nil, nil
+		return errorResult(fmt.Sprintf("No similar notes found for: %s. Is the note in the index?", input.Path)), nil, nil
 	}
 
 	// Fetch extra results, excluding the source note
 	allResults, err := db.VectorSearch(noteVec, store.SearchOptions{TopK: topK + 10})
 	if err != nil {
-		return textResult("Search error. Try running reindex() first."), nil, nil
+		return errorResult("Search error. Try running reindex() first."), nil, nil
 	}
 
 	allResults = filterPrivatePaths(allResults)
@@ -394,7 +394,7 @@ func handleFindSimilar(ctx context.Context, req *mcp.CallToolRequest, input simi
 	}
 
 	if len(results) == 0 {
-		return textResult(fmt.Sprintf("No similar notes found for: %s.", input.Path)), nil, nil
+		return errorResult(fmt.Sprintf("No similar notes found for: %s.", input.Path)), nil, nil
 	}
 
 	data, _ := json.MarshalIndent(results, "", "  ")
@@ -410,13 +410,13 @@ func handleReindex(ctx context.Context, req *mcp.CallToolRequest, input reindexI
 		data, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Reindex cooldown active. Try again in %ds.", remaining),
 		})
-		return textResult(string(data)), nil, nil
+		return errorResult(string(data)), nil, nil
 	}
 	lastReindexTime = time.Now()
 
 	stats, err := indexer.Reindex(db, input.Force)
 	if err != nil {
-		return textResult("Reindex error. Check that the vault path is accessible and Ollama is running."), nil, nil
+		return errorResult("Reindex error. Check that the vault path is accessible and Ollama is running."), nil, nil
 	}
 
 	data, _ := json.MarshalIndent(stats, "", "  ")
@@ -433,34 +433,34 @@ func handleIndexStats(ctx context.Context, req *mcp.CallToolRequest, input empty
 
 func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNoteInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Path) == "" {
-		return textResult("Error: path is required."), nil, nil
+		return errorResult("Error: path is required."), nil, nil
 	}
 	if strings.TrimSpace(input.Content) == "" {
-		return textResult("Error: content is required."), nil, nil
+		return errorResult("Error: content is required."), nil, nil
 	}
 	if len(input.Content) > maxNoteSize {
-		return textResult("Error: content exceeds 100KB limit."), nil, nil
+		return errorResult("Error: content exceeds 100KB limit."), nil, nil
 	}
 	agent, err := normalizeAgent(input.Agent)
 	if err != nil {
-		return textResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
+		return errorResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
 	}
 
 	// S21: Only allow .md files to be saved via MCP
 	if !strings.HasSuffix(strings.ToLower(input.Path), ".md") {
-		return textResult("Error: only .md (markdown) files can be saved via MCP."), nil, nil
+		return errorResult("Error: only .md (markdown) files can be saved via MCP."), nil, nil
 	}
 
 	safePath := safeVaultPath(input.Path)
 	if safePath == "" {
-		return textResult("Error: path must be a relative path within the vault. Cannot write to _PRIVATE/."), nil, nil
+		return errorResult("Error: path must be a relative path within the vault. Cannot write to _PRIVATE/."), nil, nil
 	}
 	relPath, relErr := store.NormalizeClaimPath(input.Path)
 	if relErr != nil {
-		return textResult("Error: path must stay within the vault. Use a relative path like 'notes/topic.md'."), nil, nil
+		return errorResult("Error: path must stay within the vault. Use a relative path like 'notes/topic.md'."), nil, nil
 	}
 	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+		return errorResult("Error: too many write operations. Try again in a minute."), nil, nil
 	}
 
 	// S11: Prepend a provenance header so readers know this was MCP-generated.
@@ -471,7 +471,7 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 	// Ensure parent directory exists
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return textResult("Error: could not create destination directory. Check vault write permissions."), nil, nil
+		return errorResult("Error: could not create destination directory. Check vault write permissions."), nil, nil
 	}
 
 	if input.Append {
@@ -485,11 +485,11 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 				content = mcpHeader + "\n" + content
 			}
 			if err := os.WriteFile(safePath, []byte(content), 0o600); err != nil {
-				return textResult("Error: could not write note file. Check vault permissions and available disk space."), nil, nil
+				return errorResult("Error: could not write note file. Check vault permissions and available disk space."), nil, nil
 			}
 		} else {
 			if statErr != nil {
-				return textResult("Error: could not open note for appending. Check file permissions and lock state."), nil, nil
+				return errorResult("Error: could not open note for appending. Check file permissions and lock state."), nil, nil
 			}
 			if agent != "" {
 				existing, readErr := os.ReadFile(safePath)
@@ -497,23 +497,23 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 					updated := upsertAgentFrontmatter(string(existing), agent)
 					if updated != string(existing) {
 						if writeErr := os.WriteFile(safePath, []byte(updated), 0o600); writeErr != nil {
-							return textResult("Error: could not update note metadata. The note was not modified; check file permissions."), nil, nil
+							return errorResult("Error: could not update note metadata. The note was not modified; check file permissions."), nil, nil
 						}
 					}
 				}
 			}
 
-				f, err := os.OpenFile(safePath, os.O_APPEND|os.O_WRONLY, 0o600)
-				if err != nil {
-					return textResult("Error: could not open note for appending. Check file permissions and lock state."), nil, nil
-				}
-				// F14: Add provenance marker for appended MCP content
-				_, err = f.WriteString("\n<!-- Appended via SAME MCP tool -->\n" + input.Content)
-				closeErr := f.Close()
-				if err != nil || closeErr != nil {
-					return textResult("Error: could not append note content. Check vault permissions and available disk space."), nil, nil
-				}
+			f, err := os.OpenFile(safePath, os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				return errorResult("Error: could not open note for appending. Check file permissions and lock state."), nil, nil
 			}
+			// F14: Add provenance marker for appended MCP content
+			_, err = f.WriteString("\n<!-- Appended via SAME MCP tool -->\n" + input.Content)
+			closeErr := f.Close()
+			if err != nil || closeErr != nil {
+				return errorResult("Error: could not append note content. Check vault permissions and available disk space."), nil, nil
+			}
+		}
 	} else {
 		content := input.Content
 		if agent != "" {
@@ -523,7 +523,7 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 			content = mcpHeader + "\n" + content
 		}
 		if err := os.WriteFile(safePath, []byte(content), 0o600); err != nil {
-			return textResult("Error: could not write note file. Check vault permissions and available disk space."), nil, nil
+			return errorResult("Error: could not write note file. Check vault permissions and available disk space."), nil, nil
 		}
 	}
 
@@ -553,17 +553,17 @@ func handleSaveNote(ctx context.Context, req *mcp.CallToolRequest, input saveNot
 
 func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input saveDecisionInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Title) == "" {
-		return textResult("Error: title is required."), nil, nil
+		return errorResult("Error: title is required."), nil, nil
 	}
 	if strings.TrimSpace(input.Body) == "" {
-		return textResult("Error: body is required."), nil, nil
+		return errorResult("Error: body is required."), nil, nil
 	}
 	if len(input.Title)+len(input.Body) > maxNoteSize {
-		return textResult(fmt.Sprintf("Error: decision content too large (max %dKB).", maxNoteSize/1024)), nil, nil
+		return errorResult(fmt.Sprintf("Error: decision content too large (max %dKB).", maxNoteSize/1024)), nil, nil
 	}
 	agent, err := normalizeAgent(input.Agent)
 	if err != nil {
-		return textResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
+		return errorResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
 	}
 
 	status := input.Status
@@ -571,7 +571,7 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 		status = "accepted"
 	}
 	if status != "accepted" && status != "proposed" && status != "superseded" {
-		return textResult("Error: status must be 'accepted', 'proposed', or 'superseded'."), nil, nil
+		return errorResult("Error: status must be 'accepted', 'proposed', or 'superseded'."), nil, nil
 	}
 
 	// Build decision entry
@@ -597,23 +597,23 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 
 	safePath := safeVaultPath(logName)
 	if safePath == "" {
-		return textResult("Error: decision log path is invalid. Set `vault.decision_log` to a relative file under the vault."), nil, nil
+		return errorResult("Error: decision log path is invalid. Set `vault.decision_log` to a relative file under the vault."), nil, nil
 	}
 	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+		return errorResult("Error: too many write operations. Try again in a minute."), nil, nil
 	}
 	if agent != "" {
 		if existing, readErr := os.ReadFile(safePath); readErr == nil {
 			updated := upsertAgentFrontmatter(string(existing), agent)
 			if updated != string(existing) {
 				if writeErr := os.WriteFile(safePath, []byte(updated), 0o600); writeErr != nil {
-					return textResult("Error: could not update decision log metadata. Check file permissions."), nil, nil
+					return errorResult("Error: could not update decision log metadata. Check file permissions."), nil, nil
 				}
 			}
 		} else if os.IsNotExist(readErr) {
 			initial := upsertAgentFrontmatter("", agent)
 			if writeErr := os.WriteFile(safePath, []byte(initial), 0o600); writeErr != nil {
-				return textResult("Error: could not initialize decision log metadata. Check vault permissions."), nil, nil
+				return errorResult("Error: could not initialize decision log metadata. Check vault permissions."), nil, nil
 			}
 		}
 	}
@@ -621,12 +621,12 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 	// Append to decision log
 	f, err := os.OpenFile(safePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		return textResult("Error: could not open decision log for writing. Check file permissions."), nil, nil
+		return errorResult("Error: could not open decision log for writing. Check file permissions."), nil, nil
 	}
 	_, err = f.WriteString(entry)
 	closeErr := f.Close()
 	if err != nil || closeErr != nil {
-		return textResult("Error: could not write to decision log. Check available disk space and permissions."), nil, nil
+		return errorResult("Error: could not write to decision log. Check available disk space and permissions."), nil, nil
 	}
 
 	// Index only the decision log file instead of a full vault reindex.
@@ -641,15 +641,15 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 
 func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input createHandoffInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Summary) == "" {
-		return textResult("Error: summary is required."), nil, nil
+		return errorResult("Error: summary is required."), nil, nil
 	}
 	totalSize := len(input.Summary) + len(input.Pending) + len(input.Blockers)
 	if totalSize > maxNoteSize {
-		return textResult(fmt.Sprintf("Error: handoff content too large (max %dKB).", maxNoteSize/1024)), nil, nil
+		return errorResult(fmt.Sprintf("Error: handoff content too large (max %dKB).", maxNoteSize/1024)), nil, nil
 	}
 	agent, err := normalizeAgent(input.Agent)
 	if err != nil {
-		return textResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
+		return errorResult("Error: invalid agent value. Use 1-128 visible characters without newlines."), nil, nil
 	}
 
 	// Get handoff dir from config
@@ -666,10 +666,10 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 
 	safePath := safeVaultPath(relPath)
 	if safePath == "" {
-		return textResult("Error: handoff path is invalid. Set `vault.handoff_dir` to a relative directory under the vault."), nil, nil
+		return errorResult("Error: handoff path is invalid. Set `vault.handoff_dir` to a relative directory under the vault."), nil, nil
 	}
 	if !checkWriteRateLimit() {
-		return textResult("Error: too many write operations. Try again in a minute."), nil, nil
+		return errorResult("Error: too many write operations. Try again in a minute."), nil, nil
 	}
 
 	// Build handoff content
@@ -694,10 +694,10 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return textResult("Error: could not create handoff directory. Check vault write permissions."), nil, nil
+		return errorResult("Error: could not create handoff directory. Check vault write permissions."), nil, nil
 	}
 	if err := os.WriteFile(safePath, []byte(buf.String()), 0o600); err != nil {
-		return textResult("Error: could not write handoff note. Check vault permissions and available disk space."), nil, nil
+		return errorResult("Error: could not write handoff note. Check vault permissions and available disk space."), nil, nil
 	}
 
 	// Index only the handoff file instead of a full vault reindex.
@@ -719,10 +719,10 @@ func handleRecentActivity(ctx context.Context, req *mcp.CallToolRequest, input r
 
 	notes, err := db.RecentNotes(limit)
 	if err != nil {
-		return textResult("Error fetching recent notes. Try running reindex() first."), nil, nil
+		return errorResult("Error fetching recent notes. Try running reindex() first."), nil, nil
 	}
 	if len(notes) == 0 {
-		return textResult("No notes found. The index may be empty — try running reindex() first."), nil, nil
+		return errorResult("No notes found. The index may be empty — try running reindex() first."), nil, nil
 	}
 
 	entries := make([]map[string]string, 0, len(notes))
@@ -786,6 +786,10 @@ func handleGetSessionContext(ctx context.Context, req *mcp.CallToolRequest, inpu
 	if err == nil && len(recent) > 0 {
 		recentList := make([]map[string]string, 0, len(recent))
 		for _, r := range recent {
+			upper := strings.ToUpper(r.Path)
+			if strings.HasPrefix(upper, "_PRIVATE/") || strings.HasPrefix(upper, "_PRIVATE\\") {
+				continue
+			}
 			recentList = append(recentList, map[string]string{
 				"path":     r.Path,
 				"title":    r.Title,
@@ -826,10 +830,10 @@ func handleGetSessionContext(ctx context.Context, req *mcp.CallToolRequest, inpu
 
 func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, input searchAcrossVaultsInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(input.Query) == "" {
-		return textResult("Error: query is required."), nil, nil
+		return errorResult("Error: query is required."), nil, nil
 	}
 	if len(input.Query) > maxQueryLen {
-		return textResult("Error: query too long (max 10,000 characters)."), nil, nil
+		return errorResult("Error: query too long (max 10,000 characters)."), nil, nil
 	}
 
 	topK := clampTopK(input.TopK, 10)
@@ -867,7 +871,7 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 	}
 
 	if len(vaultDBPaths) == 0 {
-		return textResult("No searchable vaults found. Register vaults with 'same vault add <name> <path>'."), nil, nil
+		return errorResult("No searchable vaults found. Register vaults with 'same vault add <name> <path>'."), nil, nil
 	}
 
 	// Try to get query embedding
@@ -878,7 +882,7 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 
 	results, err := store.FederatedSearch(vaultDBPaths, queryVec, input.Query, store.SearchOptions{TopK: topK})
 	if err != nil {
-		return textResult("Federated search error."), nil, nil
+		return errorResult("Federated search error."), nil, nil
 	}
 
 	// SECURITY: Filter _PRIVATE/ paths from results. VectorSearch doesn't
@@ -895,7 +899,7 @@ func handleSearchAcrossVaults(ctx context.Context, req *mcp.CallToolRequest, inp
 	results = sanitizeFederatedSnippets(results)
 
 	if len(results) == 0 {
-		return textResult(fmt.Sprintf("No results found across %d vault(s).", len(vaultDBPaths))), nil, nil
+		return errorResult(fmt.Sprintf("No results found across %d vault(s).", len(vaultDBPaths))), nil, nil
 	}
 
 	data, _ := json.MarshalIndent(results, "", "  ")
@@ -913,6 +917,15 @@ func formatTimestamp(ts float64) string {
 
 func textResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}
+}
+
+func errorResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		IsError: true,
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: text},
 		},
@@ -1242,16 +1255,16 @@ func safeVaultPath(path string) string {
 			if ancestor == "." || ancestor == string(filepath.Separator) {
 				return ""
 			}
-				resolvedAncestor, aerr := filepath.EvalSymlinks(ancestor)
-				if aerr != nil {
-					continue
-				}
-				if !pathWithin(resolvedVault, resolvedAncestor) {
-					return ""
-				}
-				return full
+			resolvedAncestor, aerr := filepath.EvalSymlinks(ancestor)
+			if aerr != nil {
+				continue
 			}
+			if !pathWithin(resolvedVault, resolvedAncestor) {
+				return ""
+			}
+			return full
 		}
+	}
 	if !pathWithin(resolvedVault, resolved) {
 		return ""
 	}

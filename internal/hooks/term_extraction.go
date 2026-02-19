@@ -9,6 +9,14 @@ import (
 // Set before calling standardSearch.
 var keyTermsPrompt string
 
+var (
+	reQuoted  = regexp.MustCompile(`"([^"]+)"`)
+	reAcronym = regexp.MustCompile(`\b[A-Z]{2,}\b`)
+	reHyphen  = regexp.MustCompile(`\b\w+-\w+(?:-\w+)*\b`)
+	reWord5   = regexp.MustCompile(`\b[a-zA-Z]{5,}\b`)
+	reWord4   = regexp.MustCompile(`\b[a-zA-Z]{4,}\b`)
+)
+
 // extractKeyTerms pulls meaningful search terms from the current prompt.
 // Returns two slices: specific (high-signal: acronyms, quoted, hyphenated)
 // and broad (individual words). Keyword fallback only triggers on specific terms
@@ -22,8 +30,7 @@ func extractKeyTerms() (specific []string, broad []string) {
 	seen := make(map[string]bool)
 
 	// Extract quoted phrases -> specific
-	quotedRe := regexp.MustCompile(`"([^"]+)"`)
-	for _, m := range quotedRe.FindAllStringSubmatch(prompt, -1) {
+	for _, m := range reQuoted.FindAllStringSubmatch(prompt, -1) {
 		t := strings.TrimSpace(m[1])
 		if len(t) >= 2 && !seen[strings.ToLower(t)] {
 			specific = append(specific, t)
@@ -33,8 +40,7 @@ func extractKeyTerms() (specific []string, broad []string) {
 
 	// Extract uppercase acronyms (2+ chars) -> specific
 	// Skip common tech acronyms that appear in generic programming questions
-	acronymRe := regexp.MustCompile(`\b[A-Z]{2,}\b`)
-	for _, m := range acronymRe.FindAllString(prompt, -1) {
+	for _, m := range reAcronym.FindAllString(prompt, -1) {
 		lower := strings.ToLower(m)
 		if lower == "the" || lower == "and" || lower == "for" || lower == "not" || lower == "api" {
 			continue
@@ -50,8 +56,7 @@ func extractKeyTerms() (specific []string, broad []string) {
 
 	// Extract hyphenated terms -> specific
 	// Skip common generic hyphenated patterns (e.g., "three-way", "real-time")
-	hyphenRe := regexp.MustCompile(`\b\w+-\w+(?:-\w+)*\b`)
-	for _, m := range hyphenRe.FindAllString(prompt, -1) {
+	for _, m := range reHyphen.FindAllString(prompt, -1) {
 		lower := strings.ToLower(m)
 		if commonHyphenated[lower] {
 			continue
@@ -64,8 +69,7 @@ func extractKeyTerms() (specific []string, broad []string) {
 
 	// Extract significant individual words (5+ chars) -> broad
 	// These supplement specific terms but don't trigger keyword fallback alone
-	wordRe := regexp.MustCompile(`\b[a-zA-Z]{5,}\b`)
-	for _, m := range wordRe.FindAllString(prompt, -1) {
+	for _, m := range reWord5.FindAllString(prompt, -1) {
 		lower := strings.ToLower(m)
 		if stopWords[lower] || seen[lower] {
 			continue
@@ -208,8 +212,7 @@ func extractDisplayTerms(prompt string) []string {
 	seen := make(map[string]bool)
 
 	// Extract quoted phrases
-	quotedRe := regexp.MustCompile(`"([^"]+)"`)
-	for _, m := range quotedRe.FindAllStringSubmatch(prompt, -1) {
+	for _, m := range reQuoted.FindAllStringSubmatch(prompt, -1) {
 		t := strings.TrimSpace(m[1])
 		lower := strings.ToLower(t)
 		if len(t) >= 2 && !seen[lower] {
@@ -219,8 +222,7 @@ func extractDisplayTerms(prompt string) []string {
 	}
 
 	// Extract significant words (4+ chars, skip common words)
-	wordRe := regexp.MustCompile(`\b[a-zA-Z]{4,}\b`)
-	for _, m := range wordRe.FindAllString(prompt, -1) {
+	for _, m := range reWord4.FindAllString(prompt, -1) {
 		lower := strings.ToLower(m)
 		if displayStopWords[lower] || seen[lower] {
 			continue

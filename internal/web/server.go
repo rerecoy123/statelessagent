@@ -204,7 +204,7 @@ func (s *server) handleRecentNotes(w http.ResponseWriter, r *http.Request) {
 	}
 	notes, err := s.db.RecentNotes(limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	writeJSON(w, filterPrivateNotes(notes))
@@ -226,7 +226,7 @@ func (s *server) handleAllNotes(w http.ResponseWriter, r *http.Request) {
 
 	notes, err := s.db.AllNotes()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	filtered := filterPrivateNotes(notes)
@@ -367,7 +367,7 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filter private paths from results
-	var filtered []store.SearchResult
+	filtered := make([]store.SearchResult, 0)
 	for _, r := range results {
 		if !isPrivatePath(r.Path) {
 			filtered = append(filtered, r)

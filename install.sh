@@ -14,6 +14,7 @@ B2='\033[38;5;75m'   # sky blue
 B3='\033[38;5;69m'   # medium blue
 B4='\033[38;5;33m'   # blue
 R1='\033[38;5;196m'  # bright red (tagline)
+RED='\033[31m'
 DIM='\033[2m'
 BOLD='\033[1m'
 GREEN='\033[32m'
@@ -221,6 +222,9 @@ if [ "$MUSL" = true ]; then
 fi
 
 BINARY_ACQUIRED=false
+TEMP_FILE=""
+CHECKSUM_FILE=""
+trap 'rm -f "${TEMP_FILE:-}" "${CHECKSUM_FILE:-}" 2>/dev/null' EXIT INT TERM
 
 if [ "$SKIP_DOWNLOAD" = false ]; then
   # Strategy 1: Download pre-built binary from GitHub Releases
@@ -233,17 +237,48 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
     echo "  Latest version: $LATEST"
     BINARY_NAME="same-$SUFFIX"
     URL="https://github.com/$REPO/releases/download/$LATEST/$BINARY_NAME"
-    TEMP_FILE="/tmp/same-download-$$"
+    CHECKSUM_URL="https://github.com/$REPO/releases/download/$LATEST/sha256sums.txt"
+    TEMP_FILE=$(mktemp /tmp/same-download-XXXXXX)
+    CHECKSUM_FILE=$(mktemp /tmp/same-checksums-XXXXXX)
 
     if curl -fsSL "$URL" -o "$TEMP_FILE" 2>/dev/null; then
-      mv "$TEMP_FILE" "$OUTPUT"
-      chmod +x "$OUTPUT"
-      BINARY_ACQUIRED=true
-      echo "  Downloaded successfully."
+      verified=true
+      if curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_FILE" 2>/dev/null; then
+        EXPECTED=$(grep "$BINARY_NAME" "$CHECKSUM_FILE" | awk '{print $1}' | head -1 || true)
+        if [ -n "$EXPECTED" ]; then
+          if command -v shasum >/dev/null 2>&1; then
+            ACTUAL=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
+          elif command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL=$(sha256sum "$TEMP_FILE" | awk '{print $1}')
+          else
+            ACTUAL=""
+          fi
+          if [ -z "$ACTUAL" ]; then
+            echo -e "  ${YELLOW}!${RESET} Could not verify checksum (no SHA256 tool found)."
+            verified=false
+          elif [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo -e "  ${RED}✗${RESET} Checksum mismatch! Expected: $EXPECTED Got: $ACTUAL"
+            verified=false
+          fi
+        fi
+      fi
+
+      if [ "$verified" = true ]; then
+        mv "$TEMP_FILE" "$OUTPUT"
+        chmod +x "$OUTPUT"
+        BINARY_ACQUIRED=true
+        echo "  Downloaded successfully."
+      else
+        rm -f "$TEMP_FILE"
+        echo "  Download failed verification."
+      fi
     else
-      rm -f "$TEMP_FILE"
       echo "  Download failed."
     fi
+
+    rm -f "$TEMP_FILE" "$CHECKSUM_FILE"
+    TEMP_FILE=""
+    CHECKSUM_FILE=""
   else
     # Check for network vs no-release
     if curl -fsSL "https://api.github.com" >/dev/null 2>&1; then

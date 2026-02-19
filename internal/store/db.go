@@ -28,6 +28,8 @@ type DB struct {
 	ftsAvailable bool       // true if FTS5 module is available
 }
 
+const maxSchemaVersion = 6
+
 // Open opens or creates the database at the configured path.
 func Open() (*DB, error) {
 	return OpenPath(config.DBPath())
@@ -229,6 +231,9 @@ func (db *DB) migrate() error {
 
 	// Version-gated migrations (run once, tracked in schema_meta)
 	currentVersion := db.SchemaVersion()
+	if currentVersion > maxSchemaVersion {
+		return fmt.Errorf("database schema version %d is newer than this binary supports (max %d). Please upgrade SAME: same update", currentVersion, maxSchemaVersion)
+	}
 	versionedMigrations := []struct {
 		version int
 		fn      func() error
@@ -245,9 +250,22 @@ func (db *DB) migrate() error {
 			if err := m.fn(); err != nil {
 				return fmt.Errorf("migration v%d: %w", m.version, err)
 			}
-			if err := db.SetMeta("schema_version", strconv.Itoa(m.version)); err != nil {
+			tx, err := db.conn.Begin()
+			if err != nil {
+				return fmt.Errorf("begin migration v%d: %w", m.version, err)
+			}
+			if _, err := tx.Exec(
+				`INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)
+				 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+				strconv.Itoa(m.version),
+			); err != nil {
+				_ = tx.Rollback()
 				return fmt.Errorf("record migration v%d: %w", m.version, err)
 			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit migration v%d: %w", m.version, err)
+			}
+			currentVersion = m.version
 		}
 	}
 

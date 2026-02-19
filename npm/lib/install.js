@@ -8,6 +8,7 @@ var https = require("https");
 var fs = require("fs");
 var os = require("os");
 var path = require("path");
+var crypto = require("crypto");
 
 var VERSION = require("../package.json").version;
 var BASE_URL =
@@ -99,6 +100,60 @@ function download(url, dest, cb, redirects) {
     });
 }
 
+function verifyChecksum(binaryPath, checksumUrl, binaryName, cb) {
+  var checksumDest = binaryPath + ".sha256";
+  download(checksumUrl, checksumDest, function (err) {
+    if (err) {
+      // Checksum file unavailable (older release) — proceed.
+      cb(null);
+      return;
+    }
+
+    var expected = null;
+    try {
+      var checksumContent = fs.readFileSync(checksumDest, "utf8");
+      var lines = checksumContent.split(/\r?\n/);
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf(binaryName) !== -1) {
+          expected = lines[i].split(/\s+/)[0].toLowerCase();
+          break;
+        }
+      }
+    } catch (e) {
+      expected = null;
+    }
+
+    try {
+      fs.unlinkSync(checksumDest);
+    } catch (e) {}
+
+    if (!expected) {
+      cb(null);
+      return;
+    }
+
+    var hash = crypto.createHash("sha256");
+    var stream = fs.createReadStream(binaryPath);
+    stream.on("error", function (streamErr) {
+      cb(streamErr);
+    });
+    stream.on("data", function (chunk) {
+      hash.update(chunk);
+    });
+    stream.on("end", function () {
+      var actual = hash.digest("hex").toLowerCase();
+      if (actual !== expected) {
+        try {
+          fs.unlinkSync(binaryPath);
+        } catch (e) {}
+        cb(new Error("Checksum mismatch: expected " + expected + " got " + actual));
+        return;
+      }
+      cb(null);
+    });
+  });
+}
+
 function main() {
   var binDir = path.join(__dirname, "..", "bin");
   var isWindows = os.platform() === "win32";
@@ -118,6 +173,7 @@ function main() {
   }
 
   var url = BASE_URL + "/same-" + suffix;
+  var checksumUrl = BASE_URL + "/sha256sums.txt";
 
   // Ensure bin/ exists
   try {
@@ -146,14 +202,22 @@ function main() {
       process.exit(0);
     }
 
-    // chmod 755 on Unix
-    if (!isWindows) {
-      try {
-        fs.chmodSync(dest, 0o755);
-      } catch (e) {}
-    }
+    verifyChecksum(dest, checksumUrl, "same-" + suffix, function (verifyErr) {
+      if (verifyErr) {
+        console.error("[same] Download failed verification: " + verifyErr.message);
+        console.error("[same] The binary will be downloaded on first run.");
+        process.exit(0);
+      }
 
-    console.log("[same] Installed successfully.");
+      // chmod 755 on Unix
+      if (!isWindows) {
+        try {
+          fs.chmodSync(dest, 0o755);
+        } catch (e) {}
+      }
+
+      console.log("[same] Installed successfully.");
+    });
   });
 }
 

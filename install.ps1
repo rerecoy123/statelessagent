@@ -111,16 +111,40 @@ if (-not $SkipDownload) {
 
         $BinaryName = "same-$Suffix"
         $Url = "https://github.com/$Repo/releases/download/$Latest/$BinaryName"
-        $TempFile = Join-Path $env:TEMP "same-download.exe"
+        $ChecksumUrl = "https://github.com/$Repo/releases/download/$Latest/sha256sums.txt"
+        $TempFile = Join-Path $env:TEMP ("same-download-" + $PID + ".exe")
+        $ChecksumFile = Join-Path $env:TEMP ("same-checksums-" + $PID + ".txt")
 
         try {
             Invoke-WebRequest -Uri $Url -OutFile $TempFile -UseBasicParsing
-            Move-Item -Path $TempFile -Destination $OutputFile -Force
-            $BinaryAcquired = $true
-            Write-Host "  Downloaded successfully."
+            $Verified = $true
+            try {
+                Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumFile -UseBasicParsing
+                $ExpectedLine = Get-Content $ChecksumFile | Where-Object { $_ -match [regex]::Escape($BinaryName) } | Select-Object -First 1
+                if ($ExpectedLine) {
+                    $Expected = (($ExpectedLine -split '\s+')[0]).ToLower()
+                    $Actual = (Get-FileHash -Path $TempFile -Algorithm SHA256).Hash.ToLower()
+                    if ($Actual -ne $Expected) {
+                        Write-Host "  Checksum mismatch! Expected: $Expected Got: $Actual" -ForegroundColor Red
+                        $Verified = $false
+                    }
+                }
+            } catch {
+                # Checksum unavailable for older releases — continue.
+            }
+
+            if ($Verified) {
+                Move-Item -Path $TempFile -Destination $OutputFile -Force
+                $BinaryAcquired = $true
+                Write-Host "  Downloaded successfully."
+            } else {
+                Write-Host "  Download failed verification."
+            }
         } catch {
-            Remove-Item -Path $TempFile -ErrorAction SilentlyContinue
             Write-Host "  Download failed."
+        } finally {
+            Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $ChecksumFile -Force -ErrorAction SilentlyContinue
         }
     } catch {
         # Check if we can reach GitHub at all
