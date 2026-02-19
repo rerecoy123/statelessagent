@@ -1,9 +1,6 @@
 package store
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // PinNote pins a note path so it always appears in context surfacing.
 func (db *DB) PinNote(path string) error {
@@ -76,38 +73,33 @@ func (db *DB) IsPinned(path string) (bool, error) {
 
 // GetPinnedNotes returns the full NoteRecord for each pinned note.
 // Returns deduplicated records (one per path, preferring chunk 0).
+// Uses a single JOIN query instead of N+1 queries.
 func (db *DB) GetPinnedNotes() ([]NoteRecord, error) {
-	pinnedPaths, err := db.GetPinnedPaths()
+	rows, err := db.conn.Query(
+		`SELECT n.id, n.path, n.title, n.tags, n.domain, n.workstream, COALESCE(n.agent, ''),
+		        n.chunk_id, n.chunk_heading, n.text, n.modified, n.content_hash,
+		        n.content_type, n.review_by, n.confidence, n.access_count
+		 FROM vault_notes n
+		 JOIN pinned_notes p ON p.path = n.path
+		 WHERE n.chunk_id = 0
+		   AND UPPER(n.path) NOT LIKE '_PRIVATE/%'
+		   AND UPPER(n.path) NOT LIKE '_PRIVATE\%'
+		 ORDER BY p.pinned_at ASC`,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get pinned notes: %w", err)
 	}
-	if len(pinnedPaths) == 0 {
-		return nil, nil
-	}
+	defer rows.Close()
 
 	var records []NoteRecord
-	for _, path := range pinnedPaths {
-		// F08: Skip _PRIVATE/ paths even if manually pinned
-		if upper := strings.ToUpper(path); strings.HasPrefix(upper, "_PRIVATE/") || strings.HasPrefix(upper, "_PRIVATE\\") {
-			continue
-		}
-		row := db.conn.QueryRow(
-			`SELECT id, path, title, tags, domain, workstream, COALESCE(agent, ''), chunk_id, chunk_heading,
-			        text, modified, content_hash, content_type, review_by, confidence, access_count
-			 FROM vault_notes
-			 WHERE path = ?
-			 ORDER BY chunk_id ASC
-			 LIMIT 1`,
-			path,
-		)
+	for rows.Next() {
 		var rec NoteRecord
-		err := row.Scan(
+		if err := rows.Scan(
 			&rec.ID, &rec.Path, &rec.Title, &rec.Tags, &rec.Domain, &rec.Workstream, &rec.Agent,
 			&rec.ChunkID, &rec.ChunkHeading, &rec.Text, &rec.Modified,
 			&rec.ContentHash, &rec.ContentType, &rec.ReviewBy, &rec.Confidence, &rec.AccessCount,
-		)
-		if err != nil {
-			continue // Note may have been deleted from vault but pin remains
+		); err != nil {
+			return nil, fmt.Errorf("scan pinned note: %w", err)
 		}
 		records = append(records, rec)
 	}

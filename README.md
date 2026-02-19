@@ -202,7 +202,7 @@ same seed install claude-code-power-user
 | `ai-agent-architecture` | 58 | Agent design patterns, orchestration, memory strategies |
 | `personal-productivity-os` | 118 | GTD, time blocking, habit systems, review frameworks |
 
-10 seeds available — 612+ notes of expert knowledge. Browse with `same seed list`.
+10 seeds available — 600+ notes of expert knowledge. Browse with `same seed list`.
 
 [Browse all seeds](https://github.com/sgx-labs/seed-vaults)
 
@@ -519,7 +519,7 @@ When enabled, a pre-push git hook blocks pushes unless a one-time ticket has bee
 <details>
 <summary><strong>Troubleshooting</strong></summary>
 
-Start with `same doctor` — it runs 18 checks and tells you exactly what's wrong.
+Start with `same doctor` — it runs 19 checks and tells you exactly what's wrong.
 
 **"No vault found"**
 SAME can't find your notes directory. Fix:
@@ -542,7 +542,7 @@ Context isn't being surfaced during Claude Code sessions. Fix:
 
 **Context not surfacing**
 Hooks fire but no notes appear. Fix:
-- Run `same doctor` to diagnose all 18 checks
+- Run `same doctor` to diagnose all 19 checks
 - Run `same reindex` if your notes have changed
 - Try `same search "your query"` to test search directly
 - Check if display mode is set to "quiet": `same config show`

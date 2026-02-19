@@ -37,16 +37,16 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.25'
           cache-dependency-path: go.sum
 
       - name: Install zig (Windows cross-compile)
         if: matrix.cc == 'zig'
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.13.0
 
@@ -80,7 +80,7 @@ jobs:
             -o build/same-${{ matrix.suffix }} ./cmd/same
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: same-${{ matrix.suffix }}
           path: build/same-${{ matrix.suffix }}
@@ -90,21 +90,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
       - name: Generate SHA256 checksums
         run: |
+          cd artifacts
           sha256sum \
-            artifacts/same-darwin-arm64/same-darwin-arm64 \
-            artifacts/same-linux-amd64/same-linux-amd64 \
-            artifacts/same-linux-arm64/same-linux-arm64 \
-            artifacts/same-windows-amd64.exe/same-windows-amd64.exe \
-            > artifacts/sha256sums.txt
+            same-darwin-arm64/same-darwin-arm64 \
+            same-linux-amd64/same-linux-amd64 \
+            same-linux-arm64/same-linux-arm64 \
+            same-windows-amd64.exe/same-windows-amd64.exe \
+            | sed 's|[^ ]*/||' > sha256sums.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           generate_release_notes: true
           files: |
@@ -120,12 +121,10 @@ jobs:
     # npm requires 2FA (passkey) for publishing. CI token may not have bypass-2FA.
     # If this job fails, publish locally: cd npm && npm publish --access public --auth-type=web
     continue-on-error: true
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -134,13 +133,20 @@ jobs:
         run: |
           MAKE_VERSION=$(grep '^VERSION' Makefile | head -1 | awk '{print $NF}')
           NPM_VERSION=$(node -p "require('./npm/package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
           if [ "$MAKE_VERSION" != "$NPM_VERSION" ]; then
             echo "Version mismatch: Makefile=$MAKE_VERSION npm=$NPM_VERSION"
             exit 1
           fi
-          echo "Version match: $MAKE_VERSION"
+          if [ "$TAG_VERSION" != "$NPM_VERSION" ]; then
+            echo "Tag version $TAG_VERSION does not match npm version $NPM_VERSION"
+            exit 1
+          fi
+          echo "Version match: $MAKE_VERSION (tag: $GITHUB_REF_NAME)"
 
       - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         working-directory: npm
         run: |
           PKG_NAME=$(node -p "require('./package.json').name")

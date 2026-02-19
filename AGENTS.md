@@ -131,6 +131,9 @@ internal/
     security.go           # Tarball extraction hardening
   setup/               # Init flow, hook installation
   ollama/              # Ollama HTTP client (generate)
+  llm/                # Provider-agnostic chat routing (same ask, graph LLM)
+    client.go             # NewClient, NewClientWithOptions, PickBestModel
+    openai.go             # OpenAI-compatible chat completion provider
   guard/               # PII scanner, push protection
     guard.go              # Main PII scanner
     patterns.go           # PII regex patterns
