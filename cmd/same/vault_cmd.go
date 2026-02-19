@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -22,12 +25,28 @@ func watchCmd() *cobra.Command {
 		Short: "Auto-update the index when notes change",
 		Long:  "Monitor the vault filesystem for markdown file changes. Automatically reindexes modified, created, or deleted notes with a 2-second debounce.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithCancel(cmd.Context())
+			defer cancel()
+
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			go func() {
+				select {
+				case <-ctx.Done():
+				case <-sigCh:
+					fmt.Fprintln(os.Stderr, "\nStopping watcher...")
+					cancel()
+				}
+			}()
+
 			db, err := store.Open()
 			if err != nil {
 				return fmt.Errorf("open database: %w", err)
 			}
 			defer db.Close()
-			return watcher.Watch(db)
+			return watcher.Watch(ctx, db)
 		},
 	}
 }

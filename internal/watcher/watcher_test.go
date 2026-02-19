@@ -3,6 +3,7 @@ package watcher
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sgx-labs/statelessagent/internal/store"
@@ -105,6 +106,29 @@ func TestReindexFiles_MissingPathDeletesIndexedEntry(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected stale note to be removed, count=%d", count)
+	}
+}
+
+func TestShouldWatchDir_SkipsSymlinkDirectories(t *testing.T) {
+	root := t.TempDir()
+	realDir := filepath.Join(root, "notes")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("mkdir real dir: %v", err)
+	}
+
+	linkDir := filepath.Join(root, "notes-link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "operation not permitted") {
+			t.Skipf("symlink unsupported in this environment: %v", err)
+		}
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	if shouldWatchDir(linkDir) {
+		t.Fatalf("expected symlink directory to be skipped")
+	}
+	if !shouldWatchDir(realDir) {
+		t.Fatalf("expected real directory to be watched")
 	}
 }
 

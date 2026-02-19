@@ -2,6 +2,7 @@
 package watcher
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -20,7 +21,7 @@ import (
 
 // Watch starts watching the vault for changes and reindexes modified files.
 // It blocks until the context is done or an unrecoverable error occurs.
-func Watch(db *store.DB) error {
+func Watch(ctx context.Context, db *store.DB) error {
 	vaultPath := config.VaultPath()
 
 	w, err := fsnotify.NewWatcher()
@@ -68,6 +69,14 @@ func Watch(db *store.DB) error {
 
 	for {
 		select {
+		case <-ctx.Done():
+			mu.Lock()
+			if timer != nil {
+				timer.Stop()
+			}
+			mu.Unlock()
+			flush()
+			return nil
 		case event, ok := <-w.Events:
 			if !ok {
 				return nil
@@ -76,14 +85,9 @@ func Watch(db *store.DB) error {
 			// Only care about markdown files (skip meta-docs)
 			if !strings.HasSuffix(event.Name, ".md") || config.SkipFiles[filepath.Base(event.Name)] {
 				// But watch new directories
-				if event.Has(fsnotify.Create) {
-					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						name := filepath.Base(event.Name)
-						if !config.SkipDirs[name] {
-							if err := w.Add(event.Name); err != nil {
-								fmt.Fprintf(os.Stderr, "  [WARN] Could not watch %s: %v\n", event.Name, err)
-							}
-						}
+				if event.Has(fsnotify.Create) && shouldWatchDir(event.Name) {
+					if err := w.Add(event.Name); err != nil {
+						fmt.Fprintf(os.Stderr, "  [WARN] Could not watch %s: %v\n", event.Name, err)
 					}
 				}
 				continue
@@ -116,6 +120,20 @@ func Watch(db *store.DB) error {
 			fmt.Fprintf(os.Stderr, "  [WARN] Watch error: %v\n", err)
 		}
 	}
+}
+
+func shouldWatchDir(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	if !info.IsDir() {
+		return false
+	}
+	return !config.SkipDirs[filepath.Base(path)]
 }
 
 func reindexFiles(db *store.DB, paths []string, vaultPath string) {

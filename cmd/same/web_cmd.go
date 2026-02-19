@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -34,6 +38,22 @@ Examples:
 				return config.ErrNoVault
 			}
 
+			ctx, cancel := context.WithCancel(cmd.Context())
+			defer cancel()
+
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			go func() {
+				select {
+				case <-ctx.Done():
+				case <-sigCh:
+					fmt.Fprintln(os.Stderr, "Shutting down...")
+					cancel()
+				}
+			}()
+
 			// Create embed provider (nil is fine — keyword fallback)
 			embedClient, _ := newEmbedProvider()
 
@@ -46,7 +66,7 @@ Examples:
 				}()
 			}
 
-			return web.Serve(addr, embedClient, Version, vp)
+			return web.Serve(ctx, addr, embedClient, Version, vp)
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 4078, "Port to listen on")

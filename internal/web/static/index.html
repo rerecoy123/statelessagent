@@ -937,6 +937,7 @@ body {
 
   // State
   var allNotes = [];
+  var allNotesTruncated = false;
   var searchMode = 'unknown';
   var lastPage = 'dashboard';
   var debounceTimer = null;
@@ -1832,7 +1833,8 @@ body {
       }
     });
 
-    document.getElementById('browse-count').textContent = filtered.length + ' of ' + allNotes.length + ' notes';
+    var totalLabel = allNotes.length + (allNotesTruncated ? '+' : '');
+    document.getElementById('browse-count').textContent = filtered.length + ' of ' + totalLabel + ' notes';
     var browseEl = document.getElementById('browse-notes');
     if (allNotes.length === 0) {
       setEmpty(browseEl, 'Your vault has no indexed notes yet.', 'Run same reindex to index markdown notes, or run same seed list to install starter vaults.');
@@ -1854,7 +1856,13 @@ body {
   function ensureAllNotes(cb) {
     if (allNotes.length > 0) { cb(); return; }
     api('/api/notes').then(function(data) {
-      allNotes = data || [];
+      if (Array.isArray(data)) {
+        allNotes = data;
+        allNotesTruncated = false;
+      } else {
+        allNotes = (data && Array.isArray(data.notes)) ? data.notes : [];
+        allNotesTruncated = !!(data && data.truncated);
+      }
       cb(true);
     }).catch(function() {
       cb(false);

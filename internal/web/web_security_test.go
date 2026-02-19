@@ -195,3 +195,22 @@ func TestFilterPrivateNotes_SnippetTruncation(t *testing.T) {
 		t.Errorf("maxNoteSize = %d, want %d", maxNoteSize, 5*1024*1024)
 	}
 }
+
+func TestMethodNotAllowed(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := methodGET(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/status", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for POST /api/status, got %d", w.Code)
+	}
+	if allow := w.Header().Get("Allow"); allow != http.MethodGet {
+		t.Fatalf("expected Allow header %q, got %q", http.MethodGet, allow)
+	}
+}

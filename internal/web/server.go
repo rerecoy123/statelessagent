@@ -2,6 +2,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/embedding"
@@ -24,7 +27,7 @@ import (
 // Serve starts the web server on the given address.
 // embedClient may be nil if no embedding provider is available (keyword-only mode).
 // vaultPath is the resolved vault directory, shown in the dashboard for orientation.
-func Serve(addr string, embedClient embedding.Provider, version string, vaultPath string) error {
+func Serve(ctx context.Context, addr string, embedClient embedding.Provider, version string, vaultPath string) error {
 	db, err := store.Open()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -50,14 +53,51 @@ func Serve(addr string, embedClient embedding.Provider, version string, vaultPat
 	mux.HandleFunc("/api/graph/stats", s.handleGraphStats)
 	mux.HandleFunc("/api/graph/connections/", s.handleGraphConnections) // /api/graph/connections/{path}
 
-	handler := localhostOnly(securityHeaders(mux))
+	handler := localhostOnly(securityHeaders(methodGET(mux)))
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 	fmt.Fprintf(os.Stderr, "SAME web dashboard: http://%s\n", listener.Addr())
-	return http.Serve(listener, handler)
+
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	var (
+		wg          sync.WaitGroup
+		shutdownErr error
+	)
+	serveDone := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			shutdownErr = srv.Shutdown(shutdownCtx)
+		case <-serveDone:
+		}
+	}()
+
+	err = srv.Serve(listener)
+	close(serveDone)
+	wg.Wait()
+
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown web server: %w", shutdownErr)
+	}
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("serve dashboard: %w", err)
+	}
+	return nil
 }
 
 type server struct {
@@ -95,6 +135,17 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func methodGET(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -160,12 +211,34 @@ func (s *server) handleRecentNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleAllNotes(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, convErr := strconv.Atoi(v)
+		if convErr != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		if n > 1000 {
+			n = 1000
+		}
+		limit = n
+	}
+
 	notes, err := s.db.AllNotes()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, filterPrivateNotes(notes))
+	filtered := filterPrivateNotes(notes)
+	truncated := len(filtered) > limit
+	if truncated {
+		filtered = filtered[:limit]
+	}
+	writeJSON(w, map[string]any{
+		"notes":     filtered,
+		"truncated": truncated,
+		"limit":     limit,
+	})
 }
 
 // maxNoteSize caps the total text returned for a single note (5 MB).

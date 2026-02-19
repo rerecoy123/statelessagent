@@ -249,6 +249,7 @@ func runDoctor(jsonOut bool) error {
 	if vaultOK && embedAvailable {
 		db, err := store.Open()
 		if err == nil {
+			defer db.Close()
 			if !db.HasVectors() {
 				noteCount, _ := db.NoteCount()
 				if noteCount > 0 {
@@ -263,7 +264,6 @@ func runDoctor(jsonOut bool) error {
 					}
 				}
 			}
-			db.Close()
 		}
 	}
 

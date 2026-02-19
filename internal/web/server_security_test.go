@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -102,15 +103,25 @@ func TestWebAPI_PrivateNotesAreFiltered(t *testing.T) {
 		t.Fatalf("expected 200 from /api/notes, got %d", rr.Code)
 	}
 
-	var notes []map[string]any
-	if err := json.NewDecoder(rr.Body).Decode(&notes); err != nil {
+	var payload struct {
+		Notes     []map[string]any `json:"notes"`
+		Truncated bool             `json:"truncated"`
+		Limit     int              `json:"limit"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode notes response: %v", err)
 	}
-	if len(notes) != 1 {
-		t.Fatalf("expected only non-private notes, got %d entries", len(notes))
+	if len(payload.Notes) != 1 {
+		t.Fatalf("expected only non-private notes, got %d entries", len(payload.Notes))
 	}
-	if strings.HasPrefix(strings.ToUpper(notes[0]["path"].(string)), "_PRIVATE/") {
-		t.Fatalf("private note leaked in API response: %+v", notes[0])
+	if payload.Truncated {
+		t.Fatalf("unexpected truncation in small notes response")
+	}
+	if payload.Limit != 200 {
+		t.Fatalf("expected default limit 200, got %d", payload.Limit)
+	}
+	if strings.HasPrefix(strings.ToUpper(payload.Notes[0]["path"].(string)), "_PRIVATE/") {
+		t.Fatalf("private note leaked in API response: %+v", payload.Notes[0])
 	}
 
 	privateReq := httptest.NewRequest(http.MethodGet, "/api/notes/_PRIVATE/secret.md", nil)
@@ -152,5 +163,44 @@ func TestWebNoteJSONAndRendererDefensesAgainstXSS(t *testing.T) {
 		if !strings.Contains(page, token) {
 			t.Fatalf("expected embedded UI to include XSS guard %q", token)
 		}
+	}
+}
+
+func TestAllNotes_DefaultLimit(t *testing.T) {
+	db, err := store.OpenMemory()
+	if err != nil {
+		t.Fatalf("open memory db: %v", err)
+	}
+	defer db.Close()
+
+	for i := 0; i < 250; i++ {
+		path := fmt.Sprintf("notes/n-%03d.md", i)
+		insertLiteNote(t, db, path, fmt.Sprintf("N-%03d", i), "note body")
+	}
+
+	s := &server{db: db}
+	rr := httptest.NewRecorder()
+	s.handleAllNotes(rr, httptest.NewRequest(http.MethodGet, "/api/notes", nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/notes, got %d", rr.Code)
+	}
+
+	var payload struct {
+		Notes     []map[string]any `json:"notes"`
+		Truncated bool             `json:"truncated"`
+		Limit     int              `json:"limit"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode notes payload: %v", err)
+	}
+	if !payload.Truncated {
+		t.Fatalf("expected truncated=true for >200 notes")
+	}
+	if payload.Limit != 200 {
+		t.Fatalf("expected default limit 200, got %d", payload.Limit)
+	}
+	if len(payload.Notes) != 200 {
+		t.Fatalf("expected 200 notes in default response, got %d", len(payload.Notes))
 	}
 }

@@ -22,7 +22,7 @@ func TestRunAsk_NoChatProviderConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	defer db.Close()
 
 	if _, err := db.BulkInsertNotesLite([]store.NoteRecord{
 		{
@@ -64,7 +64,7 @@ func TestRunAsk_OllamaUnavailableReturnsActionableHint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	defer db.Close()
 
 	if _, err := db.BulkInsertNotesLite([]store.NoteRecord{
 		{
