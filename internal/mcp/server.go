@@ -632,9 +632,7 @@ func handleSaveDecision(ctx context.Context, req *mcp.CallToolRequest, input sav
 	// Index only the decision log file instead of a full vault reindex.
 	// This avoids O(n) work per call, preventing DoS on large vaults.
 	relPath := filepath.ToSlash(logName)
-	if err := indexer.IndexSingleFile(db, safePath, relPath, vaultRoot, embedClient); err != nil {
-		// Non-fatal: the decision was saved, just not indexed yet
-	}
+	_ = indexer.IndexSingleFile(db, safePath, relPath, vaultRoot, embedClient) // best-effort indexing
 
 	return textResult(fmt.Sprintf("Decision logged: %s (%s)", input.Title, status)), nil, nil
 }
@@ -701,9 +699,7 @@ func handleCreateHandoff(ctx context.Context, req *mcp.CallToolRequest, input cr
 	}
 
 	// Index only the handoff file instead of a full vault reindex.
-	if err := indexer.IndexSingleFile(db, safePath, filepath.ToSlash(relPath), vaultRoot, embedClient); err != nil {
-		// Non-fatal: the handoff was saved, just not indexed yet
-	}
+	_ = indexer.IndexSingleFile(db, safePath, filepath.ToSlash(relPath), vaultRoot, embedClient) // best-effort indexing
 
 	return textResult(fmt.Sprintf("Handoff saved: %s", relPath)), nil, nil
 }

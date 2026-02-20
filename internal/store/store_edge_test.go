@@ -1039,17 +1039,17 @@ func TestGetStaleNotes_TrimsToMaxResults(t *testing.T) {
 	// Insert more stale notes than we will request
 	for i := 0; i < 10; i++ {
 		rec := &NoteRecord{
-			Path:        "notes/stale-" + string(rune('a'+i)) + ".md",
-			Title:       "Stale Note",
-			Tags:        "[]",
-			ChunkID:     0,
+			Path:         "notes/stale-" + string(rune('a'+i)) + ".md",
+			Title:        "Stale Note",
+			Tags:         "[]",
+			ChunkID:      0,
 			ChunkHeading: "(full)",
-			Text:        "stale content",
-			Modified:    1700000000,
-			ContentHash: "st-" + string(rune('a'+i)),
-			ContentType: "note",
-			Confidence:  0.5,
-			ReviewBy:    "2020-01-01",
+			Text:         "stale content",
+			Modified:     1700000000,
+			ContentHash:  "st-" + string(rune('a'+i)),
+			ContentType:  "note",
+			Confidence:   0.5,
+			ReviewBy:     "2020-01-01",
 		}
 		if err := db.InsertNote(rec, vec); err != nil {
 			t.Fatalf("InsertNote %d: %v", i, err)

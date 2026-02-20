@@ -706,23 +706,6 @@ func shouldSkipPath(path string) bool {
 	return isPrivatePath(path) || isNoisyPath(path)
 }
 
-// recencyPriority returns a sorting priority for recency queries.
-// Lower number = higher priority. Handoff/session notes are prioritized
-// because recency queries typically want session context, not generic hubs.
-func recencyPriority(path string) int {
-	lower := strings.ToLower(path)
-	if strings.Contains(lower, "handoff") || strings.Contains(lower, "session") {
-		return 0
-	}
-	if strings.Contains(lower, "decision") {
-		return 1
-	}
-	if strings.Contains(lower, "working_notes") || strings.Contains(lower, "progress") {
-		return 2
-	}
-	return 3
-}
-
 // isRecencyRelevantType returns true if a content type is session-relevant.
 // Used to filter RecentNotes merge to avoid surfacing random notes that
 // happen to be recently modified.

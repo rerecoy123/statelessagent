@@ -176,7 +176,7 @@ func writeVerboseLog(content string) {
 	logPath := verboseLogPath()
 
 	const maxSize = 5 * 1024 * 1024  // 5MB
-	const keepSize = 1 * 1024 * 1024  // 1MB
+	const keepSize = 1 * 1024 * 1024 // 1MB
 
 	// Check if rotation is needed
 	if info, err := os.Stat(logPath); err == nil && info.Size() > maxSize {

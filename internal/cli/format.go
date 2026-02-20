@@ -199,37 +199,6 @@ func SurfacingVerbose(notes []SurfacedNote, totalVault int) {
 	surfacingBox(notes, totalVault)
 }
 
-// surfacingSimple prints a clean, simple list format that works in all terminals.
-func surfacingSimple(notes []SurfacedNote, totalVault int) {
-	var included, excluded []SurfacedNote
-	for _, n := range notes {
-		if n.Included {
-			included = append(included, n)
-		} else {
-			excluded = append(excluded, n)
-		}
-	}
-
-	verb := randomVerb()
-	fmt.Fprintf(os.Stderr, "%sSAME %s %d memories:%s\n",
-		Cyan, verb, len(included), Reset)
-
-	for _, n := range included {
-		fmt.Fprintf(os.Stderr, "  %s+%s %s %s(%d tokens)%s\n",
-			Cyan, Reset, n.Title, Dim, n.Tokens, Reset)
-		if len(n.MatchTerms) > 0 {
-			fmt.Fprintf(os.Stderr, "    %smatched: %s%s\n",
-				Dim, strings.Join(quoteTerms(n.MatchTerms), ", "), Reset)
-		}
-	}
-
-	if len(excluded) > 0 {
-		fmt.Fprintf(os.Stderr, "  %s- also found: %s%s\n",
-			Dim, excluded[0].Title, Reset)
-	}
-	fmt.Fprintf(os.Stderr, "\n")
-}
-
 // surfacingBox prints the fancy Unicode box format.
 func surfacingBox(notes []SurfacedNote, totalVault int) {
 	var included, found int

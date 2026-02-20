@@ -225,12 +225,12 @@ func TestRankingEditDistance1(t *testing.T) {
 		a, b string
 		want bool
 	}{
-		{"kubernetes", "kuberntes", true},  // deletion
-		{"kuberntes", "kubernetes", true},   // insertion
-		{"embedding", "embeddinh", true},        // substitution
-		{"short", "shorr", false},               // both < 7 chars
-		{"totally", "different", false},          // too different
-		{"same", "same", false},                  // identical
+		{"kubernetes", "kuberntes", true}, // deletion
+		{"kuberntes", "kubernetes", true}, // insertion
+		{"embedding", "embeddinh", true},  // substitution
+		{"short", "shorr", false},         // both < 7 chars
+		{"totally", "different", false},   // too different
+		{"same", "same", false},           // identical
 	}
 	for _, tt := range tests {
 		got := rankingEditDistance1(tt.a, tt.b)
@@ -248,8 +248,8 @@ func TestRankingSharesStem(t *testing.T) {
 		{"invoice", "invoicing", true},
 		{"finance", "financing", true},
 		{"report", "reporting", true},
-		{"cat", "cats", false},             // too short
-		{"hello", "goodbye", false},        // no common prefix
+		{"cat", "cats", false},      // too short
+		{"hello", "goodbye", false}, // no common prefix
 		{"embedding", "embeddings", true},
 	}
 	for _, tt := range tests {

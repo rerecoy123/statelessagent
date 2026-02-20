@@ -158,7 +158,9 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(indexHTML)
+	if _, err := w.Write(indexHTML); err != nil {
+		fmt.Fprintf(os.Stderr, "same web: write index: %v\n", err)
+	}
 }
 
 func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {

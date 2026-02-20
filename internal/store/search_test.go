@@ -82,19 +82,19 @@ func TestKeywordSearch(t *testing.T) {
 		{
 			Path: "notes/auth-guide.md", Title: "Authentication Guide",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "This guide covers JWT authentication and OAuth2 flows.",
+			Text:     "This guide covers JWT authentication and OAuth2 flows.",
 			Modified: 1700000000, ContentHash: "h1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/database-setup.md", Title: "Database Setup",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Instructions for setting up PostgreSQL and running migrations.",
+			Text:     "Instructions for setting up PostgreSQL and running migrations.",
 			Modified: 1700000001, ContentHash: "h2", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/deploy-checklist.md", Title: "Deployment Checklist",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Steps to deploy the application to production servers.",
+			Text:     "Steps to deploy the application to production servers.",
 			Modified: 1700000002, ContentHash: "h3", ContentType: "note", Confidence: 0.5,
 		},
 	}
@@ -141,7 +141,7 @@ func TestSearchAndNoteReadsHandleNullAgent(t *testing.T) {
 	note := &NoteRecord{
 		Path: "notes/null-agent.md", Title: "Null Agent",
 		Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-		Text: "Keyword fallback should still work.",
+		Text:     "Keyword fallback should still work.",
 		Modified: 1700000000, ContentHash: "null-agent", ContentType: "note", Confidence: 0.5,
 	}
 	if err := db.InsertNote(note, vec); err != nil {
@@ -203,19 +203,19 @@ func TestContentTermSearch(t *testing.T) {
 		{
 			Path: "notes/embedding-overview.md", Title: "Embedding Overview",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Embeddings convert text into vector representations for semantic search.",
+			Text:     "Embeddings convert text into vector representations for semantic search.",
 			Modified: 1700000000, ContentHash: "h1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/embedding-overview.md", Title: "Embedding Overview",
 			Tags: "[]", ChunkID: 1, ChunkHeading: "Models",
-			Text: "Popular embedding models include nomic-embed-text and text-embedding-3-small.",
+			Text:     "Popular embedding models include nomic-embed-text and text-embedding-3-small.",
 			Modified: 1700000000, ContentHash: "h1c1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/api-reference.md", Title: "API Reference",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "The REST API exposes endpoints for CRUD operations.",
+			Text:     "The REST API exposes endpoints for CRUD operations.",
 			Modified: 1700000001, ContentHash: "h2", ContentType: "note", Confidence: 0.5,
 		},
 	}
@@ -259,7 +259,7 @@ func TestFuzzyTitleSearch(t *testing.T) {
 	rec := &NoteRecord{
 		Path: "notes/arch-decisions.md", Title: "Architecture Decisions",
 		Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-		Text: "Key architectural decisions made for the project.",
+		Text:     "Key architectural decisions made for the project.",
 		Modified: 1700000000, ContentHash: "h1", ContentType: "decision", Confidence: 0.8,
 	}
 	if err := db.InsertNote(rec, vec); err != nil {
@@ -301,19 +301,19 @@ func TestKeywordSearchTitleMatch(t *testing.T) {
 		{
 			Path: "notes/security-audit.md", Title: "Security Audit Report",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Findings from the quarterly security review.",
+			Text:     "Findings from the quarterly security review.",
 			Modified: 1700000000, ContentHash: "h1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/performance-tuning.md", Title: "Performance Tuning",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Guidelines for optimizing query performance.",
+			Text:     "Guidelines for optimizing query performance.",
 			Modified: 1700000001, ContentHash: "h2", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/onboarding.md", Title: "Developer Onboarding",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Steps for new team members to get started.",
+			Text:     "Steps for new team members to get started.",
 			Modified: 1700000002, ContentHash: "h3", ContentType: "note", Confidence: 0.5,
 		},
 	}
@@ -383,19 +383,19 @@ func TestHybridSearch(t *testing.T) {
 		{
 			Path: "notes/caching-strategy.md", Title: "Caching Strategy",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Redis-based caching layer for API responses.",
+			Text:     "Redis-based caching layer for API responses.",
 			Modified: 1700000000, ContentHash: "h1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/error-handling.md", Title: "Error Handling Patterns",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Centralized error handling with structured logging.",
+			Text:     "Centralized error handling with structured logging.",
 			Modified: 1700000001, ContentHash: "h2", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/testing-guide.md", Title: "Testing Guide",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Unit testing and integration testing best practices.",
+			Text:     "Unit testing and integration testing best practices.",
 			Modified: 1700000002, ContentHash: "h3", ContentType: "note", Confidence: 0.5,
 		},
 	}
@@ -460,13 +460,13 @@ func TestFederatedSearch_MultipleVaults(t *testing.T) {
 		{
 			Path: "notes/auth-design.md", Title: "Authentication Design",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "JWT-based authentication with refresh tokens.",
+			Text:     "JWT-based authentication with refresh tokens.",
 			Modified: 1700000000, ContentHash: "d1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/database-schema.md", Title: "Database Schema",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "PostgreSQL schema with user and session tables.",
+			Text:     "PostgreSQL schema with user and session tables.",
 			Modified: 1700000001, ContentHash: "d2", ContentType: "note", Confidence: 0.5,
 		},
 	})
@@ -475,13 +475,13 @@ func TestFederatedSearch_MultipleVaults(t *testing.T) {
 		{
 			Path: "notes/launch-plan.md", Title: "Launch Plan",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Product launch timeline and marketing strategy.",
+			Text:     "Product launch timeline and marketing strategy.",
 			Modified: 1700000000, ContentHash: "m1", ContentType: "note", Confidence: 0.5,
 		},
 		{
 			Path: "notes/auth-messaging.md", Title: "Authentication Messaging",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "How to communicate our authentication security story.",
+			Text:     "How to communicate our authentication security story.",
 			Modified: 1700000001, ContentHash: "m2", ContentType: "note", Confidence: 0.5,
 		},
 	})
@@ -558,7 +558,7 @@ func TestFederatedSearch_TopKLimit(t *testing.T) {
 		notes = append(notes, NoteRecord{
 			Path: "notes/note-" + string(rune('a'+i)) + ".md", Title: "Note " + string(rune('A'+i)),
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "Content about authentication and security patterns.",
+			Text:     "Content about authentication and security patterns.",
 			Modified: float64(1700000000 + i), ContentHash: "h" + string(rune('a'+i)),
 			ContentType: "note", Confidence: 0.5,
 		})
@@ -581,7 +581,7 @@ func TestFederatedSearch_VaultAnnotation(t *testing.T) {
 		{
 			Path: "notes/test.md", Title: "Test Note",
 			Tags: "[]", ChunkID: 0, ChunkHeading: "(full)",
-			Text: "This is a test note about architecture decisions.",
+			Text:     "This is a test note about architecture decisions.",
 			Modified: 1700000000, ContentHash: "t1", ContentType: "note", Confidence: 0.5,
 		},
 	})

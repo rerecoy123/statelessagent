@@ -216,10 +216,10 @@ func seedRemoveCmd() *cobra.Command {
 			if !yes && deleteFiles {
 				fmt.Printf("  Remove seed %q and delete all its files? [y/N] ", name)
 				var confirm string
-				fmt.Scanln(&confirm)
+				_, _ = fmt.Scanln(&confirm)
 				confirm = strings.TrimSpace(strings.ToLower(confirm))
 				if confirm != "y" && confirm != "yes" {
-					fmt.Println("  Cancelled.")
+					fmt.Println("  Canceled.")
 					return nil
 				}
 			}
@@ -258,4 +258,3 @@ func seedNameCompleter(cmd *cobra.Command, args []string, toComplete string) ([]
 	}
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
-

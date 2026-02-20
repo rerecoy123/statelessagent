@@ -72,8 +72,8 @@ func TestValidateAlias(t *testing.T) {
 		{"has:colon", false},
 		{"has@at", false},
 		{"\x00null", false},
-		{strings.Repeat("a", 65), false},  // too long
-		{strings.Repeat("a", 64), true},   // exactly at limit
+		{strings.Repeat("a", 65), false}, // too long
+		{strings.Repeat("a", 64), true},  // exactly at limit
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

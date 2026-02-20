@@ -41,16 +41,16 @@ type RecoveredSession struct {
 // that returns data wins. This ensures same-machine recovery even after crashes.
 //
 // Cascade:
-//   1. Handoff note (Stop fired) → Completeness 1.0
-//   2. Instance file with summary → Completeness 0.4
-//   3. sessions-index.json (IDE-persisted) → Completeness 0.3
-//   4. Nothing found → nil
+//  1. Handoff note (Stop fired) → Completeness 1.0
+//  2. Instance file with summary → Completeness 0.4
+//  3. sessions-index.json (IDE-persisted) → Completeness 0.3
+//  4. Nothing found → nil
 func RecoverPreviousSession(db *store.DB, currentSessionID string) *RecoveredSession {
 	// Source 1: Try handoff (richest source - Stop hook fired successfully)
 	if rs := recoverFromHandoff(); rs != nil {
 		// Record recovery outcome
 		if db != nil {
-			db.RecordRecovery(currentSessionID, rs.SessionID, "handoff", rs.Completeness)
+			_ = db.RecordRecovery(currentSessionID, rs.SessionID, "handoff", rs.Completeness)
 		}
 		return rs
 	}
@@ -58,7 +58,7 @@ func RecoverPreviousSession(db *store.DB, currentSessionID string) *RecoveredSes
 	// Source 2: Try instance files (first prompt was captured)
 	if rs := recoverFromInstance(currentSessionID); rs != nil {
 		if db != nil {
-			db.RecordRecovery(currentSessionID, rs.SessionID, "instance", rs.Completeness)
+			_ = db.RecordRecovery(currentSessionID, rs.SessionID, "instance", rs.Completeness)
 		}
 		return rs
 	}
@@ -66,14 +66,14 @@ func RecoverPreviousSession(db *store.DB, currentSessionID string) *RecoveredSes
 	// Source 3: Try sessions-index.json (IDE always persists this)
 	if rs := recoverFromSessionIndex(currentSessionID); rs != nil {
 		if db != nil {
-			db.RecordRecovery(currentSessionID, rs.SessionID, "session_index", rs.Completeness)
+			_ = db.RecordRecovery(currentSessionID, rs.SessionID, "session_index", rs.Completeness)
 		}
 		return rs
 	}
 
 	// Nothing found
 	if db != nil {
-		db.RecordRecovery(currentSessionID, "", "none", 0.0)
+		_ = db.RecordRecovery(currentSessionID, "", "none", 0.0)
 	}
 	return nil
 }

@@ -41,20 +41,13 @@ Suggested actions for the user:
 // Covers Ollama cold start (2-5s) + one retry (4s) with margin.
 const hookTimeout = 10 * time.Second
 
-const diagNoEmbed = `<same-diagnostic>
-SAME cannot connect to the embedding provider. Ollama may not be running.
-Suggested actions for the user:
-- Check if Ollama is running (look for the llama icon in the menu bar)
-- Run "same doctor" to diagnose issues
-</same-diagnostic>`
-
 // HookInput is the JSON input from Claude Code hooks.
 // Field names use snake_case to match Claude Code's JSON format.
 type HookInput struct {
-	Prompt          string `json:"prompt,omitempty"`
-	TranscriptPath  string `json:"transcript_path,omitempty"`
-	SessionID       string `json:"session_id,omitempty"`
-	HookEventName   string `json:"hook_event_name,omitempty"`
+	Prompt         string `json:"prompt,omitempty"`
+	TranscriptPath string `json:"transcript_path,omitempty"`
+	SessionID      string `json:"session_id,omitempty"`
+	HookEventName  string `json:"hook_event_name,omitempty"`
 }
 
 // HookOutput is the JSON output for Claude Code hooks.

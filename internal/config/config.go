@@ -476,7 +476,9 @@ func ShowConfig() string {
 	var b strings.Builder
 	b.WriteString("# Effective SAME configuration (merged from all sources)\n\n")
 	enc := toml.NewEncoder(&b)
-	enc.Encode(cfg)
+	if err := enc.Encode(cfg); err != nil {
+		return fmt.Sprintf("# Error encoding config: %v\n", err)
+	}
 	return b.String()
 }
 
@@ -1356,7 +1358,9 @@ func loadUserConfig() userConfig {
 		return userConfig{}
 	}
 	var cfg userConfig
-	json.Unmarshal(data, &cfg)
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return userConfig{}
+	}
 	return cfg
 }
 

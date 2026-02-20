@@ -213,7 +213,7 @@ func removeFromIndex(db *store.DB, absPath, vaultPath string) {
 
 func walkDirs(root string) []string {
 	var dirs []string
-	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -225,7 +225,9 @@ func walkDirs(root string) []string {
 			dirs = append(dirs, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "  [WARN] walk failed for %s: %v\n", root, err)
+	}
 	return dirs
 }
 

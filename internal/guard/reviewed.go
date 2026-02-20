@@ -14,12 +14,12 @@ type ReviewedTerms struct {
 
 // ReviewedTerm is a single cleared term+file combination.
 type ReviewedTerm struct {
-	Term       string `json:"term"`
-	Category   string `json:"category"`
+	Term       string   `json:"term"`
+	Category   string   `json:"category"`
 	Files      []string `json:"files"`
-	Reason     string `json:"reason"`
-	ReviewedBy string `json:"reviewed_by"`
-	ReviewedAt string `json:"reviewed_at"`
+	Reason     string   `json:"reason"`
+	ReviewedBy string   `json:"reviewed_by"`
+	ReviewedAt string   `json:"reviewed_at"`
 }
 
 // reviewedTermsPath returns the path to the reviewed-terms file.

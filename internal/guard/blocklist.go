@@ -3,7 +3,6 @@ package guard
 import (
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -109,12 +108,3 @@ func blocklistPath(vaultPath string) string {
 }
 
 // matchesBlocklistTerm checks if content contains a specific blocklist term.
-func matchesBlocklistTerm(content string, term string) bool {
-	escaped := regexp.QuoteMeta(term)
-	pattern := `(?i)\b` + escaped + `\b`
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return strings.Contains(strings.ToLower(content), strings.ToLower(term))
-	}
-	return re.MatchString(content)
-}

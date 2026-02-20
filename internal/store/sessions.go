@@ -70,7 +70,7 @@ func (db *DB) GetRecentSessions(count int, machine string) ([]SessionRecord, err
 			&s.HandoffPath, &s.Machine, &filesJSON, &s.Summary); err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(filesJSON), &s.FilesChanged)
+		_ = json.Unmarshal([]byte(filesJSON), &s.FilesChanged)
 		sessions = append(sessions, s)
 	}
 	return sessions, rows.Err()

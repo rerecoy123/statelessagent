@@ -564,4 +564,3 @@ func TestRelativeTime_Days(t *testing.T) {
 		t.Errorf("expected '2d ago', got %q", got)
 	}
 }
-

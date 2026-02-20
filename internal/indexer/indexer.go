@@ -567,7 +567,7 @@ func CountMarkdownFiles(dir string) int {
 
 func walkVault(vaultPath string) []string {
 	var files []string
-	filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -582,7 +582,9 @@ func walkVault(vaultPath string) []string {
 			files = append(files, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "same: warning: vault walk failed for %s: %v\n", vaultPath, err)
+	}
 	return files
 }
 

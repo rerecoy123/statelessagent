@@ -112,17 +112,17 @@ func extractTarGz(r io.Reader, seedPath, destDir string) (int, error) {
 		// SECURITY: reject symlinks and hardlinks
 		switch header.Typeflag {
 		case tar.TypeReg:
-			// Regular file — OK
-			case tar.TypeDir:
-				// Directory — create it
-				dirPath, err := validateExtractPath(relPath, destDir)
-				if err != nil {
-					continue // skip invalid paths
-				}
-				if err := os.MkdirAll(dirPath, 0o755); err != nil {
-					return fileCount, fmt.Errorf("create directory %s: %w", relPath, err)
-				}
-				continue
+		// Regular file — OK
+		case tar.TypeDir:
+			// Directory — create it
+			dirPath, err := validateExtractPath(relPath, destDir)
+			if err != nil {
+				continue // skip invalid paths
+			}
+			if err := os.MkdirAll(dirPath, 0o755); err != nil {
+				return fileCount, fmt.Errorf("create directory %s: %w", relPath, err)
+			}
+			continue
 		default:
 			// Skip symlinks, hardlinks, and anything else
 			continue

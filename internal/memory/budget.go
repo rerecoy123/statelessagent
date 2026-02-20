@@ -51,7 +51,7 @@ func LogInjection(db *store.DB, sessionID, hookName string, injectedPaths []stri
 		EstimatedTokens: EstimateTokens(injectedText),
 		WasReferenced:   false,
 	}
-	db.InsertUsage(rec) // ignore errors — non-critical
+	_ = db.InsertUsage(rec) // best-effort telemetry
 }
 
 // DetectReferences scans assistant text for references to injected vault paths/titles.
@@ -97,7 +97,7 @@ func DetectReferences(db *store.DB, sessionID string, assistantText string) int 
 
 		if wasRef {
 			referencedCount++
-			db.MarkReferenced(rec.ID) // ignore errors
+			_ = db.MarkReferenced(rec.ID) // best-effort telemetry
 		}
 	}
 
@@ -106,22 +106,22 @@ func DetectReferences(db *store.DB, sessionID string, assistantText string) int 
 
 // BudgetReport holds context budget utilization statistics.
 type BudgetReport struct {
-	SessionsAnalyzed    int                    `json:"sessions_analyzed"`
-	TotalInjections     int                    `json:"total_injections"`
-	TotalTokensInjected int                    `json:"total_tokens_injected"`
-	ReferencedCount     int                    `json:"referenced_injections"`
-	UtilizationRate     float64                `json:"utilization_rate"`
-	PerHook             map[string]HookStats   `json:"per_hook"`
-	Suggestions         []string               `json:"suggestions"`
+	SessionsAnalyzed    int                  `json:"sessions_analyzed"`
+	TotalInjections     int                  `json:"total_injections"`
+	TotalTokensInjected int                  `json:"total_tokens_injected"`
+	ReferencedCount     int                  `json:"referenced_injections"`
+	UtilizationRate     float64              `json:"utilization_rate"`
+	PerHook             map[string]HookStats `json:"per_hook"`
+	Suggestions         []string             `json:"suggestions"`
 }
 
 // HookStats holds per-hook utilization stats.
 type HookStats struct {
-	Injections          int     `json:"injections"`
-	Referenced          int     `json:"referenced"`
-	UtilizationRate     float64 `json:"utilization_rate"`
-	TotalTokens         int     `json:"total_tokens"`
-	AvgTokensPerInject  int     `json:"avg_tokens_per_injection"`
+	Injections         int     `json:"injections"`
+	Referenced         int     `json:"referenced"`
+	UtilizationRate    float64 `json:"utilization_rate"`
+	TotalTokens        int     `json:"total_tokens"`
+	AvgTokensPerInject int     `json:"avg_tokens_per_injection"`
 }
 
 // GetBudgetReport generates a context budget utilization report.

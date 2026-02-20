@@ -202,7 +202,7 @@ func runPlugin(p PluginConfig, inputJSON []byte, timeout time.Duration) (string,
 		}
 	case <-time.After(timeout):
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 		return "", fmt.Errorf("timeout after %v", timeout)
 	}

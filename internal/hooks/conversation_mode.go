@@ -9,11 +9,11 @@ import (
 type ConversationMode int
 
 const (
-	ModeExploring  ConversationMode = iota // Questions, open-ended inquiry
-	ModeDeepening                          // Specific follow-ups on a known topic
-	ModeExecuting                          // Imperative tasks: fix, build, implement
-	ModeReflecting                         // Evaluative: risks, benefits, tradeoffs
-	ModeSocializing                        // Greetings, affirmations (handled by isConversational)
+	ModeExploring   ConversationMode = iota // Questions, open-ended inquiry
+	ModeDeepening                           // Specific follow-ups on a known topic
+	ModeExecuting                           // Imperative tasks: fix, build, implement
+	ModeReflecting                          // Evaluative: risks, benefits, tradeoffs
+	ModeSocializing                         // Greetings, affirmations (handled by isConversational)
 )
 
 func (m ConversationMode) String() string {

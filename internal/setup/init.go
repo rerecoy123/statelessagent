@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,8 +124,8 @@ func checkDependencies(embedProvider string) {
 	}
 
 	var major, minor int
-	fmt.Sscanf(matches[1], "%d", &major)
-	fmt.Sscanf(matches[2], "%d", &minor)
+	major, _ = strconv.Atoi(matches[1])
+	minor, _ = strconv.Atoi(matches[2])
 
 	if major < 1 || (major == 1 && minor < 25) {
 		showHeader()
@@ -305,7 +306,7 @@ func RunInit(opts InitOptions) error {
 				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=none (or --provider none) for keyword-only mode%s\n\n", cli.Dim, cli.Reset)
 
 				if !confirm("  Continue with keyword-only mode?", false) {
-					return fmt.Errorf("setup cancelled — configure an embedding provider and run 'same init' again")
+					return fmt.Errorf("setup canceled — configure an embedding provider and run 'same init' again")
 				}
 
 				// They said yes — one final confirmation.
@@ -315,7 +316,7 @@ func RunInit(opts InitOptions) error {
 				fmt.Printf("  Add embeddings anytime and run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
 
 				if !confirm("  Are you sure you want keyword-only mode?", false) {
-					return fmt.Errorf("setup cancelled — configure an embedding provider and run 'same init' again")
+					return fmt.Errorf("setup canceled — configure an embedding provider and run 'same init' again")
 				}
 
 				providerReady = false
@@ -337,7 +338,7 @@ func RunInit(opts InitOptions) error {
 
 	// Warn about cloud sync
 	if !warnCloudSync(vaultPath, opts.Yes) {
-		return fmt.Errorf("setup cancelled")
+		return fmt.Errorf("setup canceled")
 	}
 
 	// Copy welcome notes (before indexing so they get included)
@@ -1442,7 +1443,7 @@ func registerVault(vaultPath string) {
 
 	reg.Vaults[name] = vaultPath
 	reg.Default = name
-	reg.Save()
+	_ = reg.Save()
 }
 
 // confirm asks a yes/no question. defaultYes controls the default.

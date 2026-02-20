@@ -514,7 +514,9 @@ func WriteHandoff(
 func generateSessionID() string {
 	ts := time.Now().Format("20060102-150405")
 	b := make([]byte, 4)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return ts + "-00000000"
+	}
 	return ts + "-" + hex.EncodeToString(b)
 }
 

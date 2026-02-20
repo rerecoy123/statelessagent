@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,6 +64,7 @@ func runBench() error {
 			Detail:  provErr.Error(),
 		})
 		fmt.Printf("  %-30s %8s     %s\n", "Embedding", "FAILED", provErr.Error())
+		printBenchSummary(results)
 		return nil
 	}
 	testQuery := "what decisions were made about the memory system architecture"
@@ -164,8 +166,10 @@ func printBenchSummary(results []benchResult) {
 	// Find the embed and search latencies to calculate overhead
 	var embedMs, searchMs, e2eMs float64
 	for _, r := range results {
-		var v float64
-		fmt.Sscanf(r.Latency, "%f", &v)
+		v, err := strconv.ParseFloat(r.Latency, 64)
+		if err != nil {
+			continue
+		}
 		switch {
 		case strings.HasPrefix(r.Name, "Embedding"):
 			embedMs = v

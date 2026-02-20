@@ -331,7 +331,7 @@ func guardReviewAddCmd() *cobra.Command {
 				return err
 			}
 
-			guard.AppendAudit(vaultPath, guard.AuditEntry{
+			_ = guard.AppendAudit(vaultPath, guard.AuditEntry{
 				Action:  "review_add",
 				Passed:  true,
 				Details: map[string]string{"term": term, "file": file, "reason": reason},
@@ -377,7 +377,7 @@ func guardReviewRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			guard.AppendAudit(vaultPath, guard.AuditEntry{
+			_ = guard.AppendAudit(vaultPath, guard.AuditEntry{
 				Action:  "review_remove",
 				Passed:  true,
 				Details: map[string]string{"term": term},
@@ -506,7 +506,7 @@ func runGuardAllow(file, match string, allowAll, last bool) error {
 		return err
 	}
 
-	guard.AppendAudit(vaultPath, guard.AuditEntry{
+	_ = guard.AppendAudit(vaultPath, guard.AuditEntry{
 		Action:  "allow",
 		Passed:  true,
 		Details: map[string]string{"count": fmt.Sprintf("%d", allowed)},

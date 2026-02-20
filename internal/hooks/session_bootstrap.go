@@ -335,7 +335,7 @@ func findActiveDecisions() string {
 	}
 
 	// Walk entire vault for decision files, respecting SkipDirs
-	filepath.Walk(vaultPath, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(vaultPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -353,7 +353,9 @@ func findActiveDecisions() string {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "same: warning: failed to scan decisions in %s: %v\n", vaultPath, err)
+	}
 
 	if len(candidates) == 0 {
 		return ""

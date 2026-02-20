@@ -13,13 +13,13 @@ import (
 
 const (
 	minPromptChars   = 20
-	maxResults       = 3   // data shows expected notes often land at #3; sweep confirmed no precision loss
+	maxResults       = 3 // data shows expected notes often land at #3; sweep confirmed no precision loss
 	maxSnippetChars  = 400
-	maxDistance       = 16.3 // L2 distance; relaxed from 16.0→16.2→16.3 — matches within this range are relevant; off-topic > 16.8
-	minComposite     = 0.70 // composite threshold; distance gate handles negative discrimination
-	minSemanticFloor = 0.25 // absolute floor: if semantic score < this, skip regardless of boost
-	maxTokenBudget   = 800  // tightened from 1000; less context waste
-	minTitleOverlap  = 0.10 // bidirectional overlap threshold for title matching
+	maxDistance      = 16.3  // L2 distance; relaxed from 16.0→16.2→16.3 — matches within this range are relevant; off-topic > 16.8
+	minComposite     = 0.70  // composite threshold; distance gate handles negative discrimination
+	minSemanticFloor = 0.25  // absolute floor: if semantic score < this, skip regardless of boost
+	maxTokenBudget   = 800   // tightened from 1000; less context waste
+	minTitleOverlap  = 0.10  // bidirectional overlap threshold for title matching
 	highTierOverlap  = 0.199 // effective 0.20 with floating point margin (e.g., 3/5*3/9 = 0.19999...)
 	// maxPerNoteTokens caps any single note's contribution to the token budget.
 	// Prevents a large note from consuming the entire budget and crowding out
@@ -43,11 +43,6 @@ var priorityTypes = map[string]bool{
 	"research": true,
 	"hub":      true,
 }
-
-// SECURITY: Paths that must never be auto-surfaced via hooks.
-// _PRIVATE/ contains client-sensitive content. Defense-in-depth:
-// indexer also skips these, but we filter here in case of stale index data.
-const privateDirPrefix = "_PRIVATE/"
 
 // noisyPathPrefixes returns the user-configured noise path prefixes.
 // Defaults to empty — no paths are filtered unless configured via

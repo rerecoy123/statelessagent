@@ -1046,17 +1046,17 @@ func FederatedSearch(vaultDBPaths map[string]string, queryVec []float32, queryTe
 						})
 					}
 				}
-				}
-				if len(results) == 0 {
-					if cerr := vaultDB.Close(); cerr != nil {
-						searchErrors = append(searchErrors, fmt.Sprintf("vault %q: close failed", alias))
-					}
-					continue
-				}
 			}
-			if cerr := vaultDB.Close(); cerr != nil {
-				searchErrors = append(searchErrors, fmt.Sprintf("vault %q: close failed", alias))
+			if len(results) == 0 {
+				if cerr := vaultDB.Close(); cerr != nil {
+					searchErrors = append(searchErrors, fmt.Sprintf("vault %q: close failed", alias))
+				}
+				continue
 			}
+		}
+		if cerr := vaultDB.Close(); cerr != nil {
+			searchErrors = append(searchErrors, fmt.Sprintf("vault %q: close failed", alias))
+		}
 
 		if err != nil {
 			// SECURITY: Use alias in error, not raw DB error which may contain paths

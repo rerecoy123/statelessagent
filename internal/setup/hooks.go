@@ -43,12 +43,6 @@ type hookAction struct {
 	Command string `json:"command"`
 }
 
-type claudeSettings struct {
-	Hooks map[string][]hookEntry `json:"hooks"`
-	// Preserve other fields
-	Extra map[string]json.RawMessage `json:"-"`
-}
-
 // SetupHooks installs SAME hooks into .claude/settings.json.
 func SetupHooks(vaultPath string) error {
 	settingsPath := filepath.Join(vaultPath, ".claude", "settings.json")

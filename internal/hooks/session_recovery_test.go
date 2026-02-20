@@ -768,10 +768,8 @@ func TestFormatRecoveryContext_EmptyFields(t *testing.T) {
 		t.Errorf("expected header even with empty fields, got: %s", result)
 	}
 	// Should NOT contain "Summary:" line since summary is empty.
-	if strings.Contains(result, "**Summary:**  ") {
-		// The format is fmt.Sprintf("**Summary:** %s\n", rs.Summary) which would produce
-		// "**Summary:** \n" — that's fine, the code checks `if rs.Summary != ""`.
-		// Actually looking at the code, it does check `if rs.Summary != ""`.
+	if strings.Contains(result, "**Summary:**") {
+		t.Errorf("expected summary line to be omitted when summary is empty, got: %s", result)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
@@ -165,7 +166,9 @@ func Install(opts InstallOptions) (*InstallResult, error) {
 		fixConfigVaultPath(configDest, absDir)
 	} else {
 		// Generate a minimal config pointing at this vault
-		config.GenerateConfig(absDir)
+		if err := config.GenerateConfig(absDir); err != nil {
+			return nil, fmt.Errorf("generate config: %w", err)
+		}
 	}
 
 	// 9. Reindex (unless --no-index)
@@ -442,13 +445,13 @@ func compareSemver(a, b string) int {
 		parts := strings.Split(s, ".")
 		var major, minor, patch int
 		if len(parts) >= 1 {
-			fmt.Sscanf(parts[0], "%d", &major)
+			major, _ = strconv.Atoi(parts[0])
 		}
 		if len(parts) >= 2 {
-			fmt.Sscanf(parts[1], "%d", &minor)
+			minor, _ = strconv.Atoi(parts[1])
 		}
 		if len(parts) >= 3 {
-			fmt.Sscanf(parts[2], "%d", &patch)
+			patch, _ = strconv.Atoi(parts[2])
 		}
 		return major, minor, patch
 	}

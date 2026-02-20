@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/sgx-labs/statelessagent/internal/cli"
@@ -38,7 +39,7 @@ func CheckGraduation(db *store.DB) string {
 			continue
 		}
 		if tip.Condition(db) {
-			db.RecordMilestone(tip.Key)
+			_ = db.RecordMilestone(tip.Key) // best-effort milestone telemetry
 			return tip.Message()
 		}
 	}
@@ -78,8 +79,10 @@ func getCommitCount() int {
 	if err != nil {
 		return 0
 	}
-	var count int
-	fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &count)
+	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0
+	}
 	return count
 }
 

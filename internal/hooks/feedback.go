@@ -60,7 +60,7 @@ func runFeedbackLoop(db *store.DB, input *HookInput) *HookOutput {
 	}
 
 	if len(referencedPaths) > 0 {
-		db.IncrementAccessCount(referencedPaths)
+		_ = db.IncrementAccessCount(referencedPaths) // best-effort relevance signal
 	}
 
 	if !isQuietMode() {

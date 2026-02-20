@@ -194,7 +194,7 @@ func SaveGuardConfig(gc GuardConfig) error {
 	// Read existing to preserve other keys
 	var cfg configFile
 	if data, err := os.ReadFile(path); err == nil {
-		json.Unmarshal(data, &cfg)
+		_ = json.Unmarshal(data, &cfg)
 	}
 
 	cfg.Guard = &gc

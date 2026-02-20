@@ -151,7 +151,7 @@ func scanUsage(rows interface {
 			&pathsJSON, &r.EstimatedTokens, &wasRef); err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(pathsJSON), &r.InjectedPaths)
+		_ = json.Unmarshal([]byte(pathsJSON), &r.InjectedPaths)
 		r.WasReferenced = wasRef != 0
 		records = append(records, r)
 	}

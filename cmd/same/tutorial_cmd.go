@@ -162,14 +162,14 @@ func (ts *tutorialState) search(query string, topK int) ([]store.SearchResult, e
 			snippet = snippet[:500]
 		}
 		results = append(results, store.SearchResult{
-			Path:       rr.Path,
-			Title:      rr.Title,
-			Snippet:    snippet,
-			Domain:     rr.Domain,
-			Workstream: rr.Workstream,
-			Tags:       rr.Tags,
+			Path:        rr.Path,
+			Title:       rr.Title,
+			Snippet:     snippet,
+			Domain:      rr.Domain,
+			Workstream:  rr.Workstream,
+			Tags:        rr.Tags,
 			ContentType: rr.ContentType,
-			Score:      0.5,
+			Score:       0.5,
 		})
 	}
 	return results, nil

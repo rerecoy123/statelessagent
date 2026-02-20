@@ -113,7 +113,7 @@ func (s *Scanner) ScanFiles(files []string) (*ScanResult, error) {
 			checkLen = 8192
 		}
 		if checkLen > 0 && bytes.ContainsRune(content[:checkLen], 0) {
-			AppendAudit(s.VaultPath, AuditEntry{
+			_ = AppendAudit(s.VaultPath, AuditEntry{
 				Action:     "scan_skip_binary",
 				FilesCount: 1,
 				Passed:     true,
@@ -126,7 +126,7 @@ func (s *Scanner) ScanFiles(files []string) (*ScanResult, error) {
 	}
 
 	// Audit the scan
-	AppendAudit(s.VaultPath, AuditEntry{
+	_ = AppendAudit(s.VaultPath, AuditEntry{
 		Action:     "scan",
 		FilesCount: len(files),
 		Passed:     result.Passed,

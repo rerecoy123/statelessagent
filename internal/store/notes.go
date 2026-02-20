@@ -82,7 +82,9 @@ func (db *DB) BulkInsertNotes(records []NoteRecord, embeddings [][]float32) (map
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	noteStmt, err := tx.Prepare(`
 		INSERT INTO vault_notes (path, title, tags, domain, workstream, agent, chunk_id, chunk_heading,
@@ -148,7 +150,9 @@ func (db *DB) BulkInsertNotesLite(records []NoteRecord) (map[string]int64, error
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO vault_notes (path, title, tags, domain, workstream, agent, chunk_id, chunk_heading,
@@ -230,7 +234,9 @@ func (db *DB) DeleteByPath(path string) error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	// Keep the knowledge graph in sync even when SQLite FK pragmas differ.
 	// We remove note nodes for this path and connected edges, then prune
@@ -275,7 +281,9 @@ func (db *DB) DeleteAllNotes() error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	// Reset graph tables as part of force-clear to avoid stale nodes/edges.
 	if _, err := tx.Exec("DELETE FROM graph_edges"); err != nil && !isNoSuchTableErr(err) {
@@ -541,6 +549,6 @@ func (db *DB) SetAccessBoost(path string, boost int) error {
 // ParseTags parses the JSON tags string into a slice.
 func ParseTags(tagsJSON string) []string {
 	var tags []string
-	json.Unmarshal([]byte(tagsJSON), &tags)
+	_ = json.Unmarshal([]byte(tagsJSON), &tags)
 	return tags
 }

@@ -401,7 +401,7 @@ func runDoctor(jsonOut bool) error {
 					// Embedding provider down — fall through to keyword check
 				}
 				// Actually test keyword search works (FTS5 or LIKE-based)
-				mode := "keyword"
+				var mode string
 				if db.FTSAvailable() {
 					results, ftsErr := db.FTS5Search("test", store.SearchOptions{TopK: 1})
 					if ftsErr != nil || results == nil {

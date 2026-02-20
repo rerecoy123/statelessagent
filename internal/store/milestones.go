@@ -6,10 +6,10 @@ import (
 
 // Milestone keys
 const (
-	MilestoneCIInit       = "ci_init_suggested"
-	MilestoneGuardInit    = "guard_init_suggested"
-	MilestonePushProtect  = "push_protect_suggested"
-	MilestoneFirstWeek    = "first_week_tips"
+	MilestoneCIInit      = "ci_init_suggested"
+	MilestoneGuardInit   = "guard_init_suggested"
+	MilestonePushProtect = "push_protect_suggested"
+	MilestoneFirstWeek   = "first_week_tips"
 )
 
 // MilestoneShown checks if a milestone has already been shown.
