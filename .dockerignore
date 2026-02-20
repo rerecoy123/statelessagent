@@ -1,0 +1,8 @@
+.git
+build/
+.devlog/
+research/
+sessions/
+*.db
+.kilocode/
+.same/
