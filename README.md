@@ -155,6 +155,7 @@ Your markdown notes are embedded with your configured provider (local or cloud) 
 | File claims (`same claim`) | Advisory read/write ownership for multi-agent coordination | No |
 | Knowledge graph (`same graph`) | Traverse note/file/agent/decision relationships | No* |
 | Context surfacing | Relevant notes injected into AI prompts | No* |
+| Web dashboard (`same web`) | Local web UI for browsing and searching your vault | No* |
 | `same demo` | Try SAME in 60 seconds | No |
 | `same tutorial` | 7 hands-on lessons | No |
 | `same doctor` | 19 diagnostic checks | No |
@@ -185,6 +186,29 @@ Markdown note links (for example `notes/next.md`) are connected as note-to-note 
 LLM graph extraction is `off` by default; enable it explicitly with `SAME_GRAPH_LLM=local-only` (local endpoints only) or `SAME_GRAPH_LLM=on`.
 
 `same web` now surfaces graph highlights (node/edge density + top relationship types) and shows per-note knowledge connections directly in the note viewer, so you can inspect relationship paths without leaving the dashboard.
+
+---
+
+## Web Dashboard
+
+Browse and search your vault from a local web UI:
+
+```bash
+same web              # opens http://localhost:4078
+same web --open       # auto-opens browser
+same web --port 8080  # custom port
+```
+
+**Features:**
+- Dashboard with vault statistics (notes, chunks, DB size, search mode)
+- Full-text and semantic search with relevance scoring
+- Browse all notes with filtering and sorting
+- Note viewer with metadata (tags, domain, content type)
+- Knowledge graph highlights per note
+- Pinned notes overview
+- Dark/light theme (auto-detects system preference)
+
+Runs on `127.0.0.1` only — never exposed to the network. No external dependencies. Works with keyword search if Ollama is unavailable.
 
 ---
 
@@ -267,6 +291,7 @@ Use `same init --mcp-only` to skip Claude Code hooks and just register the MCP s
 | **MCP tools** | 12 | 9 | Client only (connects to external MCP) |
 | **Hook integration** | Yes (Claude Code) | No | No |
 | **Knowledge graph** | Yes (built-in, SQLite) | Yes (requires Neo4j/Memgraph) | No |
+| **Web dashboard** | Yes (local) | Cloud only (managed) | Dashboard (self-hosted) |
 | **Session continuity** | Handoffs + pins + recovery | Session/user memory layers | Core feature (stateful agents) |
 | **Published benchmarks** | P=0.995, MRR=0.949 | None published | None published |
 | **Runs on Pi / edge** | Yes (~10MB binary) | No (heavy Python deps) | No (heavy Python deps) |
@@ -344,6 +369,27 @@ same init --yes
 
 Requires Go 1.25+ and CGO.
 
+**Docker:**
+```bash
+docker build -t same .
+docker run --rm -v ~/my-notes:/vault same status
+docker run --rm -v ~/my-notes:/vault same search "authentication"
+```
+
+See [`docs/docker.md`](docs/docker.md) for full usage guide.
+
+**Shell completions:**
+```bash
+# Bash
+source <(same completion bash)
+
+# Zsh
+same completion zsh > "${fpath[1]}/_same"
+
+# Fish
+same completion fish | source
+```
+
 </details>
 
 ---
@@ -391,11 +437,13 @@ Requires Go 1.25+ and CGO.
 | `same guard settings set push-protect on` | Enable push protection |
 | `same push-allow` | One-time push authorization |
 | `same watch` | Auto-reindex on file changes |
+| `same web` | Local web dashboard for browsing and searching |
 | `same budget` | Context utilization report |
 | `same log` | Recent SAME activity |
 | `same stats` | Index statistics |
 | `same update` | Update to latest version |
 | `same version [--check]` | Version and update check |
+| `same completion [bash\|zsh\|fish]` | Generate shell completion scripts |
 
 </details>
 
