@@ -19,6 +19,11 @@
 - **Web graph APIs (`/api/graph/stats`, `/api/graph/connections/{path}`)** — dashboard can now read graph density/relationship stats and fetch per-note traversal paths with input validation + private-path filtering
 - **Web dashboard graph UX** — added a graph highlights section (nodes, edges, avg degree, top relationship types) and a note-level “Knowledge Connections” panel that renders relationship-labeled paths
 - **Tutorial graph lesson (`same tutorial graph`)** — onboarding now includes a hands-on relationship traversal lesson showing how links become graph paths
+- **Example configuration files** — added `examples/` reference configs for Ollama, OpenAI, OpenAI-compatible, keyword-only, and Raspberry Pi setups, plus MCP integration examples for Claude Code and Cursor
+- **Shell completion command (`same completion`)** — added CLI generation for bash, zsh, and fish completion scripts via Cobra's completion support
+- **Docker support artifacts** — added multi-stage Dockerfile, `.dockerignore`, and `docs/docker.md` usage guide (keyword-only by default with optional external Ollama)
+- **`make lint` target + `.golangci.yml`** — added project lint configuration and Makefile integration for `errcheck`, `govet`, `staticcheck`, `misspell`, `goimports`, and related checks
+- **Man page generation (`same gendocs`)** — added hidden CLI command + `make man` target to generate man pages from the Cobra command tree
 
 ### Fixed
 
@@ -56,6 +61,15 @@
 - **Markdown cross-note linking** — `.md` references now map to note nodes, enabling direct note-to-note traversal (for example, `notes/a.md -> notes/b.md`)
 - **Graph reference-path normalization** — extraction now rejects absolute/external-style path references (for example, `Users/...`, `/...`, `.windsurf/worktrees`) to reduce noisy out-of-vault graph nodes
 - **Precheck scope clarity** — `make precheck` now labels its blocklist scan as repo-scope release hygiene and explicitly notes what it does not cover (user vaults, full history, forks, mirrors); `make precheck-full` adds an all-tracked-files blocklist sweep
+- **Lint cleanup pass** — resolved unchecked error returns, dead code, formatting/import drift, and minor misspellings flagged by golangci-lint across CLI/internal packages
+
+### Documentation
+
+- **README: Web dashboard section** — added dedicated `same web` usage examples and a dashboard capability summary
+- **README: Docker install option** — added Docker build/run examples and linked `docs/docker.md`
+- **README: shell completion setup** — added bash, zsh, and fish completion instructions
+- **README: CLI reference updates** — added `same web` and `same completion` entries
+- **README: comparison table update** — added a web dashboard row to SAME vs. alternatives
 
 ### Privacy
 
