@@ -193,6 +193,7 @@ Need help? https://discord.gg/9KfTkcGs7g`,
 		watchCmd(),
 		benchCmd(),
 		ciCmd(),
+		gendocsCmd(),
 	)
 
 	addGrouped("diagnostics",

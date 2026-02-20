@@ -10,7 +10,7 @@ export CGO_ENABLED := 1
 # Also disable zig's ubsan which causes linker errors on cross-compile
 CROSS_CFLAGS := -I$(CURDIR)/cgo-headers -fno-sanitize=undefined
 
-.PHONY: all build clean test lint precheck precheck-full provider-smoke provider-smoke-full release-candidate release-candidate-full darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64 cross-all install
+.PHONY: all build clean test lint man precheck precheck-full provider-smoke provider-smoke-full release-candidate release-candidate-full darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64 cross-all install
 
 all: build
 
@@ -22,6 +22,10 @@ test:
 
 lint:
 	golangci-lint run ./...
+
+man: build
+	mkdir -p docs/man
+	./build/same gendocs --dir docs/man
 
 precheck:
 	@/usr/bin/env bash .scripts/precheck.sh
