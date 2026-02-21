@@ -96,7 +96,7 @@ func launchBackground(addr string, port int, vaultPath string) error {
 
 	child := exec.Command(exe, "web", "--fg", "--port", fmt.Sprintf("%d", port))
 	child.Env = append(os.Environ(), "_SAME_WEB_BG=1", "VAULT_PATH="+vaultPath)
-	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	child.SysProcAttr = backgroundProcessSysProcAttr()
 	child.Stdout = nil
 	child.Stderr = nil
 
