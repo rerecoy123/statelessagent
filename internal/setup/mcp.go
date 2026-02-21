@@ -157,7 +157,7 @@ func MCPUsesPortablePath(vaultPath string) (portable bool, exists bool) {
 // setupMCPInteractive prompts and sets up MCP.
 func setupMCPInteractive(vaultPath string, autoAccept bool) {
 	// Use friendlier prompt text for non-developers
-	if autoAccept || confirm("  Set up MCP server for AI tools? (recommended)", true) {
+	if autoAccept || confirm("  Set up MCP server for AI tools? (highly recommended)", true) {
 		if err := SetupMCP(vaultPath); err != nil {
 			fmt.Printf("  %s!%s Could not set up connection: %v\n",
 				cli.Yellow, cli.Reset, err)

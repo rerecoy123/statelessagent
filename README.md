@@ -502,7 +502,7 @@ Supported embedding models (auto-detected dimensions):
 | Model | Dims | Notes |
 |-------|------|-------|
 | `nomic-embed-text` | 768 | Default. Great balance of quality and speed |
-| `snowflake-arctic-embed2` | 768 | Recommended upgrade. Best retrieval in its size class |
+| `snowflake-arctic-embed2` | 1024 | Recommended upgrade. Best retrieval in its size class |
 | `mxbai-embed-large` | 1024 | Highest overall MTEB average |
 | `all-minilm` | 384 | Lightweight (~90MB). Good for constrained hardware |
 | `snowflake-arctic-embed` | 1024 | v1 large model |

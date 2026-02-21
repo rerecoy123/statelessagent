@@ -251,7 +251,7 @@ func ollamaDefaultDims(model string) int {
 	case "snowflake-arctic-embed":
 		return 1024
 	case "snowflake-arctic-embed2":
-		return 768
+		return 1024
 	case "embeddinggemma":
 		return 768
 	case "qwen3-embedding":

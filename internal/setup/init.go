@@ -287,39 +287,61 @@ func RunInit(opts InitOptions) error {
 		}
 	} else {
 		cli.Section("Embeddings")
-		if err := checkOllama(); err != nil {
-			if opts.Yes {
-				// Non-interactive (piped install) — silently fall back to lite mode
+		if opts.Yes {
+			// Non-interactive: try Ollama silently, fall back to keyword-only
+			if err := checkOllama(); err != nil {
 				providerReady = false
-			} else {
-				// Interactive fallback guidance.
-				fmt.Println()
-				fmt.Printf("  %sSAME needs an embedding provider for semantic search.%s\n\n", cli.Bold, cli.Reset)
-				fmt.Printf("    %sWith embeddings%s          %sWithout embeddings%s\n", cli.Green, cli.Reset, cli.Dim, cli.Reset)
-				fmt.Printf("    Semantic search           Keyword matching only\n")
-				fmt.Printf("    \"auth flow\" finds          \"auth flow\" misses\n")
-				fmt.Printf("    \"login system\"             \"login system\"\n")
-				fmt.Printf("    Understands %smeaning%s        Exact words only\n\n", cli.Bold, cli.Reset)
-				fmt.Printf("  %sAlternatives:%s\n", cli.Dim, cli.Reset)
-				fmt.Printf("  %s  • Start Ollama (provider=ollama) for local-first embeddings%s\n", cli.Dim, cli.Reset)
-				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=openai or openai-compatible (llama.cpp, VLLM, LM Studio, OpenAI)%s\n", cli.Dim, cli.Reset)
-				fmt.Printf("  %s  • SAME_EMBED_PROVIDER=none (or --provider none) for keyword-only mode%s\n\n", cli.Dim, cli.Reset)
+			}
+		} else {
+			// Interactive: probe Ollama, then let user choose provider
+			ollamaDetected := probeOllama()
+			chosen := offerProviderChoice(ollamaDetected)
 
-				if !confirm("  Continue with keyword-only mode?", false) {
-					return fmt.Errorf("setup canceled — configure an embedding provider and run 'same init' again")
+			switch chosen {
+			case "ollama":
+				if err := checkOllama(); err != nil {
+					providerReady = false
 				}
-
-				// They said yes — one final confirmation.
-				fmt.Println()
-				fmt.Printf("  %sSemantic search is SAME's core feature — it's the difference\n", cli.Dim)
-				fmt.Printf("  between your AI finding the right context and missing it entirely.%s\n\n", cli.Reset)
-				fmt.Printf("  Add embeddings anytime and run %ssame reindex%s to upgrade.\n\n", cli.Bold, cli.Reset)
-
-				if !confirm("  Are you sure you want keyword-only mode?", false) {
-					return fmt.Errorf("setup canceled — configure an embedding provider and run 'same init' again")
+			case "openai":
+				embedProvider = chosen
+				_ = os.Setenv("SAME_EMBED_PROVIDER", chosen)
+				// Check for API key
+				apiKey := os.Getenv("SAME_EMBED_API_KEY")
+				if apiKey == "" {
+					apiKey = os.Getenv("OPENAI_API_KEY")
 				}
-
+				if apiKey == "" {
+					fmt.Printf("\n  %s!%s OpenAI requires an API key.\n", cli.Yellow, cli.Reset)
+					fmt.Printf("  %sSet OPENAI_API_KEY or SAME_EMBED_API_KEY in your environment,%s\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %sor add api_key under [embedding] in ~/.config/same/config.toml%s\n\n", cli.Dim, cli.Reset)
+					return fmt.Errorf("OpenAI API key not found — set it and run 'same init' again")
+				}
+				fmt.Printf("\n  %s✓%s Using OpenAI API\n", cli.Green, cli.Reset)
+			case "openai-compatible":
+				embedProvider = chosen
+				_ = os.Setenv("SAME_EMBED_PROVIDER", chosen)
+				baseURL := os.Getenv("SAME_EMBED_BASE_URL")
+				ec := config.EmbeddingProviderConfig()
+				if baseURL == "" && ec.BaseURL != "" {
+					baseURL = ec.BaseURL
+				}
+				if baseURL == "" {
+					fmt.Printf("\n  %s!%s OpenAI-compatible requires a base URL.\n", cli.Yellow, cli.Reset)
+					fmt.Printf("  %sSet SAME_EMBED_BASE_URL in your environment,%s\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %sor add base_url under [embedding] in ~/.config/same/config.toml%s\n\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %sExamples:%s\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %s  llama.cpp:  http://localhost:8080%s\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %s  LM Studio:  http://localhost:1234%s\n", cli.Dim, cli.Reset)
+					fmt.Printf("  %s  OpenRouter: https://openrouter.ai/api/v1%s\n\n", cli.Dim, cli.Reset)
+					return fmt.Errorf("base URL not configured — set it and run 'same init' again")
+				}
+				fmt.Printf("\n  %s✓%s Using OpenAI-compatible endpoint: %s\n", cli.Green, cli.Reset, baseURL)
+			case "none":
+				embedProvider = "none"
+				_ = os.Setenv("SAME_EMBED_PROVIDER", "none")
 				providerReady = false
+				fmt.Printf("\n  %s✓%s Keyword-only mode\n", cli.Green, cli.Reset)
+				fmt.Printf("  %s  Add an embedding provider anytime and run 'same reindex' to upgrade.%s\n", cli.Dim, cli.Reset)
 			}
 		}
 	}
@@ -488,6 +510,18 @@ func RunInit(opts InitOptions) error {
 	fmt.Println()
 	fmt.Printf("  Run %ssame status%s anytime to check on things.\n", cli.Bold, cli.Reset)
 
+	// Next steps — tell user what to do now
+	cli.Section("Get Started")
+	fmt.Printf("  Your AI now has memory. Start a session:\n\n")
+	fmt.Printf("    %s$%s claude              %s# Claude Code (full hooks + MCP experience)%s\n",
+		cli.Cyan, cli.Reset, cli.Dim, cli.Reset)
+	fmt.Printf("    %s$%s cursor .            %s# Cursor (MCP tools available)%s\n",
+		cli.Cyan, cli.Reset, cli.Dim, cli.Reset)
+	fmt.Printf("    %s$%s same search \"...\"   %s# Search from the command line%s\n",
+		cli.Cyan, cli.Reset, cli.Dim, cli.Reset)
+	fmt.Printf("    %s$%s same web --open     %s# Browse your vault in the browser%s\n",
+		cli.Cyan, cli.Reset, cli.Dim, cli.Reset)
+
 	// Privacy at the end
 	cli.Section("Privacy")
 	ec := config.EmbeddingProviderConfig()
@@ -566,7 +600,7 @@ func offerSeedInstall(opts InitOptions) bool {
 	}
 	fmt.Println()
 
-	fmt.Printf("  Pick a number to install, or Enter to skip: ")
+	fmt.Printf("  Pick numbers to install (e.g. 1,3,8), or Enter to skip: ")
 	line, err = reader.ReadString('\n')
 	if err != nil {
 		fmt.Println() // handle EOF/Ctrl+D
@@ -579,55 +613,82 @@ func offerSeedInstall(opts InitOptions) bool {
 		return false
 	}
 
-	var choiceIdx int
-	var n int
-	if _, err := fmt.Sscanf(line, "%d", &n); err == nil && n >= 1 && n <= len(manifest.Seeds) {
-		choiceIdx = n - 1
-	} else {
-		fmt.Printf("  %s!%s Invalid choice\n", cli.Yellow, cli.Reset)
+	// Parse comma-separated or single number
+	var choices []int
+	for _, part := range strings.Split(line, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(part, "%d", &n); err != nil || n < 1 || n > len(manifest.Seeds) {
+			fmt.Printf("  %s!%s Invalid choice: %s\n", cli.Yellow, cli.Reset, part)
+			return false
+		}
+		choices = append(choices, n-1)
+	}
+
+	if len(choices) == 0 {
+		fmt.Printf("\n  No problem! Install seeds anytime with %ssame seed install <name>%s\n", cli.Bold, cli.Reset)
 		return false
 	}
 
-	chosen := manifest.Seeds[choiceIdx]
-	destDir := filepath.Join(seed.DefaultSeedDir(), chosen.Name)
-	fmt.Println()
-	fmt.Printf("  Installing %s%s%s to %s...\n\n",
-		cli.Bold, chosen.DisplayName, cli.Reset, cli.ShortenHome(destDir))
+	installed := false
+	for _, idx := range choices {
+		chosen := manifest.Seeds[idx]
 
-	installOpts := seed.InstallOptions{
-		Name:    chosen.Name,
-		Version: opts.Version,
-		OnDownloadStart: func() {
-			fmt.Printf("  Downloading...               ")
-		},
-		OnDownloadDone: func(sizeKB int) {
-			fmt.Printf("done (%d KB)\n", sizeKB)
-		},
-		OnExtractDone: func(fileCount int) {
-			fmt.Printf("  Extracting %d files...       done\n", fileCount)
-		},
-		OnIndexDone: func(chunks int) {
-			if chunks > 0 {
-				fmt.Printf("  Indexing...                  done (%d chunks)\n", chunks)
-			} else {
-				fmt.Printf("  Indexing...                  skipped\n")
-			}
-		},
+		// Skip if already installed
+		if seed.IsInstalled(chosen.Name) {
+			fmt.Printf("\n  %s✓%s %s already installed — skipping\n",
+				cli.Green, cli.Reset, chosen.DisplayName)
+			installed = true
+			continue
+		}
+
+		destDir := filepath.Join(seed.DefaultSeedDir(), chosen.Name)
+		fmt.Println()
+		fmt.Printf("  Installing %s%s%s to %s...\n\n",
+			cli.Bold, chosen.DisplayName, cli.Reset, cli.ShortenHome(destDir))
+
+		installOpts := seed.InstallOptions{
+			Name:    chosen.Name,
+			Version: opts.Version,
+			OnDownloadStart: func() {
+				fmt.Printf("  Downloading...               ")
+			},
+			OnDownloadDone: func(sizeKB int) {
+				fmt.Printf("done (%d KB)\n", sizeKB)
+			},
+			OnExtractDone: func(fileCount int) {
+				fmt.Printf("  Extracting %d files...       done\n", fileCount)
+			},
+			OnIndexDone: func(chunks int) {
+				if chunks > 0 {
+					fmt.Printf("  Indexing...                  done (%d chunks)\n", chunks)
+				} else {
+					fmt.Printf("  Indexing...                  skipped\n")
+				}
+			},
+		}
+
+		result, err := seed.Install(installOpts)
+		if err != nil {
+			fmt.Printf("  %s!%s Install failed: %v\n", cli.Yellow, cli.Reset, err)
+			fmt.Printf("  %sYou can try again with: same seed install %s%s\n\n", cli.Dim, chosen.Name, cli.Reset)
+			continue
+		}
+
+		fmt.Printf("  Registered as vault %q\n", chosen.Name)
+		fmt.Printf("  Installed to %s\n", cli.ShortenHome(result.DestDir))
+		installed = true
 	}
 
-	result, err := seed.Install(installOpts)
-	if err != nil {
-		fmt.Printf("  %s!%s Install failed: %v\n", cli.Yellow, cli.Reset, err)
-		fmt.Printf("  %sYou can try again with: same seed install %s%s\n\n", cli.Dim, chosen.Name, cli.Reset)
-		return false
+	if installed {
+		seed.PrintLegalNotice()
+		fmt.Printf("\n  %sSearch seeds with:%s same search \"your query\" --vault <name>\n\n",
+			cli.Bold, cli.Reset)
 	}
-
-	fmt.Printf("  Registered as vault %q\n", chosen.Name)
-	seed.PrintLegalNotice()
-	fmt.Printf("\n  Installed to %s\n", cli.ShortenHome(result.DestDir))
-	fmt.Printf("\n  %sSearch it with:%s same search \"your query\" --vault %s\n\n",
-		cli.Bold, cli.Reset, chosen.Name)
-	return true
+	return installed
 }
 
 // showSeedIntro displays the seed vaults section during init.
@@ -636,7 +697,7 @@ func offerSeedInstall(opts InitOptions) bool {
 func showSeedIntro(opts InitOptions) {
 	cli.Section("Seed Vaults")
 	fmt.Printf("  Add expert knowledge alongside your own notes.\n")
-	fmt.Printf("  Pre-built, domain-specific — install in one command.\n")
+	fmt.Printf("  Pre-built, domain-specific — each installs to its own directory in %s~/same-seeds/%s.\n", cli.Dim, cli.Reset)
 	fmt.Println()
 
 	manifest, err := seed.FetchManifest(false)
@@ -669,9 +730,9 @@ func showSeedIntro(opts InitOptions) {
 		return
 	}
 
-	// Interactive — let user pick
+	// Interactive — let user pick (supports comma-separated multi-select)
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("  Pick a number to install, or Enter to skip: ")
+	fmt.Printf("  Pick numbers to install (e.g. 1,3,8), or Enter to skip: ")
 	line, err := reader.ReadString('\n')
 	if err != nil {
 		fmt.Println()
@@ -684,51 +745,78 @@ func showSeedIntro(opts InitOptions) {
 		return
 	}
 
-	var n int
-	if _, err := fmt.Sscanf(line, "%d", &n); err != nil || n < 1 || n > len(manifest.Seeds) {
-		fmt.Printf("  %s!%s Invalid choice\n", cli.Yellow, cli.Reset)
+	// Parse comma-separated or single number
+	var choices []int
+	for _, part := range strings.Split(line, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(part, "%d", &n); err != nil || n < 1 || n > len(manifest.Seeds) {
+			fmt.Printf("  %s!%s Invalid choice: %s\n", cli.Yellow, cli.Reset, part)
+			return
+		}
+		choices = append(choices, n-1)
+	}
+
+	if len(choices) == 0 {
+		fmt.Printf("\n  %sInstall seeds anytime with: same seed install <name>%s\n", cli.Dim, cli.Reset)
 		return
 	}
 
-	chosen := manifest.Seeds[n-1]
-	destDir := filepath.Join(seed.DefaultSeedDir(), chosen.Name)
-	fmt.Println()
-	fmt.Printf("  Installing %s%s%s to %s...\n\n",
-		cli.Bold, chosen.DisplayName, cli.Reset, cli.ShortenHome(destDir))
+	for _, idx := range choices {
+		chosen := manifest.Seeds[idx]
 
-	installOpts := seed.InstallOptions{
-		Name:    chosen.Name,
-		Version: opts.Version,
-		OnDownloadStart: func() {
-			fmt.Printf("  Downloading...               ")
-		},
-		OnDownloadDone: func(sizeKB int) {
-			fmt.Printf("done (%d KB)\n", sizeKB)
-		},
-		OnExtractDone: func(fileCount int) {
-			fmt.Printf("  Extracting %d files...       done\n", fileCount)
-		},
-		OnIndexDone: func(chunks int) {
-			if chunks > 0 {
-				fmt.Printf("  Indexing...                  done (%d chunks)\n", chunks)
-			} else {
-				fmt.Printf("  Indexing...                  skipped\n")
-			}
-		},
+		// Skip if already installed
+		if seed.IsInstalled(chosen.Name) {
+			fmt.Printf("\n  %s✓%s %s already installed — skipping\n",
+				cli.Green, cli.Reset, chosen.DisplayName)
+			continue
+		}
+
+		destDir := filepath.Join(seed.DefaultSeedDir(), chosen.Name)
+		fmt.Println()
+		fmt.Printf("  Installing %s%s%s to %s...\n\n",
+			cli.Bold, chosen.DisplayName, cli.Reset, cli.ShortenHome(destDir))
+
+		installOpts := seed.InstallOptions{
+			Name:    chosen.Name,
+			Version: opts.Version,
+			OnDownloadStart: func() {
+				fmt.Printf("  Downloading...               ")
+			},
+			OnDownloadDone: func(sizeKB int) {
+				fmt.Printf("done (%d KB)\n", sizeKB)
+			},
+			OnExtractDone: func(fileCount int) {
+				fmt.Printf("  Extracting %d files...       done\n", fileCount)
+			},
+			OnIndexDone: func(chunks int) {
+				if chunks > 0 {
+					fmt.Printf("  Indexing...                  done (%d chunks)\n", chunks)
+				} else {
+					fmt.Printf("  Indexing...                  skipped\n")
+				}
+			},
+		}
+
+		result, err := seed.Install(installOpts)
+		if err != nil {
+			fmt.Printf("  %s!%s Install failed: %v\n", cli.Yellow, cli.Reset, err)
+			fmt.Printf("  %sYou can try again with: same seed install %s%s\n\n", cli.Dim, chosen.Name, cli.Reset)
+			continue
+		}
+
+		fmt.Printf("  Registered as vault %q\n", chosen.Name)
+		fmt.Printf("  Installed to %s\n", cli.ShortenHome(result.DestDir))
 	}
 
-	result, err := seed.Install(installOpts)
-	if err != nil {
-		fmt.Printf("  %s!%s Install failed: %v\n", cli.Yellow, cli.Reset, err)
-		fmt.Printf("  %sYou can try again with: same seed install %s%s\n\n", cli.Dim, chosen.Name, cli.Reset)
-		return
+	if len(choices) > 0 {
+		seed.PrintLegalNotice()
+		fmt.Printf("\n  %sSearch seeds with:%s same search \"your query\" --vault <name>\n\n",
+			cli.Bold, cli.Reset)
 	}
-
-	fmt.Printf("  Registered as vault %q\n", chosen.Name)
-	seed.PrintLegalNotice()
-	fmt.Printf("\n  Installed to %s\n", cli.ShortenHome(result.DestDir))
-	fmt.Printf("\n  %sSearch it with:%s same search \"your query\" --vault %s\n\n",
-		cli.Bold, cli.Reset, chosen.Name)
 }
 
 // offerModelChoice shows available embedding models and lets the user pick one.
@@ -801,17 +889,148 @@ func offerModelChoice(provider string) {
 		return // already selected
 	}
 
-	// Update config
+	// Persist model choice in env so it's visible for the rest of init
+	// (config file write may fail if vault path isn't known yet).
+	_ = os.Setenv("SAME_EMBED_MODEL", chosen.Name)
+
+	// Also write to config file if vault is known
 	vp := config.VaultPath()
 	if vp != "" {
 		if err := config.SetEmbeddingModel(vp, chosen.Name); err != nil {
 			fmt.Printf("  %s!%s Could not save model choice: %v\n", cli.Yellow, cli.Reset, err)
-			return
+		}
+	}
+
+	// For Ollama, pull the model if not already available
+	if provider == "ollama" {
+		ollamaURL := "http://localhost:11434"
+		if v := os.Getenv("OLLAMA_URL"); v != "" {
+			ollamaURL = v
+		}
+		httpClient := &http.Client{Timeout: 5 * time.Second}
+		resp, err := httpClient.Get(ollamaURL + "/api/tags")
+		if err == nil {
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			var tagsResp struct {
+				Models []struct {
+					Name string `json:"name"`
+				} `json:"models"`
+			}
+			_ = json.Unmarshal(body, &tagsResp)
+			found := false
+			for _, m := range tagsResp.Models {
+				if m.Name == chosen.Name || strings.HasPrefix(m.Name, chosen.Name+":") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("  %s!%s %s not found — pulling...\n", cli.Yellow, cli.Reset, chosen.Name)
+				if err := pullModel(ollamaURL, chosen.Name); err != nil {
+					fmt.Printf("  %s✗%s Failed to pull: %v\n", cli.Yellow, cli.Reset, err)
+					fmt.Printf("\n  Run manually: ollama pull %s\n", chosen.Name)
+					return
+				}
+			}
 		}
 	}
 
 	fmt.Printf("  %s✓%s Switched to %s%s%s (%d dims)\n",
 		cli.Green, cli.Reset, cli.Bold, chosen.Name, cli.Reset, chosen.Dims)
+}
+
+// probeOllama silently checks if Ollama is responding on localhost.
+func probeOllama() bool {
+	ollamaURL := "http://localhost:11434"
+	if v := os.Getenv("OLLAMA_URL"); v != "" {
+		ollamaURL = v
+	}
+	u, err := url.Parse(ollamaURL)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return false
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(ollamaURL + "/api/tags")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// offerProviderChoice presents an interactive provider picker.
+// Returns the chosen provider name: "ollama", "openai", "openai-compatible", or "none".
+func offerProviderChoice(ollamaDetected bool) string {
+	fmt.Println()
+	if ollamaDetected {
+		fmt.Printf("  %s✓%s Ollama detected at localhost:11434\n\n", cli.Green, cli.Reset)
+	}
+	fmt.Printf("  %sChoose your embedding provider:%s\n\n", cli.Bold, cli.Reset)
+
+	ollamaLabel := "Ollama"
+	if ollamaDetected {
+		ollamaLabel = "Ollama (detected — local, private, recommended)"
+	} else {
+		ollamaLabel = "Ollama (requires install — ollama.com)"
+	}
+
+	options := []struct {
+		name  string
+		label string
+	}{
+		{"ollama", ollamaLabel},
+		{"openai", "OpenAI API (requires OPENAI_API_KEY)"},
+		{"openai-compatible", "OpenAI-compatible (llama.cpp, VLLM, LM Studio, OpenRouter)"},
+		{"none", "None (keyword-only mode — exact matches only)"},
+	}
+
+	for i, opt := range options {
+		fmt.Printf("    %s%d%s) %s\n", cli.Cyan, i+1, cli.Reset, opt.label)
+	}
+
+	defaultHint := ""
+	if ollamaDetected {
+		defaultHint = " [1]"
+	}
+	fmt.Printf("\n  Pick%s: ", defaultHint)
+
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		if ollamaDetected {
+			return "ollama"
+		}
+		return "none"
+	}
+	line = strings.TrimSpace(line)
+
+	if line == "" {
+		if ollamaDetected {
+			return "ollama"
+		}
+		// No default when Ollama not detected — re-prompt
+		fmt.Printf("  %s!%s Please pick a number (1-%d): ", cli.Yellow, cli.Reset, len(options))
+		line, err = reader.ReadString('\n')
+		if err != nil {
+			return "none"
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return "none"
+		}
+	}
+
+	var n int
+	if _, err := fmt.Sscanf(line, "%d", &n); err != nil || n < 1 || n > len(options) {
+		fmt.Printf("  %s!%s Invalid choice — defaulting to keyword-only\n", cli.Yellow, cli.Reset)
+		return "none"
+	}
+	return options[n-1].name
 }
 
 // checkOllama verifies Ollama is running and has the required model.
@@ -839,8 +1058,6 @@ func checkOllama() error {
 	if err != nil {
 		fmt.Printf("  %s✗%s Ollama is not running\n\n",
 			cli.Yellow, cli.Reset)
-		fmt.Println("  provider=ollama requires Ollama to generate local embeddings.")
-		fmt.Println()
 		fmt.Println("  To fix this:")
 		fmt.Println()
 		fmt.Println("  If you haven't installed Ollama yet:")
@@ -851,11 +1068,6 @@ func checkOllama() error {
 		fmt.Println("  If Ollama is already installed:")
 		fmt.Println("    - Look for the llama icon in your menu bar (Mac) or system tray (Windows)")
 		fmt.Println("    - If you don't see it, open the Ollama app")
-		fmt.Println()
-		fmt.Println("  Or switch provider:")
-		fmt.Println("    - SAME_EMBED_PROVIDER=openai")
-		fmt.Println("    - SAME_EMBED_PROVIDER=openai-compatible")
-		fmt.Println("    - SAME_EMBED_PROVIDER=none")
 		fmt.Println()
 		fmt.Println("  Need help? Join our Discord: https://discord.gg/9KfTkcGs7g")
 		return fmt.Errorf("Ollama not running. Start Ollama and try 'same init' again")
@@ -1267,6 +1479,16 @@ func runIndex(vaultPath string, verbose, useEmbeddings bool) (*indexer.Stats, er
 			os.Unsetenv("VAULT_PATH")
 		}
 	}()
+
+	// Delete existing DB to ensure clean schema (init always does a full reindex).
+	// This prevents dimension mismatches when the user switches embedding models.
+	dbPath := config.DBPath()
+	if _, err := os.Stat(dbPath); err == nil {
+		_ = os.Remove(dbPath)
+		// Also remove WAL/SHM files
+		_ = os.Remove(dbPath + "-wal")
+		_ = os.Remove(dbPath + "-shm")
+	}
 
 	db, err := store.Open()
 	if err != nil {

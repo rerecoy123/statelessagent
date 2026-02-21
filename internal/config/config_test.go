@@ -1,7 +1,6 @@
 package config
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -389,23 +388,7 @@ func TestLoadConfig_MissingBaseURL_OpenAICompatible(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	oldStderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stderr = w
-
 	cfg, err := LoadConfig()
-
-	_ = w.Close()
-	os.Stderr = oldStderr
-
-	var warnBuf strings.Builder
-	if _, copyErr := io.Copy(&warnBuf, r); copyErr != nil {
-		t.Fatalf("io.Copy stderr: %v", copyErr)
-	}
-
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -415,9 +398,6 @@ func TestLoadConfig_MissingBaseURL_OpenAICompatible(t *testing.T) {
 	ec := EmbeddingProviderConfig()
 	if ec.BaseURL != "" {
 		t.Fatalf("expected empty base URL, got %q", ec.BaseURL)
-	}
-	if !strings.Contains(warnBuf.String(), "openai-compatible provider requires base_url") {
-		t.Fatalf("expected base_url warning, got: %q", warnBuf.String())
 	}
 }
 

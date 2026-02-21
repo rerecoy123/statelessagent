@@ -276,7 +276,7 @@ func TestOllamaDefaultDims(t *testing.T) {
 		{"mxbai-embed-large", 1024},
 		{"all-minilm", 384},
 		{"snowflake-arctic-embed", 1024},
-		{"snowflake-arctic-embed2", 768},
+		{"snowflake-arctic-embed2", 1024},
 		{"embeddinggemma", 768},
 		{"qwen3-embedding", 1024},
 		{"nomic-embed-text-v2-moe", 768},

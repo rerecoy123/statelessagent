@@ -62,7 +62,7 @@ func EmbeddingDim() int {
 		case "snowflake-arctic-embed":
 			return 1024
 		case "snowflake-arctic-embed2":
-			return 768
+			return 1024
 		case "embeddinggemma":
 			return 768
 		case "qwen3-embedding":
@@ -88,7 +88,7 @@ type ModelInfo struct {
 // KnownModels lists supported embedding models with metadata.
 var KnownModels = []ModelInfo{
 	{"nomic-embed-text", 768, "ollama", "Default. Great balance of quality and speed"},
-	{"snowflake-arctic-embed2", 768, "ollama", "Best retrieval in its size class"},
+	{"snowflake-arctic-embed2", 1024, "ollama", "Best retrieval in its size class"},
 	{"mxbai-embed-large", 1024, "ollama", "Highest overall MTEB average"},
 	{"all-minilm", 384, "ollama", "Lightweight (~90MB). Good for constrained hardware"},
 	{"snowflake-arctic-embed", 1024, "ollama", "v1 large model"},
@@ -301,11 +301,6 @@ func LoadConfig() (*Config, error) {
 	} else if cfg.Memory.CompositeThreshold > 1.0 {
 		cfg.Memory.CompositeThreshold = 1.0
 	}
-	if strings.EqualFold(strings.TrimSpace(cfg.Embedding.Provider), "openai-compatible") &&
-		strings.TrimSpace(cfg.Embedding.BaseURL) == "" {
-		fmt.Fprintln(os.Stderr, "same: warning: openai-compatible provider requires base_url (set embedding.base_url or SAME_EMBED_BASE_URL)")
-	}
-
 	// Apply TOML skip_dirs to the global SkipDirs map.
 	// Previously parsed but never applied — this fixes the bug.
 	if len(cfg.Vault.SkipDirs) > 0 {
@@ -438,9 +433,16 @@ func generateTOMLContent(vaultPath string) string {
 	b.WriteString("handoff_dir = \"sessions\"\n")
 	b.WriteString("decision_log = \"decisions.md\"\n\n")
 
+	// Use the active model (may have been changed via model picker or env var)
+	activeModel := EmbeddingModel
+	ec := EmbeddingProviderConfig()
+	if ec.Model != "" {
+		activeModel = ec.Model
+	}
+
 	b.WriteString("[ollama]\n")
 	b.WriteString("url = \"http://localhost:11434\"\n")
-	b.WriteString("model = \"nomic-embed-text\"\n\n")
+	b.WriteString(fmt.Sprintf("model = %q\n\n", activeModel))
 
 	b.WriteString("[embedding]\n")
 	b.WriteString("# Embedding provider: \"ollama\" (default), \"openai\", \"openai-compatible\", or \"none\" (keyword-only)\n")
@@ -449,7 +451,7 @@ func generateTOMLContent(vaultPath string) string {
 		activeProvider = "ollama"
 	}
 	b.WriteString(fmt.Sprintf("provider = %q\n", activeProvider))
-	b.WriteString(fmt.Sprintf("model = %q\n", EmbeddingModel))
+	b.WriteString(fmt.Sprintf("model = %q\n", activeModel))
 	b.WriteString("# api_key = \"\"                  # required for cloud providers\n")
 	b.WriteString("#                               # or set SAME_EMBED_API_KEY / OPENAI_API_KEY\n")
 	b.WriteString("# dimensions = 0                # 0 = use provider default\n\n")

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -19,8 +20,9 @@ import (
 
 func webCmd() *cobra.Command {
 	var (
-		port     int
-		openFlag bool
+		port       int
+		openFlag   bool
+		foreground bool
 	)
 	cmd := &cobra.Command{
 		Use:   "web",
@@ -28,17 +30,30 @@ func webCmd() *cobra.Command {
 		Long: `Start a local web server for the vault dashboard.
 
 The dashboard is read-only and only accessible from localhost.
+The server runs in the background by default.
 
 Examples:
-  same web                  # Start on port 4078
+  same web                  # Start background server, open browser
   same web --port 8080      # Custom port
-  same web --open           # Auto-open browser`,
+  same web --fg             # Run in foreground (blocks terminal)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vp := config.VaultPath()
 			if vp == "" {
 				return config.ErrNoVault
 			}
+			// Verify the vault actually exists on disk
+			if _, err := os.Stat(vp); err != nil {
+				return fmt.Errorf("vault path does not exist: %s", vp)
+			}
 
+			addr := fmt.Sprintf("127.0.0.1:%d", port)
+
+			// Background mode: re-exec ourselves as a detached process
+			if !foreground && os.Getenv("_SAME_WEB_BG") == "" {
+				return launchBackground(addr, port, vp)
+			}
+
+			// Foreground mode (or background child process)
 			ctx, cancel := context.WithCancel(cmd.Context())
 			defer cancel()
 
@@ -50,7 +65,6 @@ Examples:
 				select {
 				case <-ctx.Done():
 				case <-sigCh:
-					fmt.Fprintln(os.Stderr, "Shutting down...")
 					cancel()
 				}
 			}()
@@ -58,23 +72,68 @@ Examples:
 			// Create embed provider (nil is fine — keyword fallback)
 			embedClient, _ := newEmbedProvider()
 
-			addr := fmt.Sprintf("127.0.0.1:%d", port)
-			fmt.Printf("\n  Dashboard: %shttp://%s%s\n", cli.Bold, addr, cli.Reset)
-			fmt.Printf("  Press Ctrl+C to stop\n\n")
-
-			if openFlag {
-				go func() {
-					time.Sleep(300 * time.Millisecond)
-					openBrowser(fmt.Sprintf("http://%s", addr))
-				}()
+			if foreground {
+				fmt.Printf("\n  Dashboard: %shttp://%s%s\n", cli.Bold, addr, cli.Reset)
+				fmt.Printf("  %sPress Ctrl+C to stop%s\n\n", cli.Dim, cli.Reset)
 			}
 
 			return web.Serve(ctx, addr, embedClient, Version, vp)
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 4078, "Port to listen on")
-	cmd.Flags().BoolVar(&openFlag, "open", false, "Auto-open browser")
+	cmd.Flags().BoolVar(&openFlag, "open", false, "Auto-open browser (default in background mode)")
+	cmd.Flags().BoolVar(&foreground, "fg", false, "Run in foreground (blocks terminal)")
 	return cmd
+}
+
+// launchBackground re-execs `same web --fg` as a detached background process,
+// waits for the server to start, opens the browser, and returns.
+func launchBackground(addr string, port int, vaultPath string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("find executable: %w", err)
+	}
+
+	child := exec.Command(exe, "web", "--fg", "--port", fmt.Sprintf("%d", port))
+	child.Env = append(os.Environ(), "_SAME_WEB_BG=1", "VAULT_PATH="+vaultPath)
+	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	child.Stdout = nil
+	child.Stderr = nil
+
+	if err := child.Start(); err != nil {
+		return fmt.Errorf("start background server: %w", err)
+	}
+
+	// Wait for server to be ready (up to 3 seconds)
+	url := fmt.Sprintf("http://%s", addr)
+	ready := false
+	for i := 0; i < 30; i++ {
+		time.Sleep(100 * time.Millisecond)
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			ready = true
+			break
+		}
+	}
+
+	if !ready {
+		fmt.Printf("  %s!%s Server may not have started — check port %d\n", cli.Yellow, cli.Reset, port)
+		return nil
+	}
+
+	// Write PID file for `same web stop` (future feature)
+	pidPath := config.DataDir() + "/web.pid"
+	_ = os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", child.Process.Pid)), 0o600)
+
+	fmt.Printf("\n  %s✓%s Dashboard running at %s%s%s\n", cli.Green, cli.Reset, cli.Bold, url, cli.Reset)
+	fmt.Printf("  %sPID %d • Stop with: kill %d%s\n\n", cli.Dim, child.Process.Pid, child.Process.Pid, cli.Reset)
+
+	openBrowser(url)
+
+	// Detach — don't wait for child
+	_ = child.Process.Release()
+	return nil
 }
 
 func openBrowser(url string) {
