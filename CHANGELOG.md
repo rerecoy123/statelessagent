@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.1 — Cross-Platform CI and Extraction Reliability
+
+### Fixed
+
+- **Windows build failure (`Setpgid` is Unix-only)** — background web process attributes now resolve via platform-specific helpers so Windows cross-compiles no longer fail
+- **Graph extraction junk decision nodes from code blocks** — decision extraction now ignores fenced code block content to avoid shell/example noise
+- **Graph extraction treating URLs as local files** — URL-like references are filtered out from file-node extraction
+- **Graph extraction placeholder/template path nodes** — placeholder and template-style paths are excluded so graph nodes reflect real vault references
+
+### Added
+
+- **Cross-compile CI check for Windows and Linux** — CI now runs `GOOS={windows,linux} GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/same` on every push/PR
+- **Linux CI test runner** — CI now executes `go test ./... -count=1` on `ubuntu-latest` with `CGO_ENABLED=1`
+
 ## v0.9.0 — Knowledge Graph, Provider Flexibility, and Hardening
 
 ### Added

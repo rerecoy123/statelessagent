@@ -12,14 +12,7 @@ import (
 
 	"github.com/sgx-labs/statelessagent/internal/config"
 	"github.com/sgx-labs/statelessagent/internal/graph"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
 )
-
-func init() {
-	sqlite_vec.Auto()
-}
 
 // DB wraps a SQLite connection with sqlite-vec support.
 type DB struct {

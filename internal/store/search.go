@@ -6,8 +6,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
 // SearchResult represents a single search result with scoring.
@@ -45,7 +43,7 @@ func (db *DB) VectorSearch(queryVec []float32, opts SearchOptions) ([]SearchResu
 		opts.TopK = 100
 	}
 
-	vecData, err := sqlite_vec.SerializeFloat32(queryVec)
+	vecData, err := serializeFloat32(queryVec)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query: %w", err)
 	}
@@ -211,7 +209,7 @@ type RawSearchResult struct {
 
 // VectorSearchRaw performs a raw vector search without score normalization.
 func (db *DB) VectorSearchRaw(queryVec []float32, fetchK int) ([]RawSearchResult, error) {
-	vecData, err := sqlite_vec.SerializeFloat32(queryVec)
+	vecData, err := serializeFloat32(queryVec)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query: %w", err)
 	}

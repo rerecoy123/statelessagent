@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
 // NoteRecord represents a vault note chunk in the database.
@@ -53,7 +51,7 @@ func (db *DB) InsertNote(rec *NoteRecord, embedding []float32) error {
 		return fmt.Errorf("last insert id: %w", err)
 	}
 
-	vecData, err := sqlite_vec.SerializeFloat32(embedding)
+	vecData, err := serializeFloat32(embedding)
 	if err != nil {
 		return fmt.Errorf("serialize embedding: %w", err)
 	}
@@ -122,7 +120,7 @@ func (db *DB) BulkInsertNotes(records []NoteRecord, embeddings [][]float32) (map
 			insertedIDs[rec.Path] = id
 		}
 
-		vecData, err := sqlite_vec.SerializeFloat32(embeddings[i])
+		vecData, err := serializeFloat32(embeddings[i])
 		if err != nil {
 			return nil, fmt.Errorf("serialize embedding %d: %w", i, err)
 		}
@@ -476,6 +474,14 @@ func deserializeFloat32(data []byte) ([]float32, error) {
 		vec[i] = math.Float32frombits(bits)
 	}
 	return vec, nil
+}
+
+func serializeFloat32(vec []float32) ([]byte, error) {
+	data := make([]byte, len(vec)*4)
+	for i, v := range vec {
+		binary.LittleEndian.PutUint32(data[i*4:(i+1)*4], math.Float32bits(v))
+	}
+	return data, nil
 }
 
 func scanNotes(rows *sql.Rows) ([]NoteRecord, error) {
